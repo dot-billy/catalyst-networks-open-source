@@ -1,0 +1,29 @@
+{% extends "base/base.html" %}
+
+{% block title %}Page Not Found - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Page Not Found{% endblock %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+    <div class="ui-form-section max-w-2xl w-full text-center">
+        <span class="ui-badge ui-badge-muted">404 error</span>
+        <h1 class="mt-6 text-7xl font-semibold tracking-tight text-gray-900 sm:text-8xl">404</h1>
+        <h2 class="mt-4 text-3xl font-semibold text-gray-900">Page Not Found</h2>
+        <p class="mt-4 text-base text-gray-600">
+            The page you’re looking for isn’t available. It may have moved, or the link may be out of date.
+        </p>
+
+        <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="{% url 'dashboard:dashboard' %}" class="btn-enhanced ui-button-primary">Go to Dashboard</a>
+            <a href="javascript:history.back()" class="btn-enhanced ui-button-secondary">Go Back</a>
+            <a href="{% url 'organizations:list' %}" class="btn-enhanced ui-button-secondary">Organizations</a>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <p class="text-sm text-gray-500">
+                If this looks wrong, <a href="mailto:support@catalystnetworks.com" class="text-primary-600 hover:text-primary-700">contact support</a>.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

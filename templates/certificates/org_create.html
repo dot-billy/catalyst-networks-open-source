@@ -1,0 +1,114 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Certificate Authority - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <h1 class="text-2xl font-bold text-light-100">Create Certificate Authority</h1>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-gray-400 hover:text-light-200">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-gray-400 hover:text-light-200">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="text-gray-400 hover:text-light-200">Certificate Authorities</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-300" aria-current="page">Create</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Form Container -->
+    <div class="bg-dark-800 shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6 border-b border-dark-600">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Certificate Authority Information</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">Create a new certificate authority for {{ organization.name }} to issue certificates for your nodes.</p>
+        </div>
+        
+        <form method="post" action="{% url 'certificates_org:create' slug=organization.slug %}" class="divide-y divide-dark-600">
+            {% csrf_token %}
+            
+            <!-- Basic Information -->
+            <div class="px-4 py-5 sm:p-6">
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <!-- Name -->
+                    <div class="sm:col-span-3">
+                        <label for="name" class="block text-sm font-medium text-light-100">Name</label>
+                        <div class="mt-1">
+                            <input type="text" name="name" id="name" required class="shadow-sm bg-dark-700 border border-dark-600 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm rounded-md text-light-200" placeholder="Production CA">
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">A descriptive name for this certificate authority.</p>
+                    </div>
+                    
+                    <!-- Common Name -->
+                    <div class="sm:col-span-3">
+                        <label for="common_name" class="block text-sm font-medium text-light-100">Common Name</label>
+                        <div class="mt-1">
+                            <input type="text" name="common_name" id="common_name" required class="shadow-sm bg-dark-700 border border-dark-600 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm rounded-md text-light-200" placeholder="example.com">
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">Common name for the CA certificate, typically a domain name.</p>
+                    </div>
+                    
+                    <!-- Validity Days -->
+                    <div class="sm:col-span-3">
+                        <label for="validity_days" class="block text-sm font-medium text-light-100">Validity (days)</label>
+                        <div class="mt-1">
+                            <input type="number" name="validity_days" id="validity_days" value="365" min="1" max="3650" class="shadow-sm bg-dark-700 border border-dark-600 focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm rounded-md text-light-200">
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">How long the CA certificate will be valid, in days.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Warning about certificate security -->
+            <div class="px-4 py-5 sm:p-6 bg-primary-700 bg-opacity-10">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-primary-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-primary-400">Important Security Information</h3>
+                        <div class="mt-2 text-sm text-light-300">
+                            <p>The certificate authority's private key is a critical security component. It will be stored securely, but ensure your server is properly secured. Anyone with access to the CA private key can issue certificates for your Nebula network.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="px-4 py-3 bg-dark-900 text-right sm:px-6">
+                <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="inline-flex justify-center py-2 px-4 border border-dark-600 shadow-sm text-sm font-medium rounded-md text-light-300 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Cancel
+                </a>
+                <button type="submit" class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Create Certificate Authority
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,1 @@
+# All certificate API serializers removed as part of API cleanup 

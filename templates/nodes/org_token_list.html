@@ -1,0 +1,109 @@
+{% extends 'base/base.html' %}
+
+{% block page_title %}Registration Tokens{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs and action buttons -->
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Registration Tokens</h1>
+            <p class="ui-page-subtitle">Create and manage tokens used to register new nodes in {{ organization.name }}.</p>
+            <nav class="flex mt-1" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2">
+                    <li>
+                        <a href="{% url 'dashboard:dashboard' %}" class="text-light-300 hover:text-primary-400">Dashboard</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">{{ organization.name }}</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <span class="text-light-100" aria-current="page">Registration Tokens</span>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'nodes_org:token_create' slug=organization.slug %}" class="btn-enhanced ui-button-primary">Create New Token</a>
+        </div>
+    </div>
+
+    <!-- Token List Card -->
+    <div class="ui-form-section overflow-hidden p-0">
+        {% if tokens %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-700">
+                <thead class="bg-dark-900">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Description</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Created</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Expires</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Uses</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Status</th>
+                        <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody class="bg-dark-800 divide-y divide-gray-700">
+                    {% for token in tokens %}
+                    <tr class="hover:bg-dark-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ token.description|default:"Unnamed Token" }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ token.created_at|date:"M d, Y" }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{% if token.expires_at %}{{ token.expires_at|date:"M d, Y" }}{% else %}Never{% endif %}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{% if token.uses_allowed > 0 %}{{ token.uses_count }}/{{ token.uses_allowed }}{% else %}{{ token.uses_count }}/∞{% endif %}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if token.is_revoked %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900 bg-opacity-30 text-red-400">Revoked</span>
+                            {% elif token.is_expired %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900 bg-opacity-30 text-yellow-400">Expired</span>
+                            {% elif token.is_used_up %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-400">Used</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 bg-opacity-30 text-green-400">Active</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'nodes_org:token_detail' slug=organization.slug pk=token.id %}" class="text-primary-400 hover:text-primary-300 transition-all">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-4 py-12 text-center">
+            <svg class="mx-auto h-12 w-12 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <h3 class="mt-2 text-lg font-medium text-light-100">No tokens found</h3>
+            <p class="mt-1 text-sm text-gray-400">Get started by creating a new registration token.</p>
+            <div class="mt-6">
+                <a href="{% url 'nodes_org:token_create' slug=organization.slug %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Create New Token
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-6">
+        <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Back to Nodes
+        </a>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,140 @@
+{% extends "base/base.html" %}
+
+{% block title %}Add Rule - {{ organization.name }} - {{ security_group.name }}{% endblock %}
+{% block page_title %}Add Policy Rule{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Add Rule to {{ security_group.name }}</h1>
+            <p class="ui-page-subtitle">Rules are allow-list entries. Choose the approved source, then define which protocol or port that source may use.</p>
+        </div>
+    </div>
+    {% if error_message %}
+    <div class="alert alert-error">
+        <div>
+            <h3 class="text-sm font-semibold">{{ error_message }}</h3>
+        </div>
+    </div>
+    {% endif %}
+    <div class="ui-form-section">
+        <form method="post">
+            {% csrf_token %}
+            <div class="ui-form-grid">
+                <div>
+                    <label for="id_protocol">Protocol</label>
+                    <select id="id_protocol" name="protocol">
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                        <option value="icmp">ICMP</option>
+                        <option value="any">Any Protocol</option>
+                    </select>
+                    <p class="ui-field-help">Use TCP or UDP for port-based rules, ICMP for ping, or Any Protocol when ports do not matter.</p>
+                </div>
+                <div>
+                    <label for="id_port">Port</label>
+                    <input type="number" name="port" id="id_port" min="1" max="65535" placeholder="443">
+                    <p class="ui-field-help">Required for TCP and UDP. Leave blank for ICMP or Any Protocol.</p>
+                </div>
+            </div>
+
+            <div class="ui-step-list mt-8">
+                <div class="ui-step">
+                    <span class="ui-step-number">1</span>
+                    <h3>Choose the source type</h3>
+                    <p>Allow either another policy group or a specific host.</p>
+                </div>
+                <div class="ui-step">
+                    <span class="ui-step-number">2</span>
+                    <h3>Describe the intent</h3>
+                    <p>Use clear language like "Allow HTTPS from ingress nodes".</p>
+                </div>
+                <div class="ui-step">
+                    <span class="ui-step-number">3</span>
+                    <h3>Save and review impact</h3>
+                    <p>Return to the policy page to confirm the source and assignments still make sense.</p>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <label class="block mb-3">Source Type</label>
+                <div class="ui-inline-actions">
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="source_type" value="group" {% if default_source_type == 'group' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Policy group</div>
+                            <div class="text-sm text-light-300">Allow traffic from one or more other security policies.</div>
+                        </div>
+                    </label>
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="source_type" value="host" {% if default_source_type == 'host' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Specific host</div>
+                            <div class="text-sm text-light-300">Allow traffic from one named node.</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="ui-form-grid mt-6">
+                <div id="group-select">
+                    <label for="id_source_group">Allowed source policies</label>
+                    <select id="id_source_group" name="source_group" multiple>
+                        {% for group in all_groups %}
+                            <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="ui-field-help">Select one or more policy groups that should be able to reach this policy.</p>
+                </div>
+                <div id="host-select" style="display:none;">
+                    <label for="id_source_node">Allowed source host</label>
+                    <select id="id_source_node" name="source_node">
+                        {% for node in all_nodes %}
+                            <option value="{{ node.id }}">{{ node.name }} ({{ node.nebula_ip }})</option>
+                        {% endfor %}
+                    </select>
+                    <p class="ui-field-help">Choose the single node that should be allowed as a source.</p>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <label for="id_rule_description">Rule description</label>
+                <input type="text" name="description" id="id_rule_description" placeholder="Allow HTTPS from ingress nodes">
+                <p class="ui-field-help">Describe what is being allowed in operational terms so later reviewers understand the reason.</p>
+            </div>
+
+            <div class="ui-action-bar mt-8 justify-end">
+                <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=security_group.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-enhanced ui-button-primary ui-button-sm">
+                    Add Rule
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const radios = document.getElementsByName('source_type');
+        const groupSelect = document.getElementById('group-select');
+        const hostSelect = document.getElementById('host-select');
+        function syncVisibility(value) {
+            if (value === 'host') {
+                groupSelect.style.display = 'none';
+                hostSelect.style.display = '';
+            } else {
+                groupSelect.style.display = '';
+                hostSelect.style.display = 'none';
+            }
+        }
+        syncVisibility('{{ default_source_type|default:"group" }}');
+        radios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                syncVisibility(this.value);
+            });
+        });
+    });
+</script>
+{% endblock %} 

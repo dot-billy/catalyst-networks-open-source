@@ -1,0 +1,17 @@
+{
+    "name": "catalyst_network",
+    "short_name": "Catalyst",
+    "description": "Advanced cyber security platform for enterprise network protection",
+    "icons": [
+        {
+            "src": "./catalyst-favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ],
+    "theme_color": "#0ea5e9",
+    "background_color": "#1e293b",
+    "display": "standalone",
+    "start_url": "/",
+    "orientation": "portrait"
+}

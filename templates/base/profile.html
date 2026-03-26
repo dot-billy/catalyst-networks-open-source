@@ -1,0 +1,108 @@
+{% extends "base/base.html" %}
+
+{% block title %}Your Profile - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Profile{% endblock %}
+
+{% block content %}
+    <div class="max-w-3xl mx-auto">
+        <div class="ui-page-header">
+            <div>
+                <h1 class="ui-page-title">Profile</h1>
+                <p class="ui-page-subtitle">Review your account details, organization memberships, and security settings.</p>
+            </div>
+        </div>
+        
+        <div class="ui-form-section">
+            <div class="card-header">
+                <h2 class="card-title">Account Information</h2>
+            </div>
+            
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Email</h3>
+                        <p class="mt-1 text-sm text-gray-900">{{ user.email }}</p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Date Joined</h3>
+                        <p class="mt-1 text-sm text-gray-900">{{ user.date_joined|date:"F j, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Last Login</h3>
+                        <p class="mt-1 text-sm text-gray-900">
+                            {% if user.last_login %}
+                                {{ user.last_login|date:"F j, Y H:i" }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Account Status</h3>
+                        <p class="mt-1 text-sm text-gray-900">
+                            {% if user.is_active %}
+                                <span class="ui-badge ui-badge-success">
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="ui-badge ui-badge-danger">
+                                    Inactive
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-6 ui-form-section">
+            <div class="card-header">
+                <h2 class="card-title">Organizations</h2>
+            </div>
+            
+            <div class="card-body">
+                {% if user.memberships.exists %}
+                    <ul class="divide-y divide-gray-200">
+                        {% for membership in user.memberships.all %}
+                            <li class="py-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-sm font-medium text-gray-900">{{ membership.organization.name }}</h3>
+                                        <p class="mt-1 text-xs text-gray-500">Joined: {{ membership.created_at|date:"F j, Y" }}</p>
+                                    </div>
+                                    <div>
+                                        <span class="ui-badge {% if membership.role == 'owner' or membership.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                                            {{ membership.role }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-sm text-gray-500">You are not a member of any organizations yet.</p>
+                        <a href="{% url 'organizations:create' %}" class="mt-2 inline-block text-sm font-medium text-primary-400 hover:text-primary-500">
+                            Create your first organization
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-6 ui-form-section">
+            <div class="card-header">
+                <h2 class="card-title">Security</h2>
+            </div>
+            
+            <div class="card-body">
+                <a href="{% url 'password_change' %}" class="btn-enhanced ui-button-primary">
+                    Change Password
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %} 

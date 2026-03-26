@@ -1,0 +1,173 @@
+# Version control
+.git
+.gitignore
+
+# Kubernetes
+k8s/
+.github/
+
+# Development and debug files
+z_random_scripts/
+debug_*.py
+*.log
+docker-compose.yml
+Dockerfile
+.dockerignore
+.env*
+debug.log
+
+# Exclude simple_cloud directory completely
+simple_cloud/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Media and static files (these should be volume mounted)
+media/
+staticfiles/
+
+# Test files
+*.pytest_cache/
+.coverage
+htmlcov/
+
+# Personal and development notes (specific files)
+my-context.md
+notes.md
+progress_and_remaining.md
+*.notes.md
+*.context.md
+*.progress.md
+
+# Kubernetes examples and troubleshooting
+k8s-deployment-example.yaml
+k8s-secret-example.yaml
+KUBERNETES_TROUBLESHOOTING.md
+*-example.yaml
+*-example.yml
+*-troubleshooting.md
+
+# Feature planning and diagrams
+*Feature Plan*.md
+*Diagram*.md
+Invitations Feature Plan & Diagram.md
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Security and certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+*.p8
+*.pkey
+*.priv
+*.pub
+*.cert
+*.ca
+*.ca-bundle
+*.chain
+*.srl
+*.req
+*.der
+*.p7b
+*.p7c
+*.p7s
+*.p7m
+*.p8
+*.p10
+*.p12
+*.pfx
+
+# Node files (contains certificates and configs)
+node_files/*/ca.crt
+node_files/*/host.crt
+node_files/*/host.key
+node_files/*/config.yml
+node_files/*/node_info.json
+node_files/*/registration_response.json
+node_files/*/downloaded_config.json
+
+# Build and deployment
+build_deploy_logs.json
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Backup and sync
+*.sync
+sync/
+backup/
+backups/
+
+# Personal notes
+TODO.md
+NOTES.md
+notes/
+personal/
+private/
+docs/APP_REVIEW_CHECKLIST.md
+
+# Experimental and scratch files
+experiment/
+scratch/
+test-*
+demo/
+example/
+sample/
+
+# Local configuration overrides
+config.local.*
+settings.local.*
+local.* 
+scripts/

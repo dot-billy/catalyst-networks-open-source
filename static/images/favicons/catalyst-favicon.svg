@@ -1,0 +1,45 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Simplified cyber gradient for favicon -->
+    <linearGradient id="cyberGradientFav" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9"/>
+      <stop offset="100%" style="stop-color:#1e40af"/>
+    </linearGradient>
+    
+    <!-- Node gradient simplified -->
+    <radialGradient id="nodeGradientFav" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#38bdf8"/>
+      <stop offset="100%" style="stop-color:#0ea5e9"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Central hexagon (simplified) -->
+  <g transform="translate(16, 16)">
+    <polygon points="0,-8 6.93,-4 6.93,4 0,8 -6.93,4 -6.93,-4" 
+             fill="url(#cyberGradientFav)" 
+             stroke="#0ea5e9" 
+             stroke-width="1"/>
+    
+    <!-- Core -->
+    <circle cx="0" cy="0" r="3" fill="url(#nodeGradientFav)"/>
+    <circle cx="0" cy="0" r="1" fill="#ffffff" opacity="0.9"/>
+  </g>
+  
+  <!-- Simplified perimeter nodes -->
+  <circle cx="16" cy="6" r="2.5" fill="url(#nodeGradientFav)"/>
+  <circle cx="26" cy="11" r="2" fill="url(#nodeGradientFav)"/>
+  <circle cx="26" cy="21" r="2" fill="url(#nodeGradientFav)"/>
+  <circle cx="16" cy="26" r="2.5" fill="url(#nodeGradientFav)"/>
+  <circle cx="6" cy="21" r="2" fill="url(#nodeGradientFav)"/>
+  <circle cx="6" cy="11" r="2" fill="url(#nodeGradientFav)"/>
+  
+  <!-- Key connections only -->
+  <g stroke="url(#cyberGradientFav)" stroke-width="0.8" fill="none" opacity="0.6">
+    <line x1="16" y1="12" x2="16" y2="6"/>
+    <line x1="16" y1="20" x2="16" y2="26"/>
+    <line x1="20" y1="14" x2="26" y2="11"/>
+    <line x1="20" y1="18" x2="26" y2="21"/>
+    <line x1="12" y1="14" x2="6" y2="11"/>
+    <line x1="12" y1="18" x2="6" y2="21"/>
+  </g>
+</svg> 

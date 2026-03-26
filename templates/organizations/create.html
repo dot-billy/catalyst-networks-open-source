@@ -1,0 +1,262 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Organization - {{ project_meta.NAME }}{% endblock %}
+
+{% block content %}
+<div class="responsive-container max-w-2xl mx-auto">
+    <div class="text-center mb-6">
+        <h1 class="ui-page-title mobile-text-xl">Create Organization</h1>
+        <p class="ui-page-subtitle max-w-none">Set up the workspace, network range, and initial security configuration.</p>
+    </div>
+    
+    <!-- Step Indicator -->
+    <div class="mb-8">
+        <div class="flex items-center mobile-only sm:hidden">
+            <div class="flex items-center text-primary-400 relative">
+                <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-primary-500 flex items-center justify-center bg-primary-700 bg-opacity-20">
+                    <span class="text-primary-400 font-bold">1</span>
+                </div>
+                <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-primary-400 mobile-text-xs">Organization Details</div>
+            </div>
+            <div class="flex-auto border-t-2 transition duration-500 ease-in-out border-dark-600"></div>
+            <div class="flex items-center text-gray-500 relative">
+                <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-dark-600 flex items-center justify-center bg-dark-800">
+                    <span class="text-gray-500 font-bold">2</span>
+                </div>
+                <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-gray-500 mobile-text-xs">Network Setup</div>
+            </div>
+            <div class="flex-auto border-t-2 transition duration-500 ease-in-out border-dark-600"></div>
+            <div class="flex items-center text-gray-500 relative">
+                <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-dark-600 flex items-center justify-center bg-dark-800">
+                    <span class="text-gray-500 font-bold">3</span>
+                </div>
+                <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-gray-500 mobile-text-xs">Security Setup</div>
+            </div>
+        </div>
+        
+        <!-- Desktop Step Indicator -->
+        <div class="desktop-only hidden sm:block">
+            <div class="flex items-center">
+                <div class="flex items-center text-primary-400 relative">
+                    <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-primary-500 flex items-center justify-center bg-primary-700 bg-opacity-20">
+                        <span class="text-primary-400 font-bold">1</span>
+                    </div>
+                    <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-primary-400">Organization Details</div>
+                </div>
+                <div class="flex-auto border-t-2 transition duration-500 ease-in-out border-dark-600"></div>
+                <div class="flex items-center text-gray-500 relative">
+                    <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-dark-600 flex items-center justify-center bg-dark-800">
+                        <span class="text-gray-500 font-bold">2</span>
+                    </div>
+                    <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-gray-500">Network Setup</div>
+                </div>
+                <div class="flex-auto border-t-2 transition duration-500 ease-in-out border-dark-600"></div>
+                <div class="flex items-center text-gray-500 relative">
+                    <div class="rounded-full transition duration-500 ease-in-out h-12 w-12 py-3 border-2 border-dark-600 flex items-center justify-center bg-dark-800">
+                        <span class="text-gray-500 font-bold">3</span>
+                    </div>
+                    <div class="absolute top-0 -ml-10 text-center mt-16 w-32 text-xs font-medium text-gray-500">Security Setup</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Multi-step Form -->
+    <div x-data="{ step: 1, isLoading: false }" class="ui-form-section">
+        <!-- Step 1: Organization Details -->
+        <div x-show="step === 1">
+            <h2 class="text-lg font-semibold mb-4 text-light-100 mobile-text-base">Organization Details</h2>
+            <p class="text-sm text-light-300 mb-6 mobile-text-xs">Enter basic information about your organization.</p>
+            
+            <div class="mobile-form space-y-6">
+                <div class="mobile-form-field">
+                    <label for="org_name" class="block text-sm font-semibold text-light-100 mb-2 mobile-text-sm">Organization Name <span class="text-red-400">*</span></label>
+                    <div class="relative">
+                        <input type="text" 
+                               id="org_name" 
+                               name="org_name" 
+                               required 
+                               class="mobile-form-input form-input-enhanced w-full"
+                               placeholder="Enter organization name">
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            <svg class="h-5 w-5 text-catalyst-gray-light" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-sm text-catalyst-gray-light mobile-text-xs">Choose a meaningful name for your organization.</p>
+                </div>
+                
+                <div class="mobile-form-field">
+                    <label for="org_description" class="block text-sm font-semibold text-light-100 mb-2 mobile-text-sm">Description (Optional)</label>
+                    <textarea id="org_description" 
+                              name="org_description" 
+                              rows="4" 
+                              class="mobile-form-input w-full bg-white text-gray-900 placeholder-gray-500 border border-gray-300 rounded-md focus:bg-white focus:text-gray-900 focus:border-primary-500"
+                              placeholder="Brief description of what this organization represents..."></textarea>
+                    <p class="mt-2 text-sm text-catalyst-gray-light mobile-text-xs">Brief description of what this organization represents.</p>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-end">
+                {% include "components/button.html" with text="Continue to Network Setup" variant="primary" size="md" x_onclick="step = 2" icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>' %}
+            </div>
+        </div>
+        
+        <!-- Step 2: Network Setup -->
+        <div x-show="step === 2" x-cloak>
+            <h2 class="text-lg font-semibold mb-4 text-light-100 mobile-text-base">Network Setup</h2>
+            <p class="text-sm text-light-300 mb-6 mobile-text-xs">Configure network settings for your Nebula overlay network.</p>
+            
+            <div class="mobile-form space-y-6">
+                <div class="bg-primary-700 bg-opacity-10 p-4 rounded-md border border-primary-700 border-opacity-20">
+                    <h3 class="text-sm font-medium text-primary-400 mb-2 mobile-text-sm">Network Range (CIDR)</h3>
+                    <p class="text-xs text-light-300 mb-4 mobile-text-xs">This sets the IP address range for your Nebula network overlay.</p>
+                    
+                    <div x-data="{ cidrChoice: '192.168.100.0/24' }">
+                        <div class="mobile-form-field">
+                            <label for="network_cidr" class="block text-sm font-medium text-light-200 mb-1 mobile-text-sm">Network CIDR</label>
+                            <select id="network_cidr" name="network_cidr" x-model="cidrChoice" class="mobile-form-input w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-light-100">
+                                <option value="192.168.100.0/24">192.168.100.0/24 (Recommended)</option>
+                                <option value="10.100.0.0/24">10.100.0.0/24</option>
+                                <option value="172.16.100.0/24">172.16.100.0/24</option>
+                                <option value="custom">Custom CIDR Range</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mt-3" x-show="cidrChoice === 'custom'" x-cloak>
+                            <label for="custom_cidr" class="block text-sm font-medium text-light-200 mb-1 mobile-text-sm">Custom CIDR</label>
+                            <input type="text" id="custom_cidr" name="custom_cidr" placeholder="e.g., 192.168.0.0/24" class="mobile-form-input w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-light-100">
+                            <p class="text-xs text-light-300 mt-1 mobile-text-xs">Use CIDR notation (IP/prefix)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-between">
+                {% include "components/button.html" with text="Previous" variant="secondary" size="md" x_onclick="step = 1" icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>' icon_position="left" %}
+                {% include "components/button.html" with text="Continue to Security Setup" variant="primary" size="md" x_onclick="step = 3" icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>' %}
+            </div>
+        </div>
+        
+        <!-- Step 3: Security Setup -->
+        <div x-show="step === 3" x-cloak>
+            <h2 class="text-lg font-semibold mb-4 text-light-100 mobile-text-base">Security Setup</h2>
+            <p class="text-sm text-light-300 mb-6 mobile-text-xs">Create your Certificate Authority (CA) for secure Nebula communications.</p>
+            
+            <div class="mobile-form space-y-6">
+                <div class="bg-green-900 bg-opacity-10 p-4 rounded-md border border-green-700 border-opacity-20">
+                    <h3 class="text-sm font-medium text-green-400 mb-2 mobile-text-sm">Certificate Authority (CA)</h3>
+                    <p class="text-xs text-light-300 mb-4 mobile-text-xs">This is the core security component for your Nebula network.</p>
+                    
+                    <div class="mobile-form-field">
+                        <label for="ca_name" class="block text-sm font-medium text-light-200 mb-1 mobile-text-sm">CA Name</label>
+                        <input type="text" id="ca_name" name="ca_name" placeholder="Organization CA" class="mobile-form-input w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-light-100">
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" class="rounded border-dark-600 bg-dark-700 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50" checked>
+                            <span class="ml-2 text-sm text-light-300 mobile-text-xs">Automatically create a Certificate Authority</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-900 bg-opacity-10 p-4 rounded-md border border-yellow-700 border-opacity-20">
+                    <h3 class="text-sm font-medium text-yellow-400 mb-2 mobile-text-sm">Lighthouse Node (Optional)</h3>
+                    <p class="text-xs text-light-300 mb-4 mobile-text-xs">Create your first lighthouse node now, or add it later.</p>
+                    
+                    <div>
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" id="create_lighthouse" name="create_lighthouse" class="rounded border-dark-600 bg-dark-700 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-light-300 mobile-text-xs">Create a lighthouse node immediately</span>
+                        </label>
+                    </div>
+                    
+                    <div class="mt-3" x-data="{ showLighthouseSettings: false }" x-init="$watch('$el.previousElementSibling.querySelector(\'input\').checked', value => showLighthouseSettings = value)">
+                        <div x-show="showLighthouseSettings" x-cloak class="pl-6 border-l-2 border-yellow-700 border-opacity-20 mt-2">
+                            <div class="mobile-form-field">
+                                <label for="lighthouse_name" class="block text-sm font-medium text-light-200 mb-1 mobile-text-sm">Lighthouse Name</label>
+                                <input type="text" id="lighthouse_name" name="lighthouse_name" placeholder="e.g., lighthouse-1" class="mobile-form-input w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-light-100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form submission -->
+            <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-between">
+                <button type="button" @click="step = 2" class="btn-enhanced ui-button-secondary">
+                    Previous
+                </button>
+                <button type="button"
+                        class="btn-enhanced ui-button-primary"
+                        @click="isLoading = true; window.submitCreateOrg && window.submitCreateOrg()"
+                        :disabled="isLoading"
+                        :class="{ 'opacity-50 cursor-not-allowed': isLoading }">
+                    <span x-show="!isLoading">Create Organization</span>
+                    <span x-show="isLoading" class="flex items-center">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Creating...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden form that will collect and submit all data at once -->
+    <form id="create_org_form" method="POST" action="{% url 'organizations:create' %}" class="hidden form-loading">
+        {% csrf_token %}
+        <input type="hidden" name="name" id="submit_name">
+        <input type="hidden" name="description" id="submit_description">
+        <input type="hidden" name="network_cidr" id="submit_network_cidr">
+        <input type="hidden" name="ca_name" id="submit_ca_name">
+        <input type="hidden" name="create_lighthouse" id="submit_create_lighthouse">
+        <input type="hidden" name="lighthouse_name" id="submit_lighthouse_name">
+    </form>
+    
+    <div class="mt-6 text-center">
+        <a href="{% url 'organizations:list' %}" class="text-sm text-primary-400 hover:text-primary-300 transition-all touch-target mobile-text-xs">Back to organizations</a>
+    </div>
+</div>
+
+    <!-- JavaScript to transfer data and submit hidden form -->
+<script>
+window.submitCreateOrg = function() {
+    const form = document.getElementById('create_org_form');
+    if (!form) return;
+    // Collect values from multi-step form
+    const nameEl = document.getElementById('org_name');
+    const descEl = document.getElementById('org_description');
+    document.getElementById('submit_name').value = nameEl ? nameEl.value : '';
+    document.getElementById('submit_description').value = descEl ? descEl.value : '';
+
+    // Get network CIDR
+    const networkSelect = document.getElementById('network_cidr');
+    const customCidrEl = document.getElementById('custom_cidr');
+    const cidrValue = (networkSelect && networkSelect.value === 'custom')
+        ? (customCidrEl ? customCidrEl.value : '')
+        : (networkSelect ? networkSelect.value : '');
+    document.getElementById('submit_network_cidr').value = cidrValue;
+
+    // Get CA info
+    const caNameEl = document.getElementById('ca_name');
+    document.getElementById('submit_ca_name').value = caNameEl ? caNameEl.value : '';
+
+    // Get lighthouse info
+    const createLighthouseEl = document.getElementById('create_lighthouse');
+    const lighthouseChecked = createLighthouseEl ? createLighthouseEl.checked : false;
+    document.getElementById('submit_create_lighthouse').value = lighthouseChecked;
+    if (lighthouseChecked) {
+        const lighthouseNameEl = document.getElementById('lighthouse_name');
+        document.getElementById('submit_lighthouse_name').value = lighthouseNameEl ? lighthouseNameEl.value : '';
+    }
+
+    // Submit hidden form
+    form.submit();
+};
+</script>
+{% endblock %} 

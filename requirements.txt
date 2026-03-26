@@ -1,0 +1,25 @@
+# Core framework - Django 5.2 LTS (supported until April 2028)
+Django>=5.2,<6.0
+djangorestframework>=3.15.2
+# simplejwt >=5.5.1 fixes CVE-2024-22513 (disabled users accessing resources)
+djangorestframework-simplejwt[blacklist]>=5.5.1
+django-simple-history>=3.11.0
+celery>=5.4.0
+redis>=5.0.0
+django-redis>=5.4.0
+psycopg[binary]>=3.2
+python-dotenv>=1.0.0
+# requests >=2.32.0 fixes cert verification bypass in sessions
+requests>=2.32.0
+# jinja2 >=3.1.6 fixes CVE-2025-27516 (sandbox breakout)
+jinja2>=3.1.6
+django-storages>=1.14.2
+drf-spectacular>=0.28.0
+boto3>=1.35.0
+django-mailgun-mime==0.1.1
+gunicorn>=25.0.0
+whitenoise>=6.8.0
+# Pillow >=12.1.1 fixes CVE-2026-25990 (OOB write in PSD handler)
+Pillow>=12.1.1
+qrcode[pil]>=7.4.2
+django-axes>=6.1.0

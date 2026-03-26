@@ -1,0 +1,243 @@
+{% comment %} HTMX partial for members and invitations table, and all modals {% endcomment %}
+
+{% if messages %}
+<div class="space-y-2 mb-4">
+    {% for message in messages %}
+    <div class="rounded-md px-4 py-3 text-sm border bg-white text-black
+        {% if message.tags == 'success' %}border-l-4 border-l-green-600 border-gray-300
+        {% elif message.tags == 'warning' %}border-l-4 border-l-amber-600 border-gray-300
+        {% else %}border-l-4 border-l-red-600 border-gray-300{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Members List -->
+<div class="ui-form-section">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Members</h2>
+            <p class="card-subtitle">Everyone who currently has access to this workspace.</p>
+        </div>
+        <span class="ui-badge ui-badge-muted">{{ organization.members.count }} total</span>
+    </div>
+    <div class="ui-table-wrapper">
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Joined</th>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for membership in organization.memberships.all %}
+                <tr>
+                    <td class="font-medium text-gray-900">{{ membership.user.email }}</td>
+                    <td>
+                        <span class="ui-badge {% if membership.role == 'owner' %}ui-badge-success{% elif membership.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                            {{ membership.role|title }}
+                        </span>
+                    </td>
+                    <td class="text-gray-500">{{ membership.created_at|date:"M d, Y" }}</td>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <td>
+                        {% if organization.role == 'owner' or membership.role != 'owner' %}
+                        <div class="ui-inline-actions justify-end">
+                            <button
+                                onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.remove('hidden')"
+                                class="btn-enhanced ui-button-secondary ui-button-sm {% if membership.user == request.user %}opacity-50 cursor-not-allowed{% endif %}"
+                                {% if membership.user == request.user %}disabled title="You cannot change your own role."{% endif %}>
+                                Change Role
+                            </button>
+                            <button
+                                onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.remove('hidden')"
+                                class="btn-enhanced ui-button-danger ui-button-sm {% if membership.user == request.user %}opacity-50 cursor-not-allowed{% endif %}"
+                                {% if membership.user == request.user %}disabled title="You cannot remove yourself."{% endif %}>
+                                Remove
+                            </button>
+                        </div>
+                        {% endif %}
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Invitations List -->
+<div class="ui-form-section">
+    <div class="card-header">
+        <div>
+            <h2 class="card-title">Pending Invitations</h2>
+            <p class="card-subtitle">Invitations that are still waiting for someone to accept.</p>
+        </div>
+        {% if organization.role == 'owner' or organization.role == 'admin' %}
+        <a href="{% url 'organizations:invitation_create' organization.slug %}" class="text-sm font-medium text-primary-600 hover:text-primary-700">Send Invitation</a>
+        {% endif %}
+    </div>
+    <div class="ui-table-wrapper">
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Expires</th>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for invitation in organization.invitations.all %}
+                {% if invitation.status == 'pending' %}
+                <tr>
+                    <td class="font-medium text-gray-900">{{ invitation.email }}</td>
+                    <td>
+                        <span class="ui-badge {% if invitation.role == 'owner' %}ui-badge-success{% elif invitation.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                            {{ invitation.role|title }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="ui-badge ui-badge-warning">
+                            Pending
+                        </span>
+                    </td>
+                    <td class="text-gray-500">
+                        {{ invitation.expires_at|date:"M d, Y" }}
+                    </td>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <td>
+                        <div class="ui-inline-actions justify-end">
+                            <button onclick="resendInvitation('{{ invitation.id }}')"
+                                    class="btn-enhanced ui-button-secondary ui-button-sm">
+                                Resend
+                            </button>
+                            <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')"
+                                    class="btn-enhanced ui-button-danger ui-button-sm">
+                                Revoke
+                            </button>
+                        </div>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modals -->
+{% for membership in organization.memberships.all %}
+<!-- Change Role Modal -->
+<div id="change-role-modal-{{ membership.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ui-modal-backdrop"></div>
+    <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-white border-gray-200 w-full max-w-md">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Change Member Role</h3>
+            <div class="mt-2">
+                <p class="text-sm text-gray-500">Update the access level for {{ membership.user.email }}.</p>
+                <form method="post" action="{% url 'organizations:change_member_role' organization.slug membership.id %}" class="mt-4" 
+                      hx-post="{% url 'organizations:change_member_role' organization.slug membership.id %}" 
+                      hx-target="#members-table" 
+                      hx-swap="innerHTML"
+                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                    {% csrf_token %}
+                    <select name="role" class="catalyst-select mt-1 block w-full" {% if membership.user == request.user %}disabled{% endif %}>
+                        <option value="member" {% if membership.role == 'member' %}selected{% endif %}>Member</option>
+                        <option value="admin" {% if membership.role == 'admin' %}selected{% endif %}>Admin</option>
+                        {% if organization.role == 'owner' %}
+                        <option value="owner" {% if membership.role == 'owner' %}selected{% endif %}>Owner</option>
+                        {% endif %}
+                    </select>
+                    <div class="mt-5 flex justify-end space-x-3">
+                        <button type="button" onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.add('hidden')"
+                                class="btn-enhanced ui-button-secondary">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn-enhanced ui-button-primary" {% if membership.user == request.user %}disabled title="You cannot change your own role."{% endif %}>
+                            Save Role
+                        </button>
+                    </div>
+                    {% if membership.user == request.user %}
+                    <p class="mt-2 text-xs text-yellow-500">You can’t change your own role.</p>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Member Modal -->
+<div id="remove-member-modal-{{ membership.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ui-modal-backdrop"></div>
+    <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-white border-gray-200 w-full max-w-md">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Remove Member</h3>
+            <div class="mt-2">
+                <p class="text-sm text-gray-500">Remove {{ membership.user.email }} from {{ organization.name }}? They’ll lose access immediately.</p>
+                <div class="mt-5 flex justify-end space-x-3">
+                    <button type="button" onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.add('hidden')"
+                            class="btn-enhanced ui-button-secondary">
+                        Cancel
+                    </button>
+                    <form method="post" action="{% url 'organizations:remove_member' organization.slug membership.id %}" 
+                          hx-post="{% url 'organizations:remove_member' organization.slug membership.id %}" 
+                          hx-target="#members-table" 
+                          hx-swap="innerHTML"
+                          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                        {% csrf_token %}
+                        <button type="submit" class="btn-enhanced ui-button-danger" {% if membership.user == request.user %}disabled title="You cannot remove yourself."{% endif %}>
+                            Remove
+                        </button>
+                    </form>
+                </div>
+                {% if membership.user == request.user %}
+                    <p class="mt-2 text-xs text-yellow-500">You can’t remove yourself from the organization.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% for invitation in organization.invitations.all %}
+{% if invitation.status == 'pending' %}
+<!-- Revoke Invitation Modal -->
+<div id="revoke-invitation-modal-{{ invitation.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ui-modal-backdrop"></div>
+    <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-white border-gray-200 w-full max-w-md">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-gray-900">Revoke Invitation</h3>
+            <div class="mt-2">
+                <p class="text-sm text-gray-500">Revoke the invitation sent to {{ invitation.email }}? They’ll need a new invite to join later.</p>
+                <div class="mt-5 flex justify-end space-x-3">
+                    <button type="button" onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.add('hidden')"
+                            class="btn-enhanced ui-button-secondary">
+                        Cancel
+                    </button>
+                    <form method="post" action="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}" 
+                          hx-post="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}" 
+                          hx-target="#members-table" 
+                          hx-swap="innerHTML"
+                          hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                        {% csrf_token %}
+                        <button type="submit" class="btn-enhanced ui-button-danger">
+                            Revoke
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %} 

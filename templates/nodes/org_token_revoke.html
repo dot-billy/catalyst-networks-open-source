@@ -1,0 +1,35 @@
+{% extends 'base/base.html' %}
+
+{% block content %}
+<div class="bg-white shadow sm:rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">
+            Revoke Registration Token
+        </h3>
+        <div class="mt-2 max-w-xl text-sm text-gray-500">
+            <p>
+                Are you sure you want to revoke the registration token "{{ token.description }}"?
+            </p>
+            <p class="mt-2">
+                <strong>Token:</strong> <span class="font-mono">{{ token.token }}</span>
+            </p>
+            <p class="mt-2">
+                This action cannot be undone. Once revoked, this token cannot be used for node registration.
+            </p>
+        </div>
+        <div class="mt-5">
+            <form method="post" action="{% url 'nodes_org:token_revoke' slug=organization.slug pk=token.id %}">
+                {% csrf_token %}
+                <div class="flex">
+                    <button type="submit" class="inline-flex items-center justify-center px-4 py-2 border border-transparent font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:text-sm">
+                        Revoke token
+                    </button>
+                    <a href="{% url 'nodes_org:token_detail' slug=organization.slug pk=token.id %}" class="ml-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

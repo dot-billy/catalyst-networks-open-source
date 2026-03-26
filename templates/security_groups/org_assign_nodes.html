@@ -1,0 +1,59 @@
+{% extends "base/base.html" %}
+
+{% block title %}Assign Nodes - {{ security_group.name }} - {{ organization.name }}{% endblock %}
+{% block page_title %}Assign Policy Nodes{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Assign Nodes to {{ security_group.name }}</h1>
+            <p class="ui-page-subtitle">Assignments are what makes the policy take effect. Select the nodes that should inherit the rules defined for this policy.</p>
+        </div>
+    </div>
+    <div class="ui-form-section">
+        <form method="post">
+            {% csrf_token %}
+            <p class="text-sm text-light-300 mb-6">If you remove a node here, its effective policy will update after save.</p>
+            <div class="ui-selection-grid">
+                {% for node in all_nodes %}
+                <label class="ui-selection-row">
+                    <input type="checkbox" name="nodes" value="{{ node.id }}" {% if node in assigned_nodes %}checked{% endif %} class="mt-1">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <span class="font-semibold text-light-100">{{ node.name }}</span>
+                            {% if node.is_lighthouse %}
+                                <span class="ui-badge ui-badge-primary">Lighthouse</span>
+                            {% else %}
+                                <span class="ui-badge ui-badge-muted">Standard</span>
+                            {% endif %}
+                        </div>
+                        <div class="ui-meta-list">
+                            <span>{{ node.nebula_ip }}</span>
+                            {% if node in assigned_nodes %}
+                            <span>•</span>
+                            <span>Currently assigned</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </label>
+                {% empty %}
+                <div class="ui-empty-state">
+                    <h3>No nodes found</h3>
+                    <p>This organization does not have any nodes available to assign yet.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="ui-action-bar mt-8 justify-end">
+                <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=security_group.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-enhanced ui-button-primary ui-button-sm">
+                    Save Assignments
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

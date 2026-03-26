@@ -1,0 +1,364 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Node Details{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="ui-page-title">{{ node.name }}</h1>
+            <span class="ui-badge {% if node.is_lighthouse %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                {% if node.is_lighthouse %}Lighthouse{% else %}Standard{% endif %}
+            </span>
+        </div>
+        <p class="ui-page-subtitle">Inspect addressing, certificate health, access policy, and mobile enrollment for this Nebula node.</p>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-gray-500 hover:text-primary-400 transition-all">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-gray-500 hover:text-primary-400 transition-all">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-gray-500 hover:text-primary-400 transition-all">Nodes</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-300" aria-current="page">{{ node.name }}</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Main content -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700 flex justify-between">
+            <div>
+                <h3 class="text-lg leading-6 font-medium text-light-100">Node Details</h3>
+                <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                    Detailed information about this Nebula node.
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                {% if can_edit %}
+                <a href="{% url 'nodes_org:edit' slug=organization.slug pk=node.id %}" 
+                   class="inline-flex items-center px-3 py-2 border border-gray-700 shadow-sm text-sm leading-4 font-medium rounded-md text-light-100 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all">
+                    <svg class="-ml-0.5 mr-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Node Information -->
+        <div class="border-b border-gray-700">
+            <dl>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Node Name</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.name }}</dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Nebula IP Address</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.nebula_ip }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Node Type</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
+                        {% if node.is_lighthouse %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-700 bg-opacity-30 text-primary-300">
+                                Lighthouse
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-700 bg-opacity-20 text-primary-400">
+                                Standard
+                            </span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Certificate Authority</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.certificate_authority.name }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Assigned User</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.assigned_user.email|default:"Unassigned" }}</dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Node Certificate Expiration</dt>
+                    <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                        {% if node.cert_expiration %}
+                            {% if node.cert_expiration|date:'U'|floatformat:0 < now_plus_30_days|date:'U'|floatformat:0 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900 bg-opacity-30 text-red-300">
+                                    Expires soon: {{ node.cert_expiration|date:"F j, Y" }}
+                                </span>
+                            {% elif node.cert_expiration|date:'U'|floatformat:0 < now_plus_90_days|date:'U'|floatformat:0 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900 bg-opacity-30 text-yellow-300">
+                                    {{ node.cert_expiration|date:"F j, Y" }}
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 bg-opacity-30 text-green-300">
+                                    {{ node.cert_expiration|date:"F j, Y" }}
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-500">Not available</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Created</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.created_at|date:"F j, Y" }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Last Check-in</dt>
+                    <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                        {% if node.last_checkin %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 bg-opacity-30 text-green-300">
+                                {{ node.last_checkin|date:"F j, Y H:i:s" }}
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900 bg-opacity-30 text-red-300">
+                                Never
+                            </span>
+                        {% endif %}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+        
+        <!-- Lighthouse-specific details -->
+        {% if node.is_lighthouse %}
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-base leading-6 font-medium text-light-100">Lighthouse Configuration</h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                Details for this lighthouse node's external connectivity.
+            </p>
+        </div>
+        <div class="border-b border-gray-700">
+            <dl>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">Public IP Address</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
+                        {{ node.public_ip|default:"Not configured" }}
+                    </dd>
+                </div>
+                {% if node.fqdn %}
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">FQDN</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.fqdn }}</dd>
+                </div>
+                {% endif %}
+                <div class="bg-{{ node.fqdn|yesno:'dark-900,dark-800' }} px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">External Port</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
+                        {{ node.external_port|default:"4242" }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+        {% endif %}
+        
+        <!-- Security Groups -->
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-base leading-6 font-medium text-light-100">Security Groups</h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                Security groups assigned to this node.
+            </p>
+        </div>
+        <div class="px-4 py-5 sm:p-6">
+            {% if node.security_groups.all %}
+                <div class="flex flex-wrap gap-2">
+                    {% for group in node.security_groups.all %}
+                        <span class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-primary-700 bg-opacity-20 text-primary-400">
+                            {{ group.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-sm text-gray-400">No security groups assigned.</p>
+                {% if can_edit %}
+                <div class="mt-3">
+                    <a href="{% url 'nodes_org:assign_security_group' slug=organization.slug pk=node.id %}" class="text-sm text-primary-400 hover:text-primary-300 transition-all">
+                        Assign security groups
+                    </a>
+                </div>
+                {% endif %}
+            {% endif %}
+        </div>
+
+        <!-- QR Code for Mobile Enrollment -->
+        {% if not node.is_lighthouse %}
+        {% if node.qr_code %}
+        <div class="px-4 py-5 sm:p-6 bg-dark-800 border-t border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Mobile Device Enrollment</h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                Use the CA QR and endpoint QR below to enroll mobile devices in your Nebula network.
+            </p>
+            {% if can_sign_mobile %}
+            <div class="mt-4">
+                <a href="{% url 'nodes_org:mobile_sign' slug=organization.slug pk=node.id %}"
+                   class="inline-flex items-center px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-md text-light-100 bg-dark-700 hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all">
+                    Upload public key to sign (Nebula Mobile)
+                </a>
+            </div>
+            {% endif %}
+
+            <div class="mt-5">
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div class="bg-dark-700 rounded-lg p-4 border border-gray-700">
+                        <h4 class="text-sm font-medium text-light-100 mb-3">CA QR</h4>
+                        {% if ca_qr %}
+                        <img src="{{ ca_qr.qr_image.url }}"
+                             alt="CA QR Code for {{ node.certificate_authority.name }}"
+                             class="w-48 h-48 bg-white p-2 rounded-lg shadow-lg">
+                        <p class="mt-3 text-sm text-gray-400">
+                            Source: <span class="text-light-100">{{ ca_qr.source }}</span>
+                        </p>
+                        {% else %}
+                        <p class="text-sm text-gray-400">CA QR not generated yet.</p>
+                        {% endif %}
+                    </div>
+                    <div class="bg-dark-700 rounded-lg p-4 border border-gray-700">
+                        <h4 class="text-sm font-medium text-light-100 mb-3">Endpoint QR</h4>
+                        <img src="{{ node.qr_code.qr_image.url }}"
+                             alt="QR Code for {{ node.name }}"
+                             class="w-48 h-48 bg-white p-2 rounded-lg shadow-lg">
+                        <div class="space-y-3">
+                            <div>
+                                <h4 class="text-sm font-medium text-light-100">Endpoint Enrollment Details</h4>
+                                <div class="mt-1 text-sm text-gray-400">
+                                    <p><strong>Node:</strong> {{ node.name }}</p>
+                                    <p><strong>IP:</strong> {{ node.nebula_ip }}</p>
+                                    <p><strong>Expires:</strong>
+                                        {% if node.qr_code.is_expired %}
+                                            <span class="text-red-400">Expired {{ node.qr_code.expires_at|date:"M j, Y H:i" }}</span>
+                                        {% elif node.qr_code.is_valid %}
+                                            <span class="text-green-400">{{ node.qr_code.expires_at|date:"M j, Y H:i" }}</span>
+                                        {% else %}
+                                            <span class="text-yellow-400">Inactive</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex space-x-3">
+                                {% if node.qr_code.is_valid %}
+                                <a href="{{ node.qr_code.enrollment_url }}"
+                                   class="inline-flex items-center px-3 py-2 border border-gray-700 shadow-sm text-sm leading-4 font-medium rounded-md text-light-100 bg-dark-700 hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all"
+                                   target="_blank">
+                                    <svg class="-ml-0.5 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    Download Config
+                                </a>
+                                {% endif %}
+
+                                <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}?regenerate_qr=1"
+                                   class="inline-flex items-center px-3 py-2 border border-gray-700 shadow-sm text-sm leading-4 font-medium rounded-md text-light-100 bg-dark-700 hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all"
+                                   onclick="return confirm('This will generate a new QR code and deactivate the current one. Continue?');">
+                                    <svg class="-ml-0.5 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Regenerate QR
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Generate QR Code Section -->
+        <div class="px-4 py-5 sm:p-6 bg-dark-800 border-t border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Mobile Device Enrollment</h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                Generate a QR code to easily enroll mobile devices in your Nebula network.
+            </p>
+            {% if can_sign_mobile %}
+            <div class="mt-4">
+                <a href="{% url 'nodes_org:mobile_sign' slug=organization.slug pk=node.id %}"
+                   class="inline-flex items-center px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-md text-light-100 bg-dark-700 hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all">
+                    Upload public key to sign (Nebula Mobile)
+                </a>
+            </div>
+            {% endif %}
+
+            <div class="mt-5">
+                <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}?generate_qr=1"
+                   class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all">
+                    <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Generate QR Code
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- Danger Zone -->
+        {% if can_edit %}
+        <div class="px-4 py-5 sm:p-6 bg-dark-800 border-t border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-red-400">Danger Zone</h3>
+            
+            <div class="mt-5 border-t border-gray-700 pt-5">
+                <div class="rounded-md bg-red-900 bg-opacity-30 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-300">Warning: These actions cannot be undone</h3>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-5 flex justify-end">
+                    {% if not node.is_lighthouse or lighthouse_count > 1 %}
+                    <form method="post" action="{% url 'nodes_org:delete' slug=organization.slug pk=node.id %}" onsubmit="return confirm('Are you sure you want to delete this node?');">
+                        {% csrf_token %}
+                        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all">
+                            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                            Delete Node
+                        </button>
+                    </form>
+                    {% else %}
+                    <div class="inline-flex items-center px-4 py-2 border border-gray-700 shadow-sm text-sm font-medium rounded-md text-gray-400 bg-dark-700 cursor-not-allowed">
+                        <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        Cannot Delete Last Lighthouse
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+
+{% endblock %} 

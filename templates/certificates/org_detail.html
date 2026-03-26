@@ -1,0 +1,217 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ certificate_authority.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Certificate Authority{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs and action buttons -->
+    <div class="ui-page-header">
+        <div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <h1 class="ui-page-title">{{ certificate_authority.name }}</h1>
+                <span class="ui-badge {% if certificate_authority.is_valid %}ui-badge-success{% else %}ui-badge-danger{% endif %}">
+                    {% if certificate_authority.is_valid %}Active{% else %}Expired{% endif %}
+                </span>
+            </div>
+            <p class="ui-page-subtitle">Review this certificate authority, its lifecycle, and the nodes currently issued from it.</p>
+            <nav class="flex mt-1" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2">
+                    <li>
+                        <a href="{% url 'dashboard:dashboard' %}" class="text-gray-400 hover:text-light-200">Dashboard</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-gray-400 hover:text-light-200">{{ organization.name }}</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="text-gray-400 hover:text-light-200">Certificate Authorities</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <span class="text-light-300" aria-current="page">{{ certificate_authority.name }}</span>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        
+        <div class="ui-page-actions">
+            <a href="{% url 'certificates_org:renew' slug=organization.slug pk=certificate_authority.id %}" class="btn-enhanced ui-button-secondary">
+                <svg class="-ml-1 mr-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                </svg>
+                Renew
+            </a>
+            {% if perms.certificates.delete_certificateauthority %}
+            <a href="{% url 'certificates_org:revoke' slug=organization.slug pk=certificate_authority.id %}" class="btn-enhanced ui-button-danger">
+                <svg class="-ml-1 mr-2 h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+                Revoke
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Certificate Authority Details -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-dark-600">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Certificate Authority Information</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">Details and resources managed by this CA.</p>
+        </div>
+        
+        <div class="border-t border-dark-600 px-4 py-5 sm:p-0">
+            <dl class="sm:divide-y sm:divide-dark-600">
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Name</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ certificate_authority.name }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Status</dt>
+                    <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                        <span class="px-2 py-1 text-xs font-medium rounded-full {% if certificate_authority.is_valid %}bg-green-900 bg-opacity-30 text-green-300{% else %}bg-red-900 bg-opacity-30 text-red-300{% endif %}">
+                            {% if certificate_authority.is_valid %}Active{% else %}Expired{% endif %}
+                        </span>
+                    </dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Organization</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ organization.name }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Created By</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ certificate_authority.created_by.email }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Created At</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ certificate_authority.created_at|date:"F j, Y, g:i a" }}</dd>
+                </div>
+                <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Managed Nodes</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ certificate_authority.nodes.count }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Managed Nodes -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-dark-600 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg leading-6 font-medium text-light-100">Nodes Using This CA</h3>
+                <p class="mt-1 max-w-2xl text-sm text-light-300">
+                    Nebula nodes with certificates issued by this authority.
+                </p>
+            </div>
+            <a href="{% url 'nodes_org:create_mobile' slug=organization.slug %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                Add Mobile Node
+            </a>
+        </div>
+        
+        {% if nodes %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-dark-600">
+                <thead class="bg-dark-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                            Node Name
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                            IP Address
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                            Lighthouse
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                            Certificate Expiration
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th scope="col" class="relative px-6 py-3">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-dark-800 divide-y divide-dark-600">
+                    {% for node in nodes %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-light-200">{{ node.name }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-light-200">{{ node.nebula_ip }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if node.is_lighthouse %}
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900 bg-opacity-30 text-blue-300">
+                                Lighthouse
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-800 text-gray-300">
+                                Client
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-light-200">{{ node.cert_expiration|date:"F j, Y" }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if node.cert_expiration > current_time_plus_30_days %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900 bg-opacity-30 text-green-300">
+                                    Valid
+                                </span>
+                            {% elif node.cert_expiration <= current_time_plus_30_days %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-900 bg-opacity-30 text-yellow-300">
+                                    Expires Soon
+                                </span>
+                            {% else %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900 bg-opacity-30 text-red-300">
+                                    Expired
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="text-primary-400 hover:text-primary-300">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-4 py-8 text-center">
+            <svg class="mx-auto h-12 w-12 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <h3 class="mt-2 text-md font-medium text-light-100">No nodes using this certificate authority yet</h3>
+            <p class="mt-1 text-sm text-light-300">Create a node to get started with this CA.</p>
+            <div class="mt-6">
+                <a href="{% url 'nodes_org:create_mobile' slug=organization.slug %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    Create Mobile Node
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

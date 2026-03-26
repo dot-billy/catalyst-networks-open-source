@@ -1,0 +1,158 @@
+{% comment %}
+    Enhanced Form Field Component with specialized styling for different field types
+    
+    Usage: {% include "components/enhanced_form_field.html" with field=form.field_name label="Custom Label" help_text="Help text description" field_type="text" %}
+    
+    Parameters:
+    - field: Required. The form field object.
+    - label: Optional. Override the field's label.
+    - help_text: Optional. Additional help text to display.
+    - required: Optional. Whether to mark the field as required.
+    - field_type: Optional. Field type for specific styling (text, email, password, textarea, select, checkbox, radio)
+    - size: Optional. Field size (sm, md, lg) - defaults to md
+{% endcomment %}
+
+{% with field_id=field.auto_id field_type=field_type|default:"text" size=size|default:"md" %}
+<div class="form-field-group mb-6" 
+     x-data="{ 
+         hasError: {{ field.errors|yesno:'true,false' }},
+         isFocused: false,
+         hasValue: false,
+         showPassword: false
+     }"
+     x-init="hasValue = $refs.field.value !== ''"
+     @focusin="isFocused = true"
+     @focusout="isFocused = false; hasValue = $refs.field.value !== ''"
+     :class="{ 'has-error': hasError, 'has-success': hasValue && !hasError }">
+    
+    <!-- Label with improved styling -->
+    <label for="{{ field_id }}" 
+           class="block text-sm font-semibold text-light-100 mb-2 transition-colors duration-200"
+           :class="{ 'text-red-400': hasError, 'text-primary-400': isFocused && !hasError }">
+        {{ label|default:field.label }}
+        {% if field.field.required or required %}
+            <span class="text-red-400 ml-1" aria-label="required">*</span>
+        {% endif %}
+    </label>
+    
+    <!-- Field wrapper with enhanced styling -->
+    <div class="relative">
+        {% if field_type == "textarea" %}
+            <textarea id="{{ field_id }}" 
+                      name="{{ field.name }}"
+                      x-ref="field"
+                      class="form-textarea-enhanced w-full"
+                      :class="{ 'error': hasError }"
+                      placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                      {% if field.field.required or required %}required{% endif %}
+                      rows="4">{{ field.value|default:'' }}</textarea>
+        {% elif field_type == "select" %}
+            <select id="{{ field_id }}" 
+                    name="{{ field.name }}"
+                    x-ref="field"
+                    class="form-select-enhanced w-full"
+                    :class="{ 'error': hasError }"
+                    {% if field.field.required or required %}required{% endif %}>
+                {% for choice in field.field.choices %}
+                    <option value="{{ choice.0 }}" {% if choice.0 == field.value %}selected{% endif %}>
+                        {{ choice.1 }}
+                    </option>
+                {% endfor %}
+            </select>
+        {% elif field_type == "password" %}
+            <div class="relative">
+                <input type="password" 
+                       id="{{ field_id }}" 
+                       name="{{ field.name }}"
+                       x-ref="field"
+                       class="form-input-enhanced w-full pr-12"
+                       :class="{ 'error': hasError }"
+                       :type="showPassword ? 'text' : 'password'"
+                       placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                       value="{{ field.value|default:'' }}"
+                       {% if field.field.required or required %}required{% endif %}>
+                <button type="button" 
+                        @click="showPassword = !showPassword"
+                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-primary-400 transition-colors">
+                    <svg x-show="!showPassword" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <svg x-show="showPassword" class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                    </svg>
+                </button>
+            </div>
+        {% elif field_type == "checkbox" %}
+            <div class="flex items-start space-x-3">
+                <input type="checkbox" 
+                       id="{{ field_id }}" 
+                       name="{{ field.name }}"
+                       x-ref="field"
+                       class="form-checkbox-enhanced h-5 w-5 mt-0.5"
+                       :class="{ 'error': hasError }"
+                       value="true"
+                       {% if field.value %}checked{% endif %}
+                       {% if field.field.required or required %}required{% endif %}>
+                <label for="{{ field_id }}" class="text-sm text-gray-700 leading-5">
+                    {{ label|default:field.label }}
+                    {% if field.field.required or required %}
+                        <span class="text-red-400 ml-1" aria-label="required">*</span>
+                    {% endif %}
+                </label>
+            </div>
+        {% else %}
+            <input type="{{ field_type }}" 
+                   id="{{ field_id }}" 
+                   name="{{ field.name }}"
+                   x-ref="field"
+                   class="form-input-enhanced w-full"
+                   :class="{ 'error': hasError }"
+                   placeholder="{{ field.field.widget.attrs.placeholder|default:'' }}"
+                   value="{{ field.value|default:'' }}"
+                   {% if field.field.required or required %}required{% endif %}>
+        {% endif %}
+        
+        <!-- Focus indicator -->
+        <div class="absolute inset-0 rounded-lg pointer-events-none transition-all duration-200"
+             :class="{ 'ring-2 ring-primary-400 ring-opacity-20': isFocused && !hasError, 'ring-2 ring-red-400 ring-opacity-20': hasError }">
+        </div>
+        
+        <!-- Success/Error icons (not for checkboxes) -->
+        {% if field_type != "checkbox" %}
+        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            {% if field.errors %}
+                <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            {% elif field.value and not field.errors %}
+                <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Error messages with improved styling -->
+    {% if field.errors %}
+        <div class="mt-2 flex items-start space-x-2" x-show="hasError" x-transition>
+            <svg class="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="text-sm text-red-400">
+                {% for error in field.errors %}
+                    <p class="mb-1 last:mb-0">{{ error }}</p>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- Help text with improved styling -->
+    {% if help_text or field.help_text %}
+        <p class="mt-2 text-sm text-gray-500 leading-relaxed">
+            {{ help_text|default:field.help_text }}
+        </p>
+    {% endif %}
+</div>
+{% endwith %}

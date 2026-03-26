@@ -1,0 +1,94 @@
+{% if nodes %}
+<div class="ui-table-wrapper">
+<table class="ui-table">
+    <thead>
+        <tr>
+            <th scope="col">Name</th>
+            <th scope="col">IP Address</th>
+            <th scope="col">Type</th>
+            <th scope="col">Assigned User</th>
+            <th scope="col">Created</th>
+            <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for node in nodes %}
+        <tr>
+            <td class="font-medium text-gray-900">{{ node.name }}</td>
+            <td class="text-gray-500">{{ node.nebula_ip }}</td>
+            <td>
+                <span class="ui-badge {% if node.is_lighthouse %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                    {% if node.is_lighthouse %}Lighthouse{% else %}Standard{% endif %}
+                </span>
+            </td>
+            <td class="text-gray-500">
+                {{ node.assigned_user.email|default:"Unassigned" }}
+            </td>
+            <td class="text-gray-500">{{ node.created_at|date:"M d, Y" }}</td>
+            <td>
+                <div class="ui-inline-actions justify-end">
+                    <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}">View</a>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<!-- Pagination -->
+{% if nodes.has_other_pages %}
+<div class="flex items-center justify-between border-t border-gray-200 px-4 py-4 sm:px-6">
+    <div class="flex-1 flex justify-between sm:hidden">
+        {% if nodes.has_previous %}
+        <a hx-get="?page={{ nodes.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" hx-target="#node-table" hx-swap="innerHTML" class="btn-enhanced ui-button-secondary ui-button-sm">Previous</a>
+        {% endif %}
+        {% if nodes.has_next %}
+        <a hx-get="?page={{ nodes.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" hx-target="#node-table" hx-swap="innerHTML" class="ml-3 btn-enhanced ui-button-secondary ui-button-sm">Next</a>
+        {% endif %}
+    </div>
+    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+        <div>
+            <nav class="relative z-0 inline-flex rounded-xl shadow-sm -space-x-px overflow-hidden" aria-label="Pagination">
+                {% if nodes.has_previous %}
+                    <a hx-get="?page=1{% if search_query %}&search={{ search_query }}{% endif %}" hx-target="#node-table" hx-swap="innerHTML" class="relative inline-flex items-center px-3 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-all">«</a>
+                {% endif %}
+                {% for i in nodes.paginator.page_range %}
+                    {% if i == 1 or i == nodes.paginator.num_pages or i >= nodes.number|add:'-2' and i <= nodes.number|add:'2' %}
+                        {% if i == nodes.number %}
+                            <span class="relative inline-flex items-center px-4 py-2 border border-primary-200 bg-primary-50 text-sm font-medium text-primary-700">{{ i }}</span>
+                        {% else %}
+                            <a hx-get="?page={{ i }}{% if search_query %}&search={{ search_query }}{% endif %}" hx-target="#node-table" hx-swap="innerHTML" class="relative inline-flex items-center px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-all">{{ i }}</a>
+                        {% endif %}
+                    {% elif i == nodes.number|add:'-3' or i == nodes.number|add:'3' %}
+                        <span class="px-2 py-2 text-gray-400">…</span>
+                    {% endif %}
+                {% endfor %}
+                {% if nodes.has_next %}
+                    <a hx-get="?page={{ nodes.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}" hx-target="#node-table" hx-swap="innerHTML" class="relative inline-flex items-center px-3 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 transition-all">»</a>
+                {% endif %}
+            </nav>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="ui-empty-state">
+    <div class="py-4">
+        <div class="flex-shrink-0 h-12 w-12 rounded-full bg-primary-50 mx-auto flex items-center justify-center">
+            <svg class="h-6 w-6 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+            </svg>
+        </div>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No nodes found</h3>
+        {% if search_query %}
+        <p class="mt-1 text-sm text-gray-500">No nodes match that search yet.</p>
+        <div class="mt-6">
+            <a href="." class="btn-enhanced ui-button-secondary">Clear Search</a>
+        </div>
+        {% else %}
+        <p class="mt-1 text-sm text-gray-500">Create your first node to start building this workspace.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %} 

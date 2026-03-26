@@ -1,0 +1,20 @@
+{% extends "base/base.html" %}
+
+{% block title %}Webhooks - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Webhooks{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Webhooks</h1>
+            <p class="ui-page-subtitle">Webhook configuration for {{ organization.name }} will live here when event delivery is available.</p>
+        </div>
+    </div>
+
+    <div class="ui-empty-state">
+        <h3>Webhook delivery is not live yet</h3>
+        <p>This area is reserved for outbound event integrations so administrators can subscribe external systems to important organization activity.</p>
+    </div>
+</div>
+{% endblock %} 

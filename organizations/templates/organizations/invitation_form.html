@@ -1,0 +1,64 @@
+{% extends "base/base.html" %}
+
+{% block title %}Send Invitation - {{ organization.name }} - Catalyst Networks{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold text-light-100">Send Invitation</h1>
+        <p class="text-gray-500">Invite a new member to {{ organization.name }}</p>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-dark-800 rounded-lg shadow p-6">
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+            
+            <!-- Email Field -->
+            <div>
+                <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-400">
+                    Email Address
+                </label>
+                <div class="mt-1">
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                    <p class="mt-1 text-sm text-red-400">{{ form.email.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Role Field -->
+            <div>
+                <label for="{{ form.role.id_for_label }}" class="block text-sm font-medium text-gray-400">
+                    Role
+                </label>
+                <div class="mt-1">
+                    {{ form.role }}
+                    {% if form.role.errors %}
+                    <p class="mt-1 text-sm text-red-400">{{ form.role.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex justify-end space-x-3 pt-4">
+                <a href="{% url 'organizations:invitation_list' organization.slug %}" 
+                   class="px-4 py-2 border border-gray-600 text-gray-400 rounded hover:bg-dark-700 transition-all">
+                    Cancel
+                </a>
+                <button type="submit" 
+                        class="px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600 transition-all">
+                    Send Invitation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

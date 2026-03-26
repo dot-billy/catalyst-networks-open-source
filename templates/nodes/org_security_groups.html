@@ -1,0 +1,87 @@
+{% extends "base/base.html" %}
+
+{% block title %}Manage Security Groups - {{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+
+{% block content %}
+<div class="responsive-container mx-auto py-8">
+    <!-- Header -->
+    <div class="responsive-flex justify-between items-center mb-8">
+        <div class="flex-1 min-w-0">
+            <h1 class="text-3xl font-bold text-light-100 mb-2 mobile-text-2xl">Manage Security Groups</h1>
+            <p class="text-catalyst-gray-light mobile-text-sm">Control network access for {{ node.name }}</p>
+        </div>
+    </div>
+    
+    <!-- Main content -->
+    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
+        <div class="mb-6">
+            <h3 class="text-lg font-medium text-light-100 mb-2">Security Groups for {{ node.name }}</h3>
+            <p class="text-sm text-catalyst-gray-light">
+                Assign or remove security groups to control network access for this node.
+            </p>
+        </div>
+        
+        <div class="space-y-8">
+            <div>
+                <h4 class="text-base font-medium text-light-100 mb-4">Currently Assigned Security Groups</h4>
+                {% if assigned_groups %}
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {% for group in assigned_groups %}
+                            <div class="bg-dark-800 p-4 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <span class="text-catalyst-teal font-medium">{{ group.name }}</span>
+                                    </div>
+                                    <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="security_group_id" value="{{ group.id }}">
+                                        <input type="hidden" name="action" value="remove">
+                                        {% include "components/button.html" with text="" variant="danger" size="sm" type="submit" icon='<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>' %}
+                                    </form>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <p class="text-sm text-catalyst-gray-light">No security groups currently assigned to this node.</p>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="border-t border-gray-600 pt-6">
+                <h4 class="text-base font-medium text-light-100 mb-4">Available Security Groups</h4>
+                {% if security_groups %}
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {% for group in security_groups %}
+                            {% if group not in assigned_groups %}
+                                <div class="bg-dark-800 p-4 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <span class="text-light-100 font-medium">{{ group.name }}</span>
+                                        </div>
+                                        <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="security_group_id" value="{{ group.id }}">
+                                            <input type="hidden" name="action" value="add">
+                                            {% include "components/button.html" with text="" variant="success" size="sm" type="submit" icon='<svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" /></svg>' %}
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <p class="text-sm text-catalyst-gray-light">No security groups available to assign.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="mt-8 flex justify-end">
+            {% include "components/button.html" with text="Back to Node Details" variant="secondary" size="md" href="/nodes/org/{{ organization.id }}/{{ node.id }}/" icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>' icon_position="left" %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

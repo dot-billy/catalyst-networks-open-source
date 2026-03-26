@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Organizations</h1>
+        <a href="{% url 'organizations:create' %}" class="btn btn-primary">Create Organization</a>
+    </div>
+
+    {% if organizations %}
+        <div class="list-group">
+            {% for org in organizations %}
+                <a href="{% url 'organizations:detail' slug=org.slug %}" class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-1">{{ org.name }}</h5>
+                        {% if org.created_by == request.user %}
+                            <span class="badge bg-primary">Owner</span>
+                        {% endif %}
+                    </div>
+                    <p class="mb-1">Created by: {{ org.created_by.username }}</p>
+                    <small>Created on: {{ org.created_at|date:"F j, Y" }}</small>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            You are not a member of any organizations. Create one to get started!
+        </div>
+    {% endif %}
+</div>
+{% endblock %} 

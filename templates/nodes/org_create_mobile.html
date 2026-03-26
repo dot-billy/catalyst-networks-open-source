@@ -1,0 +1,134 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Mobile Node - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Create Mobile Node{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <h1 class="ui-page-title">Create Mobile Node</h1>
+        <p class="ui-page-subtitle">Set up a mobile device record and generate an enrollment QR code the assigned user can scan right away.</p>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-light-300 hover:text-primary-400">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">Nodes</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-100" aria-current="page">Create Mobile Node</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Form Container -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Create a New Mobile Device</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">
+                Create a device record for iPhone, Android, or tablet access. An enrollment QR code will be generated automatically.
+            </p>
+        </div>
+
+        <div class="px-4 py-5 sm:p-6">
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <!-- Node Name -->
+                    <div class="sm:col-span-3">
+                        <label for="id_name" class="block text-sm font-medium text-light-100">
+                            Node Name *
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="name" id="id_name"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md"
+                                placeholder="e.g. john-iphone"
+                                value="{% if form_data.name %}{{ form_data.name }}{% endif %}"
+                                required>
+                        </div>
+                        <p class="mt-2 text-sm text-light-400">Choose a descriptive name for this mobile device.</p>
+                    </div>
+
+                    <!-- Assigned User -->
+                    <div class="sm:col-span-3">
+                        <label for="id_assigned_user" class="block text-sm font-medium text-light-100">
+                            Assigned User *
+                        </label>
+                        <div class="mt-1">
+                            <select name="assigned_user" id="id_assigned_user"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
+                                <option value="">Select user</option>
+                                {% for membership in assignable_memberships %}
+                                    <option value="{{ membership.user.id }}" {% if form_data.assigned_user == membership.user.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ membership.user.email }} ({{ membership.role|title }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <p class="mt-2 text-sm text-light-400">This user will see and use this mobile enrollment QR.</p>
+                    </div>
+
+                    <!-- Certificate Authority -->
+                    <div class="sm:col-span-6">
+                        <label class="block text-sm font-medium text-light-100">
+                            Certificate Authority
+                        </label>
+                        <div class="mt-1 rounded-md border border-gray-700 bg-dark-700 px-3 py-2 text-sm text-light-100">
+                            {% if latest_ca %}
+                                {{ latest_ca.name }} <span class="text-light-300">(newest CA selected automatically)</span>
+                            {% else %}
+                                <span class="text-red-400">No certificate authority configured</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Certificate Expiration -->
+                    <div class="sm:col-span-3">
+                        <label for="id_key_expiration" class="block text-sm font-medium text-light-100">
+                            Certificate Expiration *
+                        </label>
+                        <div class="mt-1">
+                            <input type="date" name="key_expiration" id="id_key_expiration"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md"
+                                value="{% if form_data.key_expiration %}{{ form_data.key_expiration }}{% endif %}"
+                                required>
+                        </div>
+                        <p class="mt-2 text-sm text-light-400">The date when the node's certificate will expire.</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-8">
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn-enhanced ui-button-primary">
+                        Create Mobile Device
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

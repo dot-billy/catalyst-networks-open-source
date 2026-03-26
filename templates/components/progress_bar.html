@@ -1,0 +1,45 @@
+{% comment %}
+    Progress Bar Component
+    
+    Usage: {% include "components/progress_bar.html" with value=75 max=100 %}
+    
+    Parameters:
+    - value: Required. Current progress value.
+    - max: Optional. Maximum progress value. Default is 100.
+    - size: Optional. Progress bar size (sm, md, lg). Default is "md".
+    - color: Optional. Progress bar color (primary, success, warning, error). Default is "primary".
+    - show_label: Optional. Show percentage label. Default is True.
+    - animated: Optional. Show animation. Default is True.
+    - class: Optional. Additional CSS classes.
+{% endcomment %}
+
+{% with 
+    max=max|default:100
+    size=size|default:"md"
+    color=color|default:"primary"
+    show_label=show_label|default:True
+    animated=animated|default:True
+    percentage=value|floatformat:0|add:0|div:max|mul:100|floatformat:0
+%}
+
+<div class="progress-bar {{ class }}">
+    {% if show_label %}
+    <div class="flex justify-between items-center mb-2">
+        <span class="text-sm font-medium text-gray-700">Progress</span>
+        <span class="text-sm text-gray-500">{{ percentage }}%</span>
+    </div>
+    {% endif %}
+    
+    <div class="w-full bg-gray-200 rounded-full overflow-hidden">
+        <div class="progress-fill {% if size == 'sm' %}h-2{% elif size == 'lg' %}h-4{% else %}h-3{% endif %} {% if color == 'success' %}bg-green-500{% elif color == 'warning' %}bg-amber-500{% elif color == 'error' %}bg-red-500{% else %}bg-primary-600{% endif %} rounded-full transition-all duration-500 ease-out {% if animated %}animate-pulse{% endif %}" 
+             style="width: {{ percentage }}%"
+             role="progressbar" 
+             aria-valuenow="{{ value }}" 
+             aria-valuemin="0" 
+             aria-valuemax="{{ max }}"
+             aria-label="Progress: {{ percentage }}%">
+        </div>
+    </div>
+</div>
+
+{% endwith %}

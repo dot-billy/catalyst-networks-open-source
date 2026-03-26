@@ -1,0 +1,156 @@
+<div class="mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
+    <div class="mb-8">
+        <div class="flex items-center">
+            <nav class="flex" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2">
+                    <li>
+                        <a href="{% url 'organizations:list' %}" class="text-gray-400 hover:text-gray-300">Organizations</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'organizations:detail' organization.slug %}" class="text-gray-400 hover:text-gray-300">{{ organization.name }}</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-gray-400 hover:text-gray-300">Nodes</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'nodes_org:registration_tokens' slug=organization.slug %}" class="text-gray-400 hover:text-gray-300">Tokens</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </li>
+                    <li>
+                        <span class="text-gray-300">Create Token</span>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="bg-dark-900 shadow overflow-hidden sm:rounded-lg border border-gray-700 hover-glow">
+        <div class="px-6 py-5">
+            <h3 class="text-lg leading-6 font-medium text-light-100">
+                Create Registration Token
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-400">
+                Create a token that can be used to register new nodes in this organization.
+            </p>
+        </div>
+
+        <div class="border-t border-gray-700">
+            <form method="POST" class="p-6">
+                {% csrf_token %}
+                
+                {% if form.errors %}
+                <div class="mb-4 p-4 rounded-md bg-red-900 bg-opacity-30 text-red-400 border border-red-800">
+                    <p class="font-medium">Please correct the errors below.</p>
+                    <ul class="mt-2 text-sm">
+                        {% for field in form %}
+                            {% for error in field.errors %}
+                                <li>{{ field.label }}: {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <div class="space-y-6">
+                    <div>
+                        <label for="description" class="block text-sm font-medium text-gray-300">
+                            Description
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="description" id="description" 
+                                   class="bg-dark-700 text-light-100 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 rounded-md" 
+                                   placeholder="Node registration token for developers" required>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">A brief description of what this token will be used for.</p>
+                    </div>
+
+                    <div>
+                        <label for="max_uses" class="block text-sm font-medium text-gray-300">
+                            Max Uses
+                        </label>
+                        <div class="mt-1">
+                            <input type="number" name="max_uses" id="max_uses" 
+                                   class="bg-dark-700 text-light-100 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 rounded-md" 
+                                   min="1" placeholder="3">
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">The maximum number of times this token can be used. Leave blank for unlimited uses.</p>
+                    </div>
+
+                    <div>
+                        <label for="expires_at" class="block text-sm font-medium text-gray-300">
+                            Expiration Date (Optional)
+                        </label>
+                        <div class="mt-1">
+                            <input type="datetime-local" name="expires_at" id="expires_at" 
+                                   class="bg-dark-700 text-light-100 shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 rounded-md">
+                        </div>
+                        <p class="mt-2 text-sm text-gray-500">When this token will expire. Leave blank for a token that never expires.</p>
+                    </div>
+
+                    <div>
+                        <fieldset>
+                            <legend class="text-sm font-medium text-gray-300">Node Types</legend>
+                            <div class="mt-4 space-y-4">
+                                <div class="relative flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input id="can_register_regular" name="can_register_regular" type="checkbox" 
+                                               class="bg-dark-700 focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-700 rounded" checked>
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="can_register_regular" class="font-medium text-gray-300">Regular Nodes</label>
+                                        <p class="text-gray-500">Allow registration of regular network nodes.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="relative flex items-start">
+                                    <div class="flex items-center h-5">
+                                        <input id="can_register_lighthouse" name="can_register_lighthouse" type="checkbox" 
+                                               class="bg-dark-700 focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-700 rounded">
+                                    </div>
+                                    <div class="ml-3 text-sm">
+                                        <label for="can_register_lighthouse" class="font-medium text-gray-300">Lighthouse Nodes</label>
+                                        <p class="text-gray-500">Allow registration of lighthouse nodes. Only enable this for trusted nodes that will serve as network relays.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </fieldset>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <a href="{% url 'nodes_org:registration_tokens' slug=organization.slug %}" 
+                       class="mr-3 py-2 px-4 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-900 focus:ring-primary-500">
+                        Cancel
+                    </a>
+                    <button type="submit" 
+                            class="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-dark-900 focus:ring-primary-500">
+                        Create Token
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

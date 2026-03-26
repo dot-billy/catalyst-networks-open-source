@@ -1,0 +1,26 @@
+{% with hover=hover|default:True %}
+<div class="card overflow-hidden {% if hover %}hover-glow{% endif %} {{ class }}">
+    {% if title or subtitle %}
+    <div class="card-header {{ header_class }}">
+        {% if title %}
+        <h3 class="card-title">{{ title }}</h3>
+        {% endif %}
+        {% if subtitle %}
+        <p class="card-subtitle">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div class="card-body {{ body_class }}">
+        {% block card_content %}
+        {{ content }}
+        {% endblock %}
+    </div>
+    
+    {% if footer_content %}
+    <div class="card-footer {{ footer_class }}">
+        {{ footer_content }}
+    </div>
+    {% endif %}
+</div>
+{% endwith %}

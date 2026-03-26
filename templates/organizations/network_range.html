@@ -1,0 +1,227 @@
+{% extends "base/base.html" %}
+
+{% block title %}Network Range - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Network Range{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <h1 class="ui-page-title">Configure Network Range</h1>
+        <p class="ui-page-subtitle">Define the private address ranges this organization can use for Nebula node allocation.</p>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-light-400 hover:text-light-200">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-400 hover:text-light-200">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-300" aria-current="page">Network Range</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Form Container -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Network Range Configuration</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">
+                Configure IP address ranges for your Nebula network. These ranges will be used for automatic IP allocation when creating nodes.
+            </p>
+        </div>
+        
+        {% if organization.network_ranges.exists %}
+        <!-- Existing Network Ranges -->
+        <div class="px-4 py-5 sm:p-6 border-b border-gray-700">
+            <h4 class="text-base font-medium text-light-100 mb-4">Existing Network Ranges</h4>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead class="bg-dark-700">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                                CIDR
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                                Description
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">
+                                Created
+                            </th>
+                            <th scope="col" class="relative px-6 py-3">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-dark-800 divide-y divide-gray-700">
+                        {% for range in organization.network_ranges.all %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">
+                                {{ range.cidr }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-light-300">
+                                {{ range.description|default:"No description" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-light-300">
+                                {{ range.created_at|date:"M d, Y" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button type="button" 
+                                        class="text-red-400 hover:text-red-300" 
+                                        onclick="document.getElementById('delete-id').value='{{ range.id }}'; document.getElementById('delete-modal').classList.remove('hidden');">
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Add Network Range Form -->
+        <form method="post" action="{% url 'organizations:network_range' slug=organization.slug %}" class="px-4 py-5 sm:p-6 bg-dark-700">
+            {% csrf_token %}
+            
+            <div class="space-y-6">
+                <div>
+                    <h4 class="text-base font-medium text-light-100 mb-4">Add New Network Range</h4>
+                    <p class="text-sm text-light-300 mb-4">
+                        Add a new IP range for node allocation. Use private IP ranges only.
+                    </p>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <!-- CIDR Input -->
+                    <div class="sm:col-span-3">
+                        <label for="cidr" class="block text-sm font-medium text-light-200">CIDR Notation</label>
+                        <div class="mt-1">
+                            <input type="text" name="cidr" id="cidr" 
+                                   class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm bg-dark-800 border-gray-700 rounded-md text-light-100" 
+                                   placeholder="192.168.100.0/24" required>
+                        </div>
+                        <p class="mt-2 text-xs text-light-400">Examples: 192.168.100.0/24, 10.100.0.0/24, or 172.16.100.0/24</p>
+                    </div>
+
+                    <!-- Description Input -->
+                    <div class="sm:col-span-3">
+                        <label for="description" class="block text-sm font-medium text-light-200">Description (Optional)</label>
+                        <div class="mt-1">
+                            <input type="text" name="description" id="description" 
+                                   class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm bg-dark-800 border-gray-700 rounded-md text-light-100" 
+                                   placeholder="Primary network range">
+                        </div>
+                        <p class="mt-2 text-xs text-light-400">Optional description for this network range</p>
+                    </div>
+                </div>
+                
+                <!-- Quick Select Buttons -->
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" onclick="document.getElementById('cidr').value='192.168.100.0/24'" 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-gray-700 shadow-sm text-xs font-medium rounded text-light-200 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        192.168.100.0/24
+                    </button>
+                    <button type="button" onclick="document.getElementById('cidr').value='10.100.0.0/24'" 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-gray-700 shadow-sm text-xs font-medium rounded text-light-200 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        10.100.0.0/24
+                    </button>
+                    <button type="button" onclick="document.getElementById('cidr').value='172.16.100.0/24'" 
+                            class="inline-flex items-center px-2.5 py-1.5 border border-gray-700 shadow-sm text-xs font-medium rounded text-light-200 bg-dark-800 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        172.16.100.0/24
+                    </button>
+                </div>
+                
+                <!-- Helper Information -->
+                <div class="rounded-md bg-primary-900 bg-opacity-30 p-4 border border-primary-800">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-primary-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3 flex-1 md:flex md:justify-between">
+                            <p class="text-sm text-light-200">
+                                Network ranges must be private IP addresses and must be specified in CIDR notation.
+                                <br>Only one network range is required, but you can add more for larger networks.
+                            </p>
+                            <p class="mt-3 text-sm md:mt-0 md:ml-6">
+                                <a href="https://en.wikipedia.org/wiki/Private_network" target="_blank" class="whitespace-nowrap font-medium text-primary-400 hover:text-primary-300">
+                                    Learn more <span aria-hidden="true">&rarr;</span>
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="mt-6 flex justify-end">
+                <a href="{% url 'organizations:detail' slug=organization.slug %}" 
+                   class="bg-dark-800 py-2 px-4 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-light-200 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Cancel
+                </a>
+                <button type="submit"
+                        class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Add Network Range
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="hidden fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-dark-900 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+        <div class="inline-block align-bottom bg-dark-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-dark-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-900 bg-opacity-30 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-light-100" id="modal-title">Delete Network Range</h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-light-300">
+                                Are you sure you want to delete this network range? This action cannot be undone. 
+                                Any nodes using IPs from this range will need to be manually reassigned.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <form method="post" action="{% url 'organizations:delete_network_range' slug=organization.slug %}">
+                {% csrf_token %}
+                <input type="hidden" name="range_id" id="delete-id" value="">
+                <div class="bg-dark-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        Delete
+                    </button>
+                    <button type="button" onclick="document.getElementById('delete-modal').classList.add('hidden')" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-700 shadow-sm px-4 py-2 bg-dark-800 text-base font-medium text-light-200 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

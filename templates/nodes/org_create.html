@@ -1,0 +1,319 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Node - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Create Node{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <h1 class="ui-page-title">Create Node</h1>
+        <p class="ui-page-subtitle">Add a new Nebula node for {{ organization.name }} with addressing, certificate, and policy assignments.</p>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-light-300 hover:text-primary-400">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">Nodes</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-100" aria-current="page">Create Node</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Form Container -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Create a New Nebula Node</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">
+                Enter the details to create a new node for {{ organization.name }}.
+            </p>
+        </div>
+        
+        <div class="px-4 py-5 sm:p-6">
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Errors -->
+                {% if form.non_field_errors %}
+                    <div class="rounded-md bg-red-800 p-4 mb-6">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <div class="text-sm text-red-200">
+                                    {% for error in form.non_field_errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <!-- Node Name -->
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Node Name *
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="{{ form.name.html_name }}" id="{{ form.name.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                placeholder="e.g. webserver-prod-1" 
+                                value="{{ form.name.value|default:'' }}" 
+                                required>
+                        </div>
+                        {% if form.name.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.name.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">The name of your Nebula node. Choose something descriptive.</p>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="sm:col-span-6">
+                        <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Description
+                        </label>
+                        <div class="mt-1">
+                            <textarea name="{{ form.description.html_name }}" id="{{ form.description.id_for_label }}" rows="3"
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md"
+                                placeholder="Optional description of this node">{{ form.description.value|default:'' }}</textarea>
+                        </div>
+                        {% if form.description.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.description.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Node IP Address -->
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.nebula_ip.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            IP Address *
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="{{ form.nebula_ip.html_name }}" id="{{ form.nebula_ip.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                placeholder="e.g. 192.168.100.1/24" 
+                                value="{{ form.nebula_ip.value|default:'' }}" 
+                                required>
+                        </div>
+                        {% if form.nebula_ip.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.nebula_ip.errors.0 }}</p>
+                        {% else %}
+                            <p class="mt-2 text-sm text-light-400">CIDR notation (IP/subnet), must be within the organization's network range.</p>
+                            <p class="mt-2 text-sm text-gray-500">Available ranges: 
+                                {% for range in organization.network_ranges.all %}
+                                    <span class="text-light-300">{{ range.cidr }}</span>{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Certificate Authority -->
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.certificate_authority.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Certificate Authority *
+                        </label>
+                        <div class="mt-1">
+                            <select name="{{ form.certificate_authority.html_name }}" id="{{ form.certificate_authority.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
+                                {% for choice in form.certificate_authority.field.choices %}
+                                    <option value="{{ choice.0 }}" {% if form.certificate_authority.value|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if form.certificate_authority.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.certificate_authority.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Key Expiration -->
+                    <div class="sm:col-span-3">
+                        <label for="{{ form.key_expiration.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Certificate Expiration *
+                        </label>
+                        <div class="mt-1">
+                            <input type="date" name="{{ form.key_expiration.html_name }}" id="{{ form.key_expiration.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                value="{{ form.key_expiration.value|date:'Y-m-d'|default:'' }}" 
+                                required>
+                        </div>
+                        {% if form.key_expiration.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.key_expiration.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">The date when the node's certificate will expire.</p>
+                    </div>
+                    
+                    <!-- Groups -->
+                    <div class="sm:col-span-6">
+                        <label for="{{ form.groups.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Groups
+                        </label>
+                        <div class="mt-1">
+                            <select multiple name="{{ form.groups.html_name }}" id="{{ form.groups.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                size="5">
+                                {% for choice in form.groups.field.choices %}
+                                    <option value="{{ choice.0 }}" {% if choice.0 in form.groups.value %}selected{% endif %}>
+                                        {{ choice.1 }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% if form.groups.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.groups.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">Associate this node with specific groups for firewall rules (Ctrl+click to select multiple).</p>
+                    </div>
+                    
+                    <!-- Is Lighthouse -->
+                    <div class="sm:col-span-6">
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input type="checkbox" name="{{ form.is_lighthouse.html_name }}" id="{{ form.is_lighthouse.id_for_label }}" 
+                                    class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-700 bg-dark-700 rounded" 
+                                    {% if form.is_lighthouse.value %}checked{% endif %}>
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="{{ form.is_lighthouse.id_for_label }}" class="font-medium text-light-100">Lighthouse Node</label>
+                                <p class="text-light-400">Designate this node as a lighthouse for the Nebula network.</p>
+                                {% if form.is_lighthouse.errors %}
+                                    <p class="mt-2 text-sm text-red-400">{{ form.is_lighthouse.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Public IP -->
+                    <div class="sm:col-span-3 {% if not form.is_lighthouse.value %}hidden{% endif %} lighthouse-field">
+                        <label for="{{ form.public_ip.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Public IP (Optional)
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="{{ form.public_ip.html_name }}" id="{{ form.public_ip.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                placeholder="e.g. 203.0.113.1" 
+                                value="{{ form.public_ip.value|default:'' }}">
+                        </div>
+                        {% if form.public_ip.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.public_ip.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">External IP address for this lighthouse. Either this or FQDN is required.</p>
+                    </div>
+                    
+                    <!-- FQDN -->
+                    <div class="sm:col-span-3 {% if not form.is_lighthouse.value %}hidden{% endif %} lighthouse-field">
+                        <label for="{{ form.fqdn.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            FQDN (Optional)
+                        </label>
+                        <div class="mt-1">
+                            <input type="text" name="{{ form.fqdn.html_name }}" id="{{ form.fqdn.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                placeholder="e.g. lighthouse.example.com" 
+                                value="{{ form.fqdn.value|default:'' }}">
+                        </div>
+                        {% if form.fqdn.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.fqdn.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">A domain name that resolves to this lighthouse's public IP address. Either this or Public IP is required.</p>
+                    </div>
+                    
+                    <!-- Port -->
+                    <div class="sm:col-span-3 {% if not form.is_lighthouse.value %}hidden{% endif %} lighthouse-field">
+                        <label for="{{ form.port.id_for_label }}" class="block text-sm font-medium text-light-100">
+                            Port
+                        </label>
+                        <div class="mt-1">
+                            <input type="number" name="{{ form.port.html_name }}" id="{{ form.port.id_for_label }}" 
+                                class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md" 
+                                placeholder="e.g. 4242" 
+                                value="{{ form.port.value|default:'' }}">
+                        </div>
+                        {% if form.port.errors %}
+                            <p class="mt-2 text-sm text-red-400">{{ form.port.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-2 text-sm text-light-400">External port for this lighthouse (required for lighthouse nodes).</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-8">
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="inline-flex items-center px-4 py-2 border border-gray-700 text-sm font-medium rounded-md shadow-sm text-light-300 bg-dark-800 hover:bg-dark-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Cancel
+                    </a>
+                    <button type="submit" onclick="return validateLighthouseFields()" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        Create Node
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function validateLighthouseFields() {
+        const isLighthouse = document.getElementById('{{ form.is_lighthouse.id_for_label }}').checked;
+        const publicIpField = document.getElementById('{{ form.public_ip.id_for_label }}');
+        const fqdnField = document.getElementById('{{ form.fqdn.id_for_label }}');
+        
+        if (isLighthouse) {
+            const publicIp = publicIpField.value.trim();
+            const fqdn = fqdnField.value.trim();
+            
+            if (!publicIp && !fqdn) {
+                alert('For lighthouse nodes, you must provide either a Public IP Address or an FQDN.');
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const lighthouseCheckbox = document.getElementById('{{ form.is_lighthouse.id_for_label }}');
+        const lighthouseFields = document.querySelectorAll('.lighthouse-field');
+        
+        function toggleLighthouseFields() {
+            lighthouseFields.forEach(field => {
+                if (lighthouseCheckbox.checked) {
+                    field.classList.remove('hidden');
+                } else {
+                    field.classList.add('hidden');
+                }
+            });
+        }
+        
+        // Initial state
+        toggleLighthouseFields();
+        
+        // On change
+        lighthouseCheckbox.addEventListener('change', toggleLighthouseFields);
+    });
+</script>
+{% endblock %} 

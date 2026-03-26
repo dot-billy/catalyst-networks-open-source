@@ -1,0 +1,173 @@
+{% extends 'base/base.html' %}
+
+{% block page_title %}Token Details{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">{{ token.description|default:"Registration Token" }}</h1>
+            <p class="ui-page-subtitle">Review status, usage, and registration permissions for this token.</p>
+        </div>
+        <nav class="flex" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-light-300 hover:text-primary-400">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">Nodes</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">Tokens</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-100">{{ token.description|default:"Token Detail" }}</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Token Detail Card -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h3 class="text-lg leading-6 font-medium text-light-100">{{ token.description|default:"Registration Token" }}</h3>
+                <p class="mt-1 max-w-2xl text-sm text-light-300">Created {{ token.created_at|date:"F j, Y" }}</p>
+            </div>
+            {% if not token.is_revoked %}
+            <form method="POST" action="{% url 'nodes_org:token_revoke' slug=organization.slug pk=token.id %}" class="mt-4 md:mt-0">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center px-4 py-2 border border-red-700 rounded-md shadow-sm text-sm font-medium text-red-400 bg-dark-900 hover:bg-red-900 hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all" onclick="return confirm('Are you sure you want to revoke this token? This action cannot be undone.')">
+                    <svg class="-ml-1 mr-2 h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                    Revoke Token
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        <div class="border-t border-gray-700">
+            <dl>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Token Status</dt>
+                    <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                        {% if token.is_revoked %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900 bg-opacity-30 text-red-400">Revoked</span>
+                        {% elif token.is_expired %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900 bg-opacity-30 text-yellow-400">Expired</span>
+                        {% elif token.is_used_up %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-400">Used</span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 bg-opacity-30 text-green-400">Active</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Token Value</dt>
+                    <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
+                        <div class="relative">
+                            <div class="font-mono bg-dark-900 border border-gray-700 rounded-md p-3 overflow-x-auto text-light-100">
+                                <code id="token-value">{{ token.token }}</code>
+                            </div>
+                            <button onclick="copyToClipboard('token-value')" class="absolute top-3 right-3 p-1 rounded-md text-gray-400 hover:text-primary-400 hover:bg-dark-700 focus:outline-none focus:bg-dark-900 focus:ring-2 focus:ring-primary-500">
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
+                                    <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Created at</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ token.created_at|date:"F j, Y, g:i a" }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Expires at</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{% if token.expires_at %}{{ token.expires_at|date:"F j, Y, g:i a" }}{% else %}<span class="text-gray-400">Never</span>{% endif %}</dd>
+                </div>
+                <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Usage</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{% if token.uses_allowed > 0 %}{{ token.uses_count }} of {{ token.uses_allowed }} uses{% else %}{{ token.uses_count }} uses (unlimited){% endif %}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Permitted Node Types</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
+                        <ul class="space-y-1">
+                            {% if token.can_register_regular %}
+                            <li class="flex items-center">
+                                <svg class="h-5 w-5 text-green-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                Regular Nodes
+                            </li>
+                            {% endif %}
+                            {% if token.can_register_lighthouse %}
+                            <li class="flex items-center">
+                                <svg class="h-5 w-5 text-green-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                Lighthouse Nodes
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+    <div class="mt-6">
+        <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">
+            <svg class="-ml-1 mr-2 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+            </svg>
+            Back to Tokens
+        </a>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function copyToClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        const text = element.textContent;
+        
+        navigator.clipboard.writeText(text).then(
+            function() {
+                // Add a temporary success indicator
+                const button = element.parentNode.nextElementSibling;
+                button.innerHTML = '<svg class="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>';
+                
+                // Restore after delay
+                setTimeout(function() {
+                    button.innerHTML = '<svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" /><path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" /></svg>';
+                }, 2000);
+            }
+        );
+    }
+</script>
+{% endblock %}
+{% endblock %} 

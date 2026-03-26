@@ -1,0 +1,122 @@
+{% extends "base/base.html" %}
+
+{% block title %}Edit Rule - {{ organization.name }} - {{ security_group.name }}{% endblock %}
+{% block page_title %}Edit Policy Rule{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div class="ui-page-header">
+    <div>
+      <h1 class="ui-page-title">Edit Rule for {{ security_group.name }}</h1>
+      <p class="ui-page-subtitle">Update what this rule allows and keep the description precise enough that future reviewers understand why the source is approved.</p>
+    </div>
+  </div>
+
+  <div class="ui-form-section">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ui-form-grid">
+        <div>
+          <label for="id_protocol">Protocol</label>
+          <select id="id_protocol" name="protocol">
+            <option value="tcp" {% if rule.protocol == 'tcp' %}selected{% endif %}>TCP</option>
+            <option value="udp" {% if rule.protocol == 'udp' %}selected{% endif %}>UDP</option>
+            <option value="icmp" {% if rule.protocol == 'icmp' %}selected{% endif %}>ICMP</option>
+            <option value="any" {% if rule.protocol == 'any' %}selected{% endif %}>Any Protocol</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="id_port_min">Start port</label>
+          <input type="number" name="port_min" id="id_port_min" min="1" max="65535" value="{{ rule.port_min }}" placeholder="22">
+        </div>
+
+        <div>
+          <label for="id_port_max">End port</label>
+          <input type="number" name="port_max" id="id_port_max" min="1" max="65535" value="{{ rule.port_max }}" placeholder="22">
+          <p class="ui-field-help">Use the same start and end port for a single-port rule. Leave blank for ICMP or Any Protocol.</p>
+        </div>
+
+        <div>
+          <label for="id_source_cidr">Fallback CIDR</label>
+          <input type="text" name="source_cidr" id="id_source_cidr" value="{{ rule.source_cidr }}" placeholder="10.0.0.0/8">
+          <p class="ui-field-help">Only used when you are not selecting a source group or host.</p>
+        </div>
+      </div>
+
+      <div class="mt-8">
+        <label class="block mb-3">Source Type</label>
+        <div class="ui-inline-actions">
+          <label class="ui-selection-row flex-1">
+            <input type="radio" name="source_type" value="group" {% if default_source_type == 'group' %}checked{% endif %} class="mt-1">
+            <div>
+              <div class="font-semibold text-light-100">Policy group</div>
+              <div class="text-sm text-light-300">Allow one or more other security policies.</div>
+            </div>
+          </label>
+          <label class="ui-selection-row flex-1">
+            <input type="radio" name="source_type" value="host" {% if default_source_type == 'host' %}checked{% endif %} class="mt-1">
+            <div>
+              <div class="font-semibold text-light-100">Specific host</div>
+              <div class="text-sm text-light-300">Allow a single node as the traffic source.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="ui-form-grid mt-6">
+        <div id="group-select">
+          <label for="id_source_group">Allowed source policies</label>
+          <select id="id_source_group" name="source_group" multiple>
+            {% for group in all_groups %}
+              <option value="{{ group.id }}" {% if group.id in selected_group_ids %}selected{% endif %}>{{ group.name }}</option>
+            {% endfor %}
+          </select>
+          <p class="ui-field-help">Select all policy groups that should be able to reach nodes in this policy.</p>
+        </div>
+        <div id="host-select" style="display:none;">
+          <label for="id_source_node">Allowed source host</label>
+          <select id="id_source_node" name="source_node">
+            <option value="">-- Select a host --</option>
+            {% for node in all_nodes %}
+              <option value="{{ node.id }}" {% if node.id == selected_node_id %}selected{% endif %}>{{ node.name }} ({{ node.nebula_ip }})</option>
+            {% endfor %}
+          </select>
+          <p class="ui-field-help">Choose the individual node that should remain allowed as a source.</p>
+        </div>
+      </div>
+
+      <div class="mt-6">
+        <label for="id_rule_description">Rule description</label>
+        <input type="text" name="description" id="id_rule_description" value="{{ rule.description }}" placeholder="Allow SSH from admin networks">
+      </div>
+
+      <div class="ui-action-bar mt-8 justify-end">
+        <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=security_group.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">Cancel</a>
+        <button type="submit" class="btn-enhanced ui-button-primary ui-button-sm">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const radios = document.getElementsByName('source_type');
+    const groupSelect = document.getElementById('group-select');
+    const hostSelect = document.getElementById('host-select');
+    function syncVisibility() {
+      const val = Array.from(radios).find(r => r.checked)?.value;
+      if (val === 'host') {
+        groupSelect.style.display = 'none';
+        hostSelect.style.display = '';
+      } else {
+        groupSelect.style.display = '';
+        hostSelect.style.display = 'none';
+      }
+    }
+    radios.forEach(r => r.addEventListener('change', syncVisibility));
+    syncVisibility();
+  });
+</script>
+{% endblock %}
+
+

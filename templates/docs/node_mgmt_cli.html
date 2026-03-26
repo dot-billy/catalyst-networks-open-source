@@ -1,0 +1,100 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Node Management CLI - Documentation{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <h1 class="ui-page-title mb-4">Node Management CLI</h1>
+    <p class="ui-page-subtitle mb-6 max-w-4xl">To add new nodes or lighthouse nodes to your organization, use the {{ project_meta.NAME }} Management CLI. This approach is more secure and flexible than using the dashboard. Follow the steps below for your operating system.</p>
+    <div class="mb-4">
+      <span class="font-semibold text-light-100">Download the {{ project_meta.NAME }} CLI:</span>
+      <ul class="list-disc ml-6 mt-2">
+        <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64" class="text-primary-400 hover:underline" download>Linux (x86_64)</a></li>
+        <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64" class="text-primary-400 hover:underline" download>macOS (Intel)</a></li>
+        <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-arm64" class="text-primary-400 hover:underline" download>macOS (Apple Silicon)</a></li>
+        <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" class="text-primary-400 hover:underline" download>Windows (x86_64)</a></li>
+      </ul>
+    </div>
+    <div>
+      <div class="tabbed-instructions">
+        <div class="tabs mb-2 flex space-x-2">
+          <button class="tab-btn px-3 py-1 rounded bg-primary-700 text-white" onclick="showTab('linux')">Linux</button>
+          <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('macos')">macOS</button>
+          <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('windows')">Windows</button>
+        </div>
+        <div id="tab-linux" class="tab-content w-full max-w-full">
+          <ol class="list-decimal ml-6 mb-2">
+            <li>Download the CLI binary:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">wget https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64
+chmod +x catalyst-networks-linux-amd64
+sudo mv catalyst-networks-linux-amd64 /usr/local/bin/catalyst-networks</pre>
+          <ol start="2" class="list-decimal ml-6 mb-2">
+            <li>Run the following command to add a node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
+          <ol start="3" class="list-decimal ml-6 mb-2">
+            <li>To add a lighthouse node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full text-sm">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+        </div>
+        <div id="tab-macos" class="tab-content hidden w-full max-w-full">
+          <ol class="list-decimal ml-6 mb-2">
+            <li>Download the CLI binary:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">curl -LO https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64
+chmod +x catalyst-networks-darwin-amd64
+sudo mv catalyst-networks-darwin-amd64 /usr/local/bin/catalyst-networks</pre>
+          <ol start="2" class="list-decimal ml-6 mb-2">
+            <li>Run the following command to add a node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
+          <ol start="3" class="list-decimal ml-6 mb-2">
+            <li>To add a lighthouse node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full text-sm">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+        </div>
+        <div id="tab-windows" class="tab-content hidden w-full max-w-full">
+          <ol class="list-decimal ml-6 mb-2">
+            <li>Download the CLI binary:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">Invoke-WebRequest -Uri `
+  "https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" `
+  -OutFile "catalyst-networks.exe"</pre>
+          <ol start="2" class="list-decimal ml-6 mb-2">
+            <li>Run the following command to add a node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2 text-sm">.\catalyst-networks.exe create --name mynode --hostname mynode.example.com</pre>
+          <ol start="3" class="list-decimal ml-6 mb-2">
+            <li>To add a lighthouse node:</li>
+          </ol>
+          <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full text-sm">.\catalyst-networks.exe create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+        </div>
+      </div>
+      <script>
+      function showTab(tab) {
+        document.getElementById('tab-linux').classList.add('hidden');
+        document.getElementById('tab-macos').classList.add('hidden');
+        document.getElementById('tab-windows').classList.add('hidden');
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.classList.remove('bg-primary-700', 'text-white');
+          btn.classList.add('bg-dark-700', 'text-light-200');
+        });
+        document.getElementById('tab-' + tab).classList.remove('hidden');
+        document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.add('bg-primary-700', 'text-white');
+        document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.remove('bg-dark-700', 'text-light-200');
+      }
+      // Default to Linux tab
+      showTab('linux');
+      </script>
+    </div>
+    <div class="mt-4 text-sm text-light-300">
+      <strong>Tip:</strong> You can generate registration tokens in the "Registration Tokens" section of your organization. The CLI will prompt you for the token and other credentials when you run the create command.
+    </div>
+  </main>
+</div>
+{% endblock %} 

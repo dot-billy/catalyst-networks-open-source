@@ -1,0 +1,83 @@
+{% comment %}
+    Usage: {% include "components/form.html" with form=form submit_text="Submit" cancel_url=cancel_url %}
+    
+    Parameters:
+    - form: Required. The form object.
+    - submit_text: Optional. The text for the submit button. Default is "Submit".
+    - cancel_url: Optional. URL to redirect to when cancel is clicked.
+    - cancel_text: Optional. The text for the cancel button. Default is "Cancel".
+    - is_multipart: Optional. Set to True if form includes file uploads.
+    - form_id: Optional. HTML ID for the form.
+    - title: Optional. Title to display above the form.
+    - subtitle: Optional. Subtitle to display below the title.
+{% endcomment %}
+
+<div class="bg-dark-900 border border-gray-700 rounded-lg shadow-md p-6 hover-glow">
+    {% if title %}
+    <div class="mb-5">
+        <h2 class="text-xl font-semibold text-light-100">{{ title }}</h2>
+        {% if subtitle %}
+        <p class="mt-1 text-sm text-light-300">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <!-- Form errors -->
+    {% if form.non_field_errors %}
+    <div class="mb-4 p-3 rounded bg-red-900 bg-opacity-30 border border-red-800 text-red-400">
+        {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <form 
+        method="post" 
+        {% if is_multipart %}enctype="multipart/form-data"{% endif %}
+        {% if form_id %}id="{{ form_id }}"{% endif %}
+        class="space-y-5"
+    >
+        {% csrf_token %}
+        
+        {% for field in form %}
+            <div class="mb-4">
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-light-200 mb-1">
+                    {{ field.label }}{% if field.field.required %}<span class="text-red-400">*</span>{% endif %}
+                </label>
+                
+                {% if field.field.widget.input_type == 'checkbox' %}
+                    <div class="flex items-center">
+                        {{ field }}
+                        {% if field.help_text %}
+                            <span class="ml-2 text-xs text-gray-500">{{ field.help_text }}</span>
+                        {% endif %}
+                    </div>
+                {% else %}
+                    {{ field }}
+                    {% if field.help_text %}
+                        <p class="mt-1 text-xs text-gray-500">{{ field.help_text }}</p>
+                    {% endif %}
+                {% endif %}
+                
+                {% if field.errors %}
+                    <div class="mt-1 text-sm text-red-400">
+                        {% for error in field.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+        
+        <div class="flex items-center justify-end mt-6 space-x-3">
+            {% if cancel_url %}
+                <a href="{{ cancel_url }}" class="px-4 py-2 text-sm font-medium text-light-300 bg-dark-800 border border-gray-700 rounded-md hover:bg-dark-700 transition-all">
+                    {{ cancel_text|default:"Cancel" }}
+                </a>
+            {% endif %}
+            <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary-500 rounded-md hover:bg-primary-600 transition-all">
+                {{ submit_text|default:"Submit" }}
+            </button>
+        </div>
+    </form>
+</div> 

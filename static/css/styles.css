@@ -1,0 +1,58 @@
+/* Custom CSS styles for Catalyst Networks */
+
+/* HTMX indicator styles */
+.htmx-indicator {
+    display: none;
+}
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+/* Custom badges and status indicators */
+.badge-expired {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #047857;
+}
+
+/* Card hover effects */
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Form validation styles */
+.error-feedback {
+    color: #b91c1c;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.form-control.is-invalid {
+    border-color: #b91c1c;
+}
+
+/* Custom button transitions */
+.btn-transition {
+    transition: all 0.2s ease;
+}
+
+.btn-transition:hover {
+    transform: translateY(-1px);
+} 

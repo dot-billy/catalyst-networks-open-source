@@ -1,0 +1,170 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}{{ organization.name }} - Members{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold">{{ organization.name }} - Members</h1>
+        {% if user_role == 'admin' %}
+        <a href="{% url 'organizations:invitation_create' organization.slug %}" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded">
+            Invite Member
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Current Members -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Current Members</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for membership in memberships %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ membership.user.email }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if membership.role == 'admin' %}bg-green-100 text-green-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                                {{ membership.role|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if user_role == 'admin' and membership.user.email != request.user.email %}
+                            <div class="flex space-x-2">
+                                <form method="post" action="{% url 'organizations:change_member_role' organization.slug membership.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <select name="role" onchange="this.form.submit()" class="text-sm border rounded px-2 py-1">
+                                        <option value="member" {% if membership.role == 'member' %}selected{% endif %}>Member</option>
+                                        <option value="admin" {% if membership.role == 'admin' %}selected{% endif %}>Admin</option>
+                                    </select>
+                                </form>
+                                <form method="post" action="{% url 'organizations:remove_member' organization.slug membership.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-600 hover:text-red-900" onclick="return confirm('Are you sure you want to remove this member?')">
+                                        Remove
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pending Invitations -->
+    {% if pending_invitations %}
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Pending Invitations</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invited By</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expires</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for invitation in pending_invitations %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ invitation.email }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if invitation.role == 'admin' %}bg-green-100 text-green-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                                {{ invitation.role|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ invitation.inviter.email }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">{{ invitation.expires_at|date:"M d, Y" }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if user_role == 'admin' %}
+                            <div class="flex space-x-2">
+                                <form method="post" action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-blue-600 hover:text-blue-900">Resend</button>
+                                </form>
+                                <form method="post" action="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="text-red-600 hover:text-red-900" onclick="return confirm('Are you sure you want to revoke this invitation?')">
+                                        Revoke
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Expired Invitations -->
+    {% if expired_invitations %}
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Expired Invitations</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invited By</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expired On</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for invitation in expired_invitations %}
+                    <tr class="bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-500">{{ invitation.email }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                {{ invitation.role|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-500">{{ invitation.inviter.email }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-500">{{ invitation.expires_at|date:"M d, Y" }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            {% if user_role == 'admin' %}
+                            <form method="post" action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="text-blue-600 hover:text-blue-900">Resend</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

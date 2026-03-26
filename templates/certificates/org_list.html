@@ -1,0 +1,55 @@
+{% extends "base/base.html" %}
+
+{% block title %}Certificate Authorities - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Certificates{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Certificate Authorities</h1>
+            <p class="ui-page-subtitle">Certificate authorities sign node certificates for {{ organization.name }} and underpin secure enrollment and renewal workflows.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="btn-enhanced ui-button-primary ui-button-sm">Create New CA</a>
+        </div>
+    </div>
+
+    {% if certificate_authorities %}
+    <div class="ui-list">
+        {% for ca in certificate_authorities %}
+        <div class="ui-list-item">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h2 class="text-lg font-semibold text-light-100">{{ ca.name }}</h2>
+                        <span class="ui-badge {% if ca.is_valid %}ui-badge-success{% else %}ui-badge-danger{% endif %}">
+                            {% if ca.is_valid %}Active{% else %}Expired{% endif %}
+                        </span>
+                    </div>
+                    <div class="ui-meta-list">
+                        <span>{{ ca.nodes.count }} nodes</span>
+                        <span>•</span>
+                        <span>Created {{ ca.created_at|date:"M d, Y" }}</span>
+                        <span>•</span>
+                        <span>{{ ca.created_by.email }}</span>
+                    </div>
+                </div>
+                <div class="ui-inline-actions">
+                    <a href="{% url 'certificates_org:detail' slug=organization.slug pk=ca.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">View Details</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ui-empty-state">
+        <h3>No certificate authorities</h3>
+        <p>Create a certificate authority before provisioning nodes so issued certificates can be signed correctly.</p>
+        <div class="mt-6">
+            <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="btn-enhanced ui-button-primary ui-button-sm">Create New CA</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

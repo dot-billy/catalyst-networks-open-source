@@ -1,0 +1,242 @@
+{% extends "base/base.html" %}
+
+{% block title %}Edit Node - {{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Edit Node{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs -->
+    <div>
+        <h1 class="ui-page-title">Edit Node</h1>
+        <p class="ui-page-subtitle">Update the core settings for {{ node.name }} without changing its certificate authority or assigned address.</p>
+        <nav class="flex mt-1" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-2">
+                <li>
+                    <a href="{% url 'dashboard:dashboard' %}" class="text-light-300 hover:text-primary-400">Dashboard</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'organizations:detail' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">{{ organization.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-light-300 hover:text-primary-400">Nodes</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="text-light-300 hover:text-primary-400">{{ node.name }}</a>
+                </li>
+                <li>
+                    <svg class="flex-shrink-0 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </li>
+                <li>
+                    <span class="text-light-100" aria-current="page">Edit</span>
+                </li>
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Form Container -->
+    <div class="ui-form-section overflow-hidden p-0">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Node Information</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">
+                Edit the Nebula node properties for {{ node.name }}.
+                {% if node.is_lighthouse %}
+                <span class="text-primary-400 font-semibold">This is a lighthouse node.</span>
+                {% endif %}
+            </p>
+        </div>
+        
+        <form method="post" action="{% url 'nodes_org:edit' slug=organization.slug pk=node.id %}" class="divide-y divide-gray-700">
+            {% csrf_token %}
+            
+            <!-- Node Configuration -->
+            <div class="px-4 py-5 sm:p-6">
+                <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                    <!-- Node Name -->
+                    <div class="sm:col-span-3">
+                        <label for="name" class="block text-sm font-medium text-light-100">Node Name</label>
+                        <div class="mt-1">
+                            <input type="text" name="name" id="name" required
+                                   value="{{ node.name }}"
+                                   class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">A descriptive name for this node.</p>
+                    </div>
+                    
+                    <!-- Certificate Authority (read-only) -->
+                    <div class="sm:col-span-3">
+                        <label class="block text-sm font-medium text-light-100">Certificate Authority</label>
+                        <div class="mt-1">
+                            <div class="shadow-sm px-3 py-2 bg-dark-700 border border-gray-700 rounded-md text-light-300 text-sm">
+                                {{ node.certificate_authority.name }} (CA cannot be changed after creation)
+                            </div>
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">
+                            The CA that issued this node's certificate.
+                        </p>
+                    </div>
+                    
+                    <!-- Is Lighthouse -->
+                    <div class="sm:col-span-6">
+                        <div class="flex items-start">
+                            <div class="flex items-center h-5">
+                                <input id="is_lighthouse" name="is_lighthouse" type="checkbox"
+                                       {% if node.is_lighthouse %}checked{% endif %}
+                                       class="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-700 bg-dark-700 rounded"
+                                       onchange="toggleLighthouseFields()">
+                            </div>
+                            <div class="ml-3 text-sm">
+                                <label for="is_lighthouse" class="font-medium text-light-100">Lighthouse Node</label>
+                                <p class="text-light-300">Enable this if the node should act as a Nebula lighthouse (connection broker).</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lighthouse specific fields - conditionally displayed -->
+                    <div id="lighthouse_fields" class="sm:col-span-6 {% if not node.is_lighthouse %}hidden{% endif %} pt-4 border-t border-gray-700 mt-4">
+                        <h4 class="text-base font-medium text-light-100 mb-3">Lighthouse Configuration</h4>
+                        <p class="text-sm text-light-300 mb-4">These settings are required for lighthouse nodes to function properly in your Nebula network.</p>
+                        
+                        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+                            <!-- Public IP Address -->
+                            <div class="sm:col-span-3">
+                                <label for="public_ip" class="block text-sm font-medium text-light-100">Public IP Address (Optional)</label>
+                                <div class="mt-1">
+                                    <input type="text" name="public_ip" id="public_ip" 
+                                           value="{{ node.public_ip|default:'' }}"
+                                           class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md"
+                                           placeholder="203.0.113.10">
+                                </div>
+                                <p class="mt-2 text-sm text-light-300">The public IP address where this lighthouse is reachable. Either this or FQDN is required.</p>
+                            </div>
+                            
+                            <!-- FQDN -->
+                            <div class="sm:col-span-3">
+                                <label for="fqdn" class="block text-sm font-medium text-light-100">FQDN (Optional)</label>
+                                <div class="mt-1">
+                                    <input type="text" name="fqdn" id="fqdn" 
+                                           value="{{ node.fqdn|default:'' }}"
+                                           class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md"
+                                           placeholder="lighthouse.example.com">
+                                </div>
+                                <p class="mt-2 text-sm text-light-300">A domain name that resolves to this lighthouse's public IP address. Either this or Public IP is required.</p>
+                            </div>
+                            
+                            <!-- External Port -->
+                            <div class="sm:col-span-3">
+                                <label for="external_port" class="block text-sm font-medium text-light-100">External Port</label>
+                                <div class="mt-1">
+                                    <input type="number" name="external_port" id="external_port" 
+                                           value="{{ node.external_port|default:'4242' }}"
+                                           class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
+                                </div>
+                                <p class="mt-2 text-sm text-light-300">The external port where the lighthouse service is available (default: 4242).</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Network Information (read-only) -->
+            <div class="px-4 py-5 sm:p-6 bg-dark-900">
+                <h4 class="text-base font-medium text-light-100 mb-4">Network Information</h4>
+                
+                <div class="rounded-md bg-primary-900 bg-opacity-30 p-4 mb-6 border border-primary-800">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-primary-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-light-300">
+                                Current IP address: <span class="font-medium text-light-100">{{ node.nebula_ip }}</span>
+                                <br>
+                                IP address was assigned from organization's network range:
+                                {% if organization.network_ranges.exists %}
+                                <span class="font-medium text-light-100">{{ organization.network_ranges.first.cidr }}</span>
+                                {% else %}
+                                <span class="text-red-400 font-medium">No network range configured!</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="px-4 py-3 bg-dark-900 text-right sm:px-6">
+                <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}"
+                   class="inline-flex justify-center py-2 px-4 border border-gray-700 shadow-sm text-sm font-medium rounded-md text-light-300 bg-dark-800 hover:bg-dark-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Cancel
+                </a>
+                <button type="submit" onclick="return validateLighthouseFields()"
+                        class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleLighthouseFields() {
+        const isLighthouse = document.getElementById('is_lighthouse').checked;
+        const lighthouseFields = document.getElementById('lighthouse_fields');
+        const publicIpField = document.getElementById('public_ip');
+        const fqdnField = document.getElementById('fqdn');
+        const externalPortField = document.getElementById('external_port');
+        
+        if (isLighthouse) {
+            lighthouseFields.classList.remove('hidden');
+            // Only require external port, not public IP (can use FQDN instead)
+            externalPortField.setAttribute('required', 'required');
+        } else {
+            lighthouseFields.classList.add('hidden');
+            publicIpField.removeAttribute('required');
+            fqdnField.removeAttribute('required');
+            externalPortField.removeAttribute('required');
+        }
+    }
+    
+    function validateLighthouseFields() {
+        const isLighthouse = document.getElementById('is_lighthouse').checked;
+        const publicIpField = document.getElementById('public_ip');
+        const fqdnField = document.getElementById('fqdn');
+        
+        if (isLighthouse) {
+            const publicIp = publicIpField.value.trim();
+            const fqdn = fqdnField.value.trim();
+            
+            if (!publicIp && !fqdn) {
+                alert('For lighthouse nodes, you must provide either a Public IP Address or an FQDN.');
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleLighthouseFields();
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,63 @@
+{% extends "base/base.html" %}
+
+{% block title %}Sign Mobile Certificate - {{ node.name }} - {{ organization.name }}{% endblock %}
+{% block page_title %}Sign Mobile Certificate{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="ui-page-title">Sign for Nebula Mobile</h1>
+    <p class="ui-page-subtitle">
+      Upload the public key exported from the Nebula mobile app. We’ll return a zip containing the CA certificate and your signed client certificate.
+    </p>
+  </div>
+
+  <div class="ui-form-section overflow-hidden p-0">
+    <div class="px-4 py-5 sm:px-6 border-b border-gray-700">
+      <h3 class="text-lg leading-6 font-medium text-light-100">Device: {{ node.name }}</h3>
+      <p class="mt-1 text-sm text-gray-400">
+        This does <strong>not</strong> upload or download any private key.
+      </p>
+    </div>
+
+    <div class="px-4 py-5 sm:p-6">
+      <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        <div>
+          <label for="id_public_key" class="block text-sm font-medium text-light-100">Nebula public key file *</label>
+          <div class="mt-1">
+            <input
+              type="file"
+              name="public_key"
+              id="id_public_key"
+              accept=".pub,.txt,*/*"
+              required
+              class="block w-full text-sm text-light-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary-700 file:bg-opacity-20 file:text-primary-300 hover:file:bg-opacity-30"
+            >
+          </div>
+          <p class="mt-2 text-sm text-light-400">
+            In Nebula Mobile, export/share the <strong>public key</strong> and upload it here.
+          </p>
+        </div>
+
+        <div class="flex justify-end space-x-3">
+          <a
+            href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}"
+            class="btn-enhanced ui-button-secondary"
+          >
+            Back
+          </a>
+          <button
+            type="submit"
+            class="btn-enhanced ui-button-primary"
+          >
+            Sign and download bundle
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,30 @@
+{% extends "base/base.html" %}
+
+{% block title %}Webhooks - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Webhooks{% endblock %}
+
+{% block content %}
+    <div class="space-y-6">
+        <div class="ui-page-header">
+            <div>
+                <h1 class="ui-page-title">Webhooks</h1>
+                <p class="ui-page-subtitle">Webhook management is not available yet, but this is where event delivery configuration will live.</p>
+            </div>
+            <div class="ui-page-actions">
+                <a href="#" class="btn-enhanced ui-button-secondary">Create Webhook</a>
+            </div>
+        </div>
+
+        <div class="ui-form-section text-center py-12">
+            <div class="flex justify-center mb-4">
+                <span class="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
+                    <svg class="h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </span>
+            </div>
+            <h2 class="card-title">Webhook Management</h2>
+            <p class="card-subtitle max-w-xl mx-auto">This page will support webhook endpoints, delivery settings, and event subscriptions in a future update.</p>
+        </div>
+    </div>
+{% endblock %} 

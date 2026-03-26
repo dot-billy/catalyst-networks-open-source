@@ -1,0 +1,113 @@
+{% extends "base/base.html" %}
+
+{% block title %}Dashboard - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+    <div class="space-y-6">
+        <div class="ui-page-header">
+            <div>
+                <h1 class="ui-page-title">Overview</h1>
+                <p class="ui-page-subtitle">Review your workspaces, spot anything that needs attention, and jump back into the next setup or operations task.</p>
+            </div>
+            <div class="ui-page-actions">
+                {% url 'organizations:create' as create_org_url %}
+                {% include "components/button.html" with text="Create Organization" href=create_org_url variant="primary" size="sm" %}
+            </div>
+        </div>
+
+        <div class="ui-kpi-grid">
+            <div class="ui-kpi-card">
+                <p class="ui-kpi-label">Organizations</p>
+                <p class="ui-kpi-value">{{ organizations_count }}</p>
+                <p class="ui-kpi-meta">Workspaces available to you.</p>
+            </div>
+            <div class="ui-kpi-card">
+                <p class="ui-kpi-label">Nodes</p>
+                <p class="ui-kpi-value">{{ nodes_count }}</p>
+                <p class="ui-kpi-meta">Tracked across your accessible organizations.</p>
+            </div>
+            <div class="ui-kpi-card">
+                <p class="ui-kpi-label">Security Policies</p>
+                <p class="ui-kpi-value">{{ security_groups_count }}</p>
+                <p class="ui-kpi-meta">Reusable policy groups across workspaces.</p>
+            </div>
+        </div>
+
+        <div class="ui-form-section">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Your Organizations</h2>
+                    <p class="card-subtitle">Open the workspace that needs attention, review setup progress, and manage members, nodes, and security policies.</p>
+                </div>
+            </div>
+
+            {% if organizations %}
+            <div class="ui-list">
+                {% for org in organizations %}
+                <div class="ui-list-item">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <h3 class="text-lg font-semibold text-light-100">{{ org.name }}</h3>
+                                <span class="ui-badge {% if org.role == 'owner' or org.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">{{ org.role|title }}</span>
+                            </div>
+                            <div class="ui-meta-list">
+                                <span>{{ org.nodes.count }} nodes</span>
+                                <span>•</span>
+                                <span>{{ org.security_groups.count }} security policies</span>
+                                <span>•</span>
+                                <span>{{ org.certificate_authorities.count }} certificate authorities</span>
+                            </div>
+                        </div>
+                        <div class="ui-inline-actions">
+                            <a href="{% url 'organizations:detail' slug=org.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Open</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="ui-empty-state">
+                <h3>No organizations yet</h3>
+                <p>Create your first workspace to start configuring nodes, certificates, security policies, and member access.</p>
+                <div class="mt-6">
+                    {% include "components/button.html" with text="Create Organization" variant="primary" size="sm" href=create_org_url %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div class="ui-form-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Certificate Expiry Warnings</h2>
+                        <p class="card-subtitle">Review certificates that may need renewal soon.</p>
+                    </div>
+                </div>
+                <div id="certificate-warnings" hx-get="{% url 'dashboard:certificate_warnings' %}" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-400"></div>
+                        <p class="mt-2 text-gray-500">Loading warnings...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ui-form-section">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Recent Activity</h2>
+                        <p class="card-subtitle">A live feed of recent changes across the workspaces you can access.</p>
+                    </div>
+                </div>
+                <div id="recent-activity" hx-get="{% url 'dashboard:recent_activity' %}" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="text-center py-8">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-400"></div>
+                        <p class="mt-2 text-gray-500">Loading activity...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %} 

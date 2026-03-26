@@ -1,0 +1,29 @@
+{% comment %}
+    Badge Component with consistent styling
+    
+    Usage: {% include "components/badge.html" with text="Badge Text" variant="primary" %}
+    
+    Parameters:
+    - text: Required. Badge text content.
+    - variant: Optional. Badge variant (primary, success, warning, error, gray). Default is "primary".
+    - size: Optional. Badge size (sm, md, lg). Default is "md".
+    - class: Optional. Additional CSS classes.
+    - icon: Optional. Icon to display before the text.
+    - icon_position: Optional. Icon position (left, right). Default is "left".
+{% endcomment %}
+
+{% with variant=variant|default:"primary" size=size|default:"md" size_classes=size|yesno:"text-xs px-2 py-1,text-sm px-3 py-1.5,text-base px-4 py-2" %}
+
+<span class="badge badge-{{ variant }} {{ size_classes }} inline-flex items-center gap-1 {{ class }}">
+    {% if icon and icon_position != "right" %}
+    <span class="badge-icon">{{ icon|safe }}</span>
+    {% endif %}
+    
+    <span class="badge-text">{{ text }}</span>
+    
+    {% if icon and icon_position == "right" %}
+    <span class="badge-icon">{{ icon|safe }}</span>
+    {% endif %}
+</span>
+
+{% endwith %}

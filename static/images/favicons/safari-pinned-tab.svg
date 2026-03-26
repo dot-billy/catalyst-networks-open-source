@@ -1,0 +1,28 @@
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 700">
+  <!-- Safari pinned tab version - single color silhouette -->
+  <g fill="#000000">
+    <!-- Central hexagon -->
+    <path d="M350 200 L450 258 L450 442 L350 500 L250 442 L250 258 Z" />
+    
+    <!-- Core circle -->
+    <circle cx="350" cy="350" r="50" />
+    
+    <!-- Network nodes -->
+    <circle cx="350" cy="150" r="35" />
+    <circle cx="500" cy="225" r="30" />
+    <circle cx="500" cy="475" r="30" />
+    <circle cx="350" cy="550" r="35" />
+    <circle cx="200" cy="475" r="30" />
+    <circle cx="200" cy="225" r="30" />
+    
+    <!-- Connection paths -->
+    <rect x="345" y="185" width="10" height="100" />
+    <rect x="345" y="415" width="10" height="100" />
+    
+    <!-- Diagonal connections -->
+    <path d="M380 320 L470 265 L480 275 L390 330 Z" />
+    <path d="M380 380 L470 435 L480 425 L390 370 Z" />
+    <path d="M320 320 L230 265 L220 275 L310 330 Z" />
+    <path d="M320 380 L230 435 L220 425 L310 370 Z" />
+  </g>
+</svg>

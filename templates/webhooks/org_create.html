@@ -1,0 +1,60 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Webhook - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Create Webhook{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-8">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Create Webhook</h1>
+            <p class="ui-page-subtitle">Add an endpoint for event delivery in {{ organization.name }}.</p>
+        </div>
+        <a href="{% url 'webhooks_org:list' org_id=organization.id %}" class="text-primary-400 hover:underline">Back to Webhooks</a>
+    </div>
+
+    <form method="post" class="ui-form-section space-y-6">
+        {% csrf_token %}
+        <div>
+            <label for="url" class="catalyst-label">Webhook URL</label>
+            <input type="url" name="url" id="url" required class="catalyst-input" placeholder="https://hooks.slack.com/services/...">
+        </div>
+        <div>
+            <label class="catalyst-label">Events</label>
+            <div class="space-y-2">
+                {% for event, label in events %}
+                <div class="flex items-center">
+                    <input type="checkbox" name="events" value="{{ event }}" id="event_{{ forloop.counter }}" class="form-checkbox-enhanced">
+                    <label for="event_{{ forloop.counter }}" class="ml-2 block text-sm text-gray-700">{{ label }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <label for="description" class="catalyst-label">Description (optional)</label>
+            <textarea name="description" id="description" rows="2" class="catalyst-textarea"></textarea>
+        </div>
+        <div>
+            <label for="secret" class="catalyst-label">Secret (optional)</label>
+            <input type="text" name="secret" id="secret" class="catalyst-input">
+        </div>
+        <div class="flex items-center">
+            <input type="checkbox" name="active" id="active" checked class="form-checkbox-enhanced">
+            <label for="active" class="ml-2 block text-sm text-gray-700">Active</label>
+        </div>
+        <div>
+            <button type="submit" class="btn-enhanced ui-button-primary">Create Webhook</button>
+        </div>
+    </form>
+
+    <div class="ui-form-section mt-8">
+        <h2 class="card-title mb-2">Quick Add: Slack Webhook</h2>
+        <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1">
+            <li>Go to <a href="https://api.slack.com/messaging/webhooks" class="underline" target="_blank">Slack Incoming Webhooks</a> and create a new webhook for your workspace.</li>
+            <li>Choose the channel you want notifications to go to and copy the webhook URL.</li>
+            <li>Paste the URL above and select the events you want to notify Slack about (e.g., Node Created).</li>
+            <li>Click "Create Webhook" to save.</li>
+        </ol>
+    </div>
+</div>
+{% endblock %} 

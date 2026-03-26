@@ -1,0 +1,148 @@
+{% extends "base/base.html" %}
+
+{% block title %}Members - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Members{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Organization Members</h1>
+            <p class="ui-page-subtitle">Manage members and invitations for {{ organization.name }}.</p>
+        </div>
+        {% if organization.role == 'owner' or organization.role == 'admin' %}
+        <div class="ui-page-actions">
+            <button type="button" onclick="document.getElementById('invite-member-modal').classList.remove('hidden')" class="btn-enhanced ui-button-primary">
+                Invite Member
+            </button>
+            <button type="button" onclick="document.getElementById('add-member-modal').classList.remove('hidden')" class="btn-enhanced ui-button-secondary">
+                Add Member
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- HTMX Members Table Partial -->
+    <div id="members-table" hx-get="{% url 'organizations:members' organization.slug %}?partial=1" hx-trigger="load" hx-swap="innerHTML">
+        <div class="text-center py-8 ui-form-section">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+            <p class="mt-2 text-gray-400">Loading members...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Invite Member Modal -->
+<div id="invite-member-modal" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Invite Member</h3>
+            <div class="mt-2">
+                <form method="post" action="{% url 'organizations:invitation_create' organization.slug %}" class="space-y-4" 
+                      hx-post="{% url 'organizations:invitation_create' organization.slug %}" 
+                      hx-target="#members-table" 
+                      hx-swap="innerHTML"
+                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                    {% csrf_token %}
+                    <div>
+                        <label for="invite-member-email" class="block text-sm font-medium text-gray-400">Email Address</label>
+                        <input id="invite-member-email" name="email" type="email" required class="mt-1 block w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-md text-light-100" />
+                        <p class="mt-1 text-xs text-gray-500">We'll send an invitation email to this address.</p>
+                    </div>
+                    <div>
+                        <label for="invite-member-role" class="block text-sm font-medium text-gray-400">Role</label>
+                        <select id="invite-member-role" name="role" class="mt-1 block w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-md text-light-100">
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                            {% if organization.role == 'owner' %}
+                            <option value="owner">Owner</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="mt-5 flex justify-end space-x-3">
+                        <button type="button" onclick="document.getElementById('invite-member-modal').classList.add('hidden')" class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">Send Invitation</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div id="add-member-modal" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+        <div class="mt-3">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Add Member</h3>
+            <div class="mt-2">
+                <form method="post" action="{% url 'organizations:add_member' organization.slug %}" class="space-y-4" 
+                      hx-post="{% url 'organizations:add_member' organization.slug %}" 
+                      hx-target="#members-table" 
+                      hx-swap="innerHTML"
+                      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                    {% csrf_token %}
+                    <div>
+                        <label for="add-member-email" class="block text-sm font-medium text-gray-400">Email Address</label>
+                        <input id="add-member-email" name="email" type="email" required class="mt-1 block w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-md text-light-100" />
+                        <p class="mt-1 text-xs text-gray-500">Existing users are added directly. If no account exists, an invitation is created automatically.</p>
+                    </div>
+                    <div>
+                        <label for="add-member-role" class="block text-sm font-medium text-gray-400">Role</label>
+                        <select id="add-member-role" name="role" class="mt-1 block w-full px-3 py-2 bg-dark-700 border border-gray-700 rounded-md text-light-100">
+                            <option value="member">Member</option>
+                            <option value="admin">Admin</option>
+                            {% if organization.role == 'owner' %}
+                            <option value="owner">Owner</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="mt-5 flex justify-end space-x-3">
+                        <button type="button" onclick="document.getElementById('add-member-modal').classList.add('hidden')" class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Add Member</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function resendInvitation(invitationId) {
+        // Get the CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Create a form element
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.style.display = 'none';
+        
+        // Add HTMX attributes
+        form.setAttribute('hx-post', `/organizations/{{ organization.slug }}/invitations/${invitationId}/resend/`);
+        form.setAttribute('hx-target', '#members-table');
+        form.setAttribute('hx-swap', 'innerHTML');
+        
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+        
+        // Add to document, submit, and remove
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    }
+
+    // Log HTMX events for debugging
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        // Close modals after successful requests
+        if (evt.detail.successful) {
+            document.getElementById('invite-member-modal').classList.add('hidden');
+            document.getElementById('add-member-modal').classList.add('hidden');
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %} 

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ project_meta.NAME }}{% endblock %}</title>
+
+    <meta name="description" content="{% block description %}{{ project_meta.DESCRIPTION }}{% endblock %}">
+    <meta name="keywords" content="{{ project_meta.KEYWORDS }}">
+    <meta property="og:title" content="{% block og_title %}{{ project_meta.NAME }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{{ project_meta.DESCRIPTION }}{% endblock %}">
+    <meta property="og:image" content="{{ project_meta.URL }}{{ project_meta.IMAGE }}">
+    <meta property="og:url" content="{{ project_meta.URL }}">
+    <meta property="og:type" content="website">
+
+    {% load static %}
+    {% include 'components/favicon.html' %}
+
+    <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+    <script>
+        (function() {
+            const warn = console.warn;
+            console.warn = function() {
+                if (arguments[0] && typeof arguments[0] === 'string' &&
+                    arguments[0].includes('cdn.tailwindcss.com should not be used in production')) {
+                    return;
+                }
+                return warn.apply(console, arguments);
+            };
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{% static 'js/loading-states.js' %}"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            400: '#6b7280',
+                            500: '#111827',
+                            600: '#030712',
+                            700: '#030712',
+                            800: '#030712',
+                            900: '#030712',
+                        },
+                        secondary: {
+                            50: '#fafafa',
+                            100: '#f4f4f5',
+                            200: '#e4e4e7',
+                            300: '#d4d4d8',
+                            400: '#a1a1aa',
+                            500: '#71717a',
+                            600: '#52525b',
+                            700: '#3f3f46',
+                            800: '#27272a',
+                            900: '#18181b',
+                        },
+                        dark: {
+                            700: '#f4f4f5',
+                            800: '#ffffff',
+                            900: '#ffffff',
+                        },
+                        light: {
+                            100: '#111827',
+                            200: '#374151',
+                            300: '#6b7280',
+                            400: '#9ca3af',
+                        },
+                        'catalyst-blue': '#111827',
+                        'catalyst-blue-light': '#374151',
+                        'catalyst-teal': '#111827',
+                        'catalyst-teal-light': '#030712',
+                        'catalyst-purple': '#111827',
+                        'catalyst-purple-light': '#1f2937',
+                        'catalyst-gray': '#6b7280',
+                        'catalyst-gray-light': '#9ca3af',
+                        'catalyst-dark': '#fafafa',
+                        'catalyst-success': '#15803d',
+                        'catalyst-warning': '#b45309',
+                        'catalyst-error': '#dc2626',
+                    },
+                    boxShadow: {
+                        glow: '0 12px 32px rgba(17, 24, 39, 0.08)',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.1/dist/cdn.min.js"></script>
+
+    <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-theme.css' %}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-sidebar.css' %}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-overrides.css' %}">
+    <link rel="stylesheet" href="{% static 'css/forms.css' %}">
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="catalyst-body">
+    <div class="catalyst-app-shell">
+        {% if user.is_authenticated %}
+        {% include 'components/mobile_nav.html' %}
+        <aside class="catalyst-sidebar hidden lg:flex">
+            <div class="catalyst-sidebar-header">
+                <a href="{% url 'dashboard:dashboard' %}" class="catalyst-logo-link">
+                    <div class="catalyst-logo">
+                        {% include 'components/catalyst_logo.svg' %}
+                    </div>
+                    <div>
+                        <div class="catalyst-logo-text">{{ project_meta.NAME }}</div>
+                        <div class="catalyst-logo-subtitle">Workspace</div>
+                    </div>
+                </a>
+            </div>
+
+            <div class="catalyst-sidebar-content">
+                <nav class="catalyst-nav">
+                    <div class="catalyst-menu-section">
+                        <p class="catalyst-menu-title">Overview</p>
+                        <a href="{% url 'dashboard:dashboard' %}" class="catalyst-menu-link {% if request.path == '/dashboard/' %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            Dashboard
+                        </a>
+                        <a href="{% url 'organizations:list' %}" class="catalyst-menu-link {% if '/organizations/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            Organizations
+                        </a>
+                        <a href="/docs/node-mgmt-cli/" class="catalyst-menu-link {% if '/docs/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 11h10M7 15h6" />
+                            </svg>
+                            Documentation
+                        </a>
+                    </div>
+
+                    {% if organization %}
+                    <div class="catalyst-menu-section">
+                        <p class="catalyst-menu-title">Current Organization</p>
+                        <div class="catalyst-org-chip">{{ organization.name }}</div>
+                        <a href="{% url 'organizations:detail' slug=organization.slug %}" class="catalyst-menu-link {% if request.path == organization.get_absolute_url %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 8h2v-2H7v2zm0-4h2v-2H7v2zm0-4h2V7H7v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z" />
+                            </svg>
+                            Summary
+                        </a>
+                        <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/nodes/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                            </svg>
+                            Nodes
+                        </a>
+                        <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/security-groups/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Security Policies
+                        </a>
+                        <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/certificates/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                            Certificates
+                        </a>
+                        <a href="{% url 'organizations:members' organization.slug %}" class="catalyst-menu-link {% if '/members/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87M16 3.13a4 4 0 010 7.75M8 3.13a4 4 0 000 7.75" />
+                            </svg>
+                            Members
+                        </a>
+                        <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/webhooks/' in request.path %}active{% endif %}">
+                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Webhooks
+                        </a>
+                    </div>
+                    {% endif %}
+                </nav>
+            </div>
+
+            <div class="catalyst-sidebar-footer">
+                <div class="catalyst-user-avatar">{{ user.email|slice:":2"|upper }}</div>
+                <div class="catalyst-user-meta">
+                    <div class="catalyst-user-email">{{ user.email }}</div>
+                    <div class="catalyst-user-actions">
+                        <a href="{% url 'profile' %}">Profile</a>
+                        <span>•</span>
+                        <a href="{% url 'logout' %}">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+        {% endif %}
+
+        <div class="catalyst-content-wrapper">
+            <header class="catalyst-topbar {% if not user.is_authenticated %}catalyst-topbar-public{% endif %}">
+                <div>
+                    <p class="catalyst-topbar-eyebrow">
+                        {% if organization %}
+                        {{ organization.name }}
+                        {% else %}
+                        Product workspace
+                        {% endif %}
+                    </p>
+                    <h1 class="catalyst-topbar-title">{% block page_title %}Administration{% endblock %}</h1>
+                </div>
+                <div class="catalyst-topbar-actions">
+                    <a href="/docs/">Docs</a>
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'profile' %}">{{ user.email }}</a>
+                    {% else %}
+                    <a href="{% url 'login' %}">Login</a>
+                    {% endif %}
+                </div>
+            </header>
+
+            <main class="catalyst-main">
+                {% if breadcrumb_items %}
+                <div class="catalyst-page-container catalyst-page-container-tight">
+                    {% include 'components/breadcrumb.html' with items=breadcrumb_items %}
+                </div>
+                {% endif %}
+
+                {% if messages %}
+                <div class="catalyst-page-container catalyst-page-container-tight">
+                    {% for message in messages %}
+                    <div class="catalyst-alert catalyst-alert-{{ message.tags|default:'info' }}">
+                        <div class="catalyst-alert-content">
+                            <p>{{ message }}</p>
+                        </div>
+                        <button type="button" class="catalyst-alert-close" onclick="this.parentElement.remove()" aria-label="Dismiss message">
+                            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="catalyst-page-container">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+
+            <footer class="catalyst-footer">
+                <div class="catalyst-footer-inner">
+                    <p>&copy; {% now "Y" %} {{ project_meta.NAME }}. Administrative platform.</p>
+                    <div class="catalyst-footer-links">
+                        <a href="/docs/">Documentation</a>
+                    </div>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            htmx.on('htmx:afterSwap', function() {
+                if (typeof Alpine !== 'undefined') {
+                    Alpine.initTree(document.body);
+                }
+            });
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

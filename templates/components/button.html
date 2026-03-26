@@ -1,0 +1,60 @@
+{% with button_variant=variant|default:"primary" button_size=size|default:"md" %}
+{% if href %}
+    <a href="{{ href }}"
+        {% if id %}id="{{ id }}"{% endif %}
+        {% if disabled %}tabindex="-1" aria-disabled="true"{% endif %}
+        {% if tooltip %}title="{{ tooltip }}"{% endif %}
+        {% if onclick %}onclick="{{ onclick }}"{% endif %}
+        {% if x_onclick %}@click="{{ x_onclick }}"{% endif %}
+        class="btn-enhanced relative {% if button_variant == 'secondary' %}ui-button-secondary{% elif button_variant == 'danger' or button_variant == 'warning' %}ui-button-danger{% elif button_variant == 'ghost' %}ui-button-ghost{% else %}ui-button-primary{% endif %} {% if button_size == 'xs' or button_size == 'sm' %}ui-button-sm{% elif button_size == 'lg' or button_size == 'xl' %}ui-button-lg{% endif %} {% if disabled %}opacity-50 cursor-not-allowed pointer-events-none{% endif %} {% if full_width %}w-full{% endif %} {{ classes }}"
+    >
+        {% if icon and icon_position == "left" or icon and not icon_position %}
+            <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">
+                {{ icon|safe }}
+            </span>
+        {% endif %}
+        {% if is_loading %}
+            <svg class="animate-spin absolute h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        {% endif %}
+        <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">{{ text }}</span>
+        {% if icon and icon_position == "right" %}
+            <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">
+                {{ icon|safe }}
+            </span>
+        {% endif %}
+    </a>
+{% else %}
+    <button
+        type="{{ type|default:'button' }}"
+        {% if id %}id="{{ id }}"{% endif %}
+        {% if name %}name="{{ name }}"{% endif %}
+        {% if disabled %}disabled{% endif %}
+        {% if tooltip %}title="{{ tooltip }}"{% endif %}
+        {% if onclick %}onclick="{{ onclick }}"{% endif %}
+        {% if x_onclick %}@click="{{ x_onclick }}"{% endif %}
+        {% if form %}form="{{ form }}"{% endif %}
+        class="btn-enhanced relative {% if button_variant == 'secondary' %}ui-button-secondary{% elif button_variant == 'danger' or button_variant == 'warning' %}ui-button-danger{% elif button_variant == 'ghost' %}ui-button-ghost{% else %}ui-button-primary{% endif %} {% if button_size == 'xs' or button_size == 'sm' %}ui-button-sm{% elif button_size == 'lg' or button_size == 'xl' %}ui-button-lg{% endif %} {% if disabled %}opacity-50 cursor-not-allowed pointer-events-none{% endif %} {% if full_width %}w-full{% endif %} {{ classes }}"
+    >
+        {% if icon and icon_position == "left" or icon and not icon_position %}
+            <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">
+                {{ icon|safe }}
+            </span>
+        {% endif %}
+        {% if is_loading %}
+            <svg class="animate-spin absolute h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        {% endif %}
+        <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">{{ text }}</span>
+        {% if icon and icon_position == "right" %}
+            <span class="{% if is_loading %}opacity-0{% else %}opacity-100{% endif %} transition-opacity duration-200">
+                {{ icon|safe }}
+            </span>
+        {% endif %}
+    </button>
+{% endif %}
+{% endwith %}

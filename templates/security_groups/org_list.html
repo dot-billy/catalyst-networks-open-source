@@ -1,0 +1,89 @@
+{% extends "base/base.html" %}
+
+{% block title %}Security Groups - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Security Policies{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Security Policies</h1>
+            <p class="ui-page-subtitle">Create policy groups for {{ organization.name }}, define which traffic they allow, and then assign them to the nodes that should inherit that policy.</p>
+        </div>
+        <div class="ui-page-actions">
+            {% if user_role == 'owner' or user_role == 'admin' %}
+            {% url 'security_groups_org:create' slug=organization.slug as create_security_group_url %}
+            {% include "components/button.html" with text="Create Policy" href=create_security_group_url variant="primary" size="sm" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ui-step-list">
+        <div class="ui-step">
+            <span class="ui-step-number">1</span>
+            <h3>Create a policy</h3>
+            <p>Start with a named policy that represents a node role or service boundary.</p>
+        </div>
+        <div class="ui-step">
+            <span class="ui-step-number">2</span>
+            <h3>Define allowed traffic</h3>
+            <p>Add rules for which groups or hosts can reach this policy and over which protocols.</p>
+        </div>
+        <div class="ui-step">
+            <span class="ui-step-number">3</span>
+            <h3>Assign nodes</h3>
+            <p>Apply the finished policy to the nodes that should inherit those rules.</p>
+        </div>
+    </div>
+
+    <div class="ui-toolbar">
+        <p class="ui-toolbar-title">Policy index</p>
+        <form method="get" class="ui-search">
+            <input type="text" name="search" id="search" value="{{ search_query }}" placeholder="Search policies by name">
+            {% include "components/button.html" with text="Search" type="submit" variant="secondary" size="sm" %}
+        </form>
+    </div>
+
+    {% if security_groups %}
+    <div class="ui-list">
+        {% for security_group in security_groups %}
+        <div class="ui-list-item">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <h2 class="text-lg font-semibold text-light-100">{{ security_group.name }}</h2>
+                        <span class="ui-badge ui-badge-primary">{{ security_group.firewall_rules.count }} rules</span>
+                        <span class="ui-badge ui-badge-muted">{{ security_group.nodes.count }} assigned nodes</span>
+                    </div>
+                    <p class="mt-2 text-sm text-light-300">{{ security_group.description|default:"No description provided yet." }}</p>
+                    <div class="ui-meta-list">
+                        <span>Created {{ security_group.created_at|date:"F j, Y" }}</span>
+                        <span>•</span>
+                        <span>Use this policy to group nodes with the same allowed traffic profile.</span>
+                    </div>
+                </div>
+                <div class="ui-inline-actions">
+                    {% url 'security_groups_org:detail' slug=organization.slug pk=security_group.id as security_group_detail_url %}
+                    {% include "components/button.html" with text="Open Policy" href=security_group_detail_url variant="secondary" size="sm" %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ui-empty-state">
+        <svg class="mx-auto h-12 w-12 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <h3>No security policies yet</h3>
+        <p>Create your first policy to start controlling which services or node groups can talk to each other.</p>
+        {% if user_role == 'owner' or user_role == 'admin' %}
+        <div class="mt-6">
+            {% url 'security_groups_org:create' slug=organization.slug as create_security_group_url %}
+            {% include "components/button.html" with text="Create First Policy" href=create_security_group_url variant="primary" size="lg" %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

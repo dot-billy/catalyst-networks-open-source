@@ -1,0 +1,133 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ organization.name }} - Catalyst Networks{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Organization Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-light-100">{{ organization.name }}</h1>
+            <p class="text-gray-500">Created {{ organization.created_at|date:"F j, Y" }}</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="px-2 py-1 rounded-full text-xs font-medium
+                {% if membership.role == 'owner' %}
+                    bg-green-100 text-green-800
+                {% elif membership.role == 'admin' %}
+                    bg-blue-100 text-blue-800
+                {% else %}
+                    bg-gray-100 text-gray-800
+                {% endif %}">
+                {{ membership.role|title }}
+            </span>
+            {% if membership.role in 'owner,admin' %}
+            <a href="{% url 'organizations:invitation_list' organization.slug %}" 
+               class="bg-primary-500 text-white px-3 py-1 rounded text-sm hover:bg-primary-600 transition-all">
+                Manage Invitations
+            </a>
+            {% endif %}
+            {% if membership.role == 'owner' %}
+            <button type="button" 
+                    onclick="document.getElementById('delete-modal').classList.remove('hidden')" 
+                    class="bg-red-900 bg-opacity-30 text-red-300 border border-red-900 px-3 py-1 rounded text-sm hover:bg-red-900 hover:bg-opacity-50 transition-all">
+                Delete Organization
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Network Ranges -->
+        <div class="bg-dark-800 rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold text-light-100 mb-4">Network Ranges</h2>
+            {% if organization.network_ranges.all %}
+            <div class="space-y-2">
+                {% for range in organization.network_ranges.all %}
+                <div class="flex justify-between items-center p-3 bg-dark-700 rounded">
+                    <span class="text-light-100">{{ range.cidr }}</span>
+                    {% if membership.role == 'owner' %}
+                    <form method="post" action="{% url 'organizations:delete_network_range' organization.slug %}" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="range_id" value="{{ range.id }}">
+                        <button type="submit" class="text-red-400 hover:text-red-300">Delete</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500">No network ranges defined.</p>
+            {% endif %}
+
+            {% if membership.role in 'owner,admin' %}
+            <div class="mt-4">
+                <h3 class="text-lg font-medium text-light-100 mb-2">Add Network Range</h3>
+                <form method="post" action="{% url 'organizations:network_range' organization.slug %}" class="space-y-3">
+                    {% csrf_token %}
+                    {{ network_range_form.as_p }}
+                    <button type="submit" class="bg-primary-500 text-white px-4 py-2 rounded hover:bg-primary-600 transition-all">
+                        Add Range
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Members -->
+        <div class="bg-dark-800 rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold text-light-100 mb-4">Members</h2>
+            {% if organization.memberships.all %}
+            <div class="space-y-2">
+                {% for member_role in organization.memberships.all %}
+                <div class="flex justify-between items-center p-3 bg-dark-700 rounded">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-light-100">{{ member_role.user.email }}</span>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                            {% if member_role.role == 'owner' %}
+                                bg-green-100 text-green-800
+                            {% elif member_role.role == 'admin' %}
+                                bg-blue-100 text-blue-800
+                            {% else %}
+                                bg-gray-100 text-gray-800
+                            {% endif %}">
+                            {{ member_role.role|title }}
+                        </span>
+                    </div>
+                    {% if membership.role == 'owner' and member_role.user != request.user %}
+                    <button type="button" class="text-red-400 hover:text-red-300">Remove</button>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500">No members in this organization.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+{% if membership.role == 'owner' %}
+<div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-dark-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+        <h3 class="text-xl font-bold text-light-100 mb-4">Delete Organization</h3>
+        <p class="text-gray-400 mb-6">Are you sure you want to delete {{ organization.name }}? This action cannot be undone.</p>
+        <div class="flex justify-end space-x-3">
+            <button type="button"
+                    onclick="document.getElementById('delete-modal').classList.add('hidden')"
+                    class="px-4 py-2 border border-gray-600 text-gray-400 rounded hover:bg-dark-700 transition-all">
+                Cancel
+            </button>
+            <form method="post" action="{% url 'organizations:delete' organization.slug %}" class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-all">
+                    Delete
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %} 

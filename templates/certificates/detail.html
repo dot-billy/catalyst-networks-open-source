@@ -1,0 +1,216 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ ca.name }} - Certificate Authority - {{ project_meta.NAME }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with breadcrumbs and actions -->
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-2xl font-bold text-light-100">{{ ca.name }}</h1>
+            <nav class="flex mt-1" aria-label="Breadcrumb">
+                <ol class="flex items-center space-x-2">
+                    <li>
+                        <a href="{% url 'dashboard:dashboard' %}" class="text-light-400 hover:text-light-200">Dashboard</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <a href="{% url 'certificates:list' %}" class="text-light-400 hover:text-light-200">Certificate Authorities</a>
+                    </li>
+                    <li>
+                        <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </li>
+                    <li>
+                        <span class="text-light-300" aria-current="page">{{ ca.name }}</span>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{% url 'nodes:create' %}?ca={{ ca.id }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                Create Node
+            </a>
+        </div>
+    </div>
+    
+    <!-- Certificate Authority Info -->
+    <div class="bg-dark-800 shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-light-100">Certificate Authority Information</h3>
+            <p class="mt-1 max-w-2xl text-sm text-light-300">Details about this certificate authority.</p>
+        </div>
+        <div class="border-t border-dark-600">
+            <dl>
+                <div class="bg-dark-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Name</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ ca.name }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Organization</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">
+                        <a href="{% url 'organizations:detail' ca.organization.id %}" class="text-primary-400 hover:text-primary-300">
+                            {{ ca.organization.name }}
+                        </a>
+                    </dd>
+                </div>
+                <div class="bg-dark-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Created By</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ ca.created_by.email }}</dd>
+                </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Created</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">{{ ca.created_at|date:"F j, Y, g:i a" }}</dd>
+                </div>
+                <div class="bg-dark-700 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-light-300">Certificate Files</dt>
+                    <dd class="mt-1 text-sm text-light-200 sm:mt-0 sm:col-span-2">
+                        <ul class="border border-dark-600 rounded-md divide-y divide-dark-600">
+                            <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                                <div class="w-0 flex-1 flex items-center">
+                                    <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8 4a3 3.5 0 104 0H8zm-.447 9.72a.73.73 0 011.447.16zm1.447-7.72h.979v1.648a2.334 2.334 0 00-.979-.279zm-5-3a1.5 1.5 0 00-3 0v3a.5.5 0 01-1 0V3a2.5 2.5 0 015 0zm11 5.5a4.5 4.5 0 00-4.5-4.5H6a4.5 4.5 0 00-4.5 4.5v7a4.5 4.5 0 004.5 4.5h7a4.5 4.5 0 004.5-4.5v-7z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="ml-2 flex-1 w-0 truncate">CA Certificate</span>
+                                </div>
+                                <div class="ml-4 flex-shrink-0 text-light-400">
+                                    {{ ca.ca_cert.name }}
+                                </div>
+                            </li>
+                            <li class="pl-3 pr-4 py-3 flex items-center justify-between text-sm">
+                                <div class="w-0 flex-1 flex items-center">
+                                    <svg class="flex-shrink-0 h-5 w-5 text-light-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="ml-2 flex-1 w-0 truncate">CA Private Key</span>
+                                </div>
+                                <div class="ml-4 flex-shrink-0 text-light-400">
+                                    {{ ca.ca_key.name }}
+                                </div>
+                            </li>
+                        </ul>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+    
+    <!-- Nodes Section -->
+    <div class="bg-dark-800 shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg leading-6 font-medium text-light-100">Nodes</h3>
+                <p class="mt-1 max-w-2xl text-sm text-light-300">
+                    Nodes using certificates issued by this CA
+                </p>
+            </div>
+            <a href="{% url 'nodes:create' %}?ca={{ ca.id }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                Create Node
+            </a>
+        </div>
+        
+        {% if nodes %}
+        <div class="border-t border-dark-600">
+            <table class="min-w-full divide-y divide-dark-600">
+                <thead class="bg-dark-700">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">IP Address</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-light-300 uppercase tracking-wider">Certificate</th>
+                        <th scope="col" class="relative px-6 py-3">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-dark-800 divide-y divide-dark-600">
+                    {% for node in nodes %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-blue-900 bg-opacity-30">
+                                    <svg class="h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-light-200">
+                                        <a href="{% url 'nodes:detail' node.id %}" class="hover:text-primary-400">
+                                            {{ node.name }}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-light-300">
+                            {{ node.nebula_ip }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-light-300">
+                            {% if node.is_lighthouse %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-900 bg-opacity-30 text-blue-300">
+                                    Lighthouse
+                                </span>
+                            {% else %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900 bg-opacity-30 text-green-300">
+                                    Standard
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-light-300">
+                            {% if node.cert_expiration %}
+                                {% if node.cert_expiration < current_time_plus_30_days %}
+                                    <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-900 bg-opacity-30 text-red-300">
+                                        Expires {{ node.cert_expiration|date:"M d, Y" }}
+                                    </span>
+                                {% else %}
+                                    <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-900 bg-opacity-30 text-green-300">
+                                        Valid until {{ node.cert_expiration|date:"M d, Y" }}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-dark-700 text-light-400">
+                                    No certificate
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'nodes:detail' node.id %}" class="text-primary-400 hover:text-primary-300">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="border-t border-dark-600 px-4 py-5 sm:p-6">
+            <div class="text-center py-6">
+                <svg class="mx-auto h-12 w-12 text-light-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-light-200">No nodes</h3>
+                <p class="mt-1 text-sm text-light-300">This certificate authority has not issued any certificates yet.</p>
+                <div class="mt-6">
+                    <a href="{% url 'nodes:create' %}?ca={{ ca.id }}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                        <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                        Create First Node
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,82 @@
+{% extends "base/base.html" %}
+
+{% block title %}Create Security Group - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Create Security Policy{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Create Security Policy</h1>
+            <p class="ui-page-subtitle">Set up the policy container first. After save, you will be taken directly to rule creation so the workflow stays clear: policy, rules, then node assignment.</p>
+        </div>
+    </div>
+
+    <div class="ui-callout">
+        <div>
+            <p class="font-semibold text-light-100">Creating policy in {{ organization.name }}</p>
+            <p class="mt-1 text-sm text-light-300">This step only creates the policy object. Traffic rules and node assignments happen in the next steps.</p>
+        </div>
+    </div>
+
+    <div class="ui-form-section">
+        <form method="post" action="{% url 'security_groups_org:create' slug=organization.slug %}" x-data="{ isLoading: false }" @submit="isLoading = true">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="alert alert-error mb-6">
+                <div>
+                    <h3 class="text-sm font-semibold">There were errors with your submission</h3>
+                    <div class="mt-2 text-sm">
+                        <ul class="list-disc pl-5 space-y-1">
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <li>{{ field|title }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="ui-form-grid">
+                <div>
+                    <label for="name">Policy name <span class="text-red-500">*</span></label>
+                    <input type="text" name="name" id="name" required placeholder="Web Servers">
+                    <p class="ui-field-help">Use a name that describes the node role this policy applies to.</p>
+                </div>
+                <div>
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="4" placeholder="Allows the approved sources for the public web tier."></textarea>
+                    <p class="ui-field-help">Document what this policy is for so assignments stay understandable later.</p>
+                </div>
+            </div>
+
+            <div class="ui-step-list mt-8">
+                <div class="ui-step">
+                    <span class="ui-step-number">1</span>
+                    <h3>Create policy</h3>
+                    <p>Define the reusable policy container and give it a clear purpose.</p>
+                </div>
+                <div class="ui-step">
+                    <span class="ui-step-number">2</span>
+                    <h3>Add rules</h3>
+                    <p>Specify which groups or hosts can reach this policy and over which ports.</p>
+                </div>
+                <div class="ui-step">
+                    <span class="ui-step-number">3</span>
+                    <h3>Assign nodes</h3>
+                    <p>Attach the finished policy to the nodes that should inherit it.</p>
+                </div>
+            </div>
+
+            <div class="ui-action-bar mt-8 justify-end">
+                {% url 'security_groups_org:list' slug=organization.slug as security_group_list_url %}
+                {% include "components/button.html" with text="Cancel" href=security_group_list_url variant="secondary" size="sm" %}
+                {% include "components/button.html" with text="Create Policy" type="submit" variant="primary" size="sm" %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

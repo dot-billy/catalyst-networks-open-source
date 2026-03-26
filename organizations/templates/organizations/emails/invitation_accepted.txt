@@ -1,0 +1,11 @@
+Hello,
+
+{{ invitee_email }} has accepted your invitation to join {{ organization.name }} as a {{ role }}.
+
+They now have access to the organization and its resources according to their assigned role.
+
+Best regards,
+The {{ organization.name }} Team
+
+---
+This is an automated message, please do not reply to this email. 

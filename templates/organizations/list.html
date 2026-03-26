@@ -1,0 +1,60 @@
+{% extends "base/base.html" %}
+
+{% block title %}Organizations - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Organizations{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Organizations</h1>
+            <p class="ui-page-subtitle">Each organization acts as a workspace for nodes, members, security policies, certificates, and webhooks.</p>
+        </div>
+        <div class="ui-page-actions">
+            {% include "components/button.html" with text="Create Organization" variant="primary" size="sm" href="/organizations/create/" %}
+        </div>
+    </div>
+
+    {% if organizations %}
+    <div class="ui-table-wrapper">
+        <table class="ui-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Nodes</th>
+                    <th class="desktop-only">Created</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for org in organizations %}
+                <tr>
+                    <td>
+                        <div class="font-semibold text-light-100">{{ org.name }}</div>
+                        {% if org.description %}
+                        <div class="text-sm text-light-300 mt-1">{{ org.description|truncatechars:80 }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ org.nodes.count }}</td>
+                    <td class="desktop-only">{{ org.created_at|date:"M d, Y" }}</td>
+                    <td>
+                        <span class="ui-badge {% if org.role == 'owner' or org.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">{{ org.role|title }}</span>
+                    </td>
+                    <td><a href="{% url 'organizations:detail' slug=org.slug %}">Open</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="ui-empty-state">
+        <h3>No organizations found</h3>
+        <p>Create your first workspace to start provisioning nodes and defining security policies.</p>
+        <div class="mt-6">
+            {% include "components/button.html" with text="Create Organization" variant="primary" size="sm" href="/organizations/create/" %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

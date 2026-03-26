@@ -1,0 +1,81 @@
+{% comment %}
+    Alert Component with consistent styling and icons
+    
+    Usage: {% include "components/alert.html" with type="success" message="Alert message" %}
+    
+    Parameters:
+    - type: Required. Alert type (success, warning, error, info).
+    - message: Optional. Alert message text.
+    - title: Optional. Alert title text.
+    - dismissible: Optional. Whether the alert can be dismissed. Default is False.
+    - class: Optional. Additional CSS classes.
+    - icon: Optional. Custom icon to display.
+{% endcomment %}
+
+{% with 
+    dismissible=dismissible|default:False
+    alert_id=alert_id|default:"alert-"|add:type|add:"-"|add:forloop.counter0
+%}
+
+<div class="alert alert-{{ type }} {{ class }}" 
+     {% if dismissible %}x-data="{ show: true }" x-show="show" x-transition{% endif %}
+     role="alert"
+     {% if alert_id %}id="{{ alert_id }}"{% endif %}>
+    
+    <div class="flex items-start">
+        <!-- Alert Icon -->
+        <div class="flex-shrink-0 mr-3">
+            {% if icon %}
+                {{ icon|safe }}
+            {% else %}
+                {% if type == "success" %}
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                {% elif type == "warning" %}
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                {% elif type == "error" %}
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {% elif type == "info" %}
+                <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {% endif %}
+            {% endif %}
+        </div>
+        
+        <!-- Alert Content -->
+        <div class="flex-1">
+            {% if title %}
+            <h4 class="font-semibold text-sm mb-1">{{ title }}</h4>
+            {% endif %}
+            
+            {% if message %}
+            <p class="text-sm">{{ message }}</p>
+            {% endif %}
+            
+            {% block alert_content %}
+            {{ content }}
+            {% endblock %}
+        </div>
+        
+        <!-- Dismiss Button -->
+        {% if dismissible %}
+        <div class="flex-shrink-0 ml-3">
+            <button @click="show = false" 
+                    class="inline-flex text-current hover:opacity-75 focus:outline-none focus:opacity-75 transition-opacity duration-200"
+                    aria-label="Dismiss alert">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endwith %}

@@ -1,0 +1,25 @@
+{% comment %}
+    Loading Spinner Component
+    
+    Usage: {% include "components/loading_spinner.html" with size="md" %}
+    
+    Parameters:
+    - size: Optional. Spinner size (sm, md, lg, xl). Default is "md".
+    - color: Optional. Spinner color (primary, secondary, white, gray). Default is "primary".
+    - text: Optional. Text to display below the spinner.
+    - class: Optional. Additional CSS classes.
+    - centered: Optional. Center the spinner. Default is True.
+{% endcomment %}
+
+{% with size=size|default:"md" color=color|default:"primary" centered=centered|default:True %}
+<div class="loading-spinner {% if centered %}flex flex-col items-center justify-center{% endif %} {{ class }}">
+    <div class="relative {% if size == 'sm' %}w-4 h-4{% elif size == 'lg' %}w-8 h-8{% elif size == 'xl' %}w-12 h-12{% else %}w-6 h-6{% endif %}">
+        <div class="absolute inset-0 rounded-full border-2 border-gray-200"></div>
+        <div class="absolute inset-0 animate-spin rounded-full border-2 border-transparent {% if color == 'white' %}border-t-white{% elif color == 'gray' %}border-t-gray-500{% elif color == 'secondary' %}border-t-gray-700{% else %}border-t-primary-600{% endif %}"></div>
+    </div>
+
+    {% if text %}
+    <p class="mt-3 text-sm text-gray-500 animate-pulse">{{ text }}</p>
+    {% endif %}
+</div>
+{% endwith %}

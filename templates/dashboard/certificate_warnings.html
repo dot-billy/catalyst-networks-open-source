@@ -1,0 +1,70 @@
+{% if expiring_certificates %}
+    <div class="flow-root">
+        <ul class="divide-y divide-gray-200">
+            {% for cert in expiring_certificates %}
+                <li class="py-4">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-shrink-0">
+                            <span class="h-10 w-10 rounded-full bg-primary-50 flex items-center justify-center">
+                                <svg class="h-6 w-6 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-900 truncate">
+                                {{ cert.node.name }}
+                            </p>
+                            <p class="text-sm text-gray-500 truncate">
+                                Organization: {{ cert.node.organization.name }}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if cert.days_remaining <= 7 %}
+                                    bg-red-50 text-red-700 border border-red-200
+                                {% elif cert.days_remaining <= 14 %}
+                                    bg-amber-50 text-amber-700 border border-amber-200
+                                {% else %}
+                                    bg-primary-50 text-primary-700 border border-primary-200
+                                {% endif %}">
+                                {% if cert.days_remaining <= 0 %}
+                                    Expired!
+                                {% else %}
+                                    Expires in {{ cert.days_remaining }} days
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div>
+                            <button 
+                                class="btn-enhanced ui-button-primary ui-button-sm"
+                                hx-post="{% url 'certificates:renew' cert.node.id %}"
+                                hx-target="#certificate-warnings"
+                                hx-swap="outerHTML"
+                                hx-indicator="#renewal-indicator-{{ cert.node.id }}">
+                                Renew Now
+                                <span id="renewal-indicator-{{ cert.node.id }}" class="htmx-indicator ml-2">
+                                    <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+{% else %}
+    <div class="ui-empty-state py-6">
+        <div class="flex items-center justify-center">
+            <span class="h-12 w-12 rounded-full bg-primary-50 flex items-center justify-center">
+                <svg class="h-6 w-6 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </span>
+        </div>
+        <p class="mt-2 text-gray-500">All certificates are valid and not expiring soon.</p>
+    </div>
+{% endif %} 

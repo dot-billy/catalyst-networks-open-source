@@ -1,0 +1,690 @@
+{% extends "base/base.html" %}
+
+{% block title %}{{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+
+{% block content %}
+    <div class="space-y-6">
+        <!-- Organization Header -->
+        <div class="ui-page-header">
+            <div>
+                <h1 class="ui-page-title">{{ organization.name }}</h1>
+                <p class="ui-page-subtitle">Created {{ organization.created_at|date:"F j, Y" }}. Manage members, setup progress, and organization resources from one place.</p>
+            </div>
+            <div class="ui-page-actions">
+                {% url 'organizations:invitation_create' organization.slug as invite_member_url %}
+                <span class="ui-badge {% if organization.role == 'owner' or organization.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                    {{ organization.role|title }}
+                </span>
+                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                {% include "components/button.html" with text="Invite Member" href=invite_member_url variant="secondary" size="sm" %}
+                {% endif %}
+                {% if organization.role == 'owner' %}
+                {% include "components/button.html" with text="Delete Organization" variant="danger" size="sm" onclick="document.getElementById('delete-modal').classList.remove('hidden')" %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Members and Invitations Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Members List -->
+            <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-medium text-light-100">Members</h2>
+                    <span class="text-sm text-gray-400">{{ organization.members.count }} total</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Joined</th>
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-dark-900 divide-y divide-gray-700">
+                            {% for membership in organization.memberships.all %}
+                            <tr class="hover:bg-dark-700 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ membership.user.email }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                        {% if membership.role == 'owner' %}
+                                            bg-green-100 text-green-800
+                                        {% elif membership.role == 'admin' %}
+                                            bg-blue-100 text-blue-800
+                                        {% else %}
+                                            bg-gray-100 text-gray-800
+                                        {% endif %}">
+                                        {{ membership.role|title }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ membership.created_at|date:"M d, Y" }}</td>
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    {% if organization.role == 'owner' or membership.role != 'owner' %}
+                                    <div class="flex justify-end space-x-2">
+                                        {% if membership.user != request.user %}
+                                        <button onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.remove('hidden')"
+                                                class="text-primary-400 hover:text-primary-300">
+                                            Change Role
+                                        </button>
+                                        <button onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.remove('hidden')"
+                                                class="text-red-400 hover:text-red-300">
+                                            Remove
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Invitations List -->
+            <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-medium text-light-100">Pending Invitations</h2>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'organizations:invitation_create' organization.slug %}" class="text-sm text-primary-400 hover:underline">Send Invitation</a>
+                    {% endif %}
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Expires</th>
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-dark-900 divide-y divide-gray-700">
+                            {% for invitation in organization.invitations.all %}
+                            {% if invitation.status == 'pending' %}
+                            <tr class="hover:bg-dark-700 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ invitation.email }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                        {% if invitation.role == 'owner' %}
+                                            bg-green-100 text-green-800
+                                        {% elif invitation.role == 'admin' %}
+                                            bg-blue-100 text-blue-800
+                                        {% else %}
+                                            bg-gray-100 text-gray-800
+                                        {% endif %}">
+                                        {{ invitation.role|title }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                                        Pending
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                    {{ invitation.expires_at|date:"M d, Y" }}
+                                </td>
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div class="flex justify-end space-x-2">
+                                        <button onclick="resendInvitation('{{ invitation.id }}')"
+                                                class="text-primary-400 hover:text-primary-300">
+                                            Resend
+                                        </button>
+                                        <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')"
+                                                class="text-red-400 hover:text-red-300">
+                                            Revoke
+                                        </button>
+                                    </div>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Setup Completeness Card -->
+        <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+            <h2 class="text-lg font-medium mb-3 text-light-100">Organization Setup</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- CA Status -->
+                <div class="flex items-center">
+                    <div class="p-2 rounded-full {% if organization.certificate_authorities.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.certificate_authorities.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            {% if organization.certificate_authorities.exists %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            {% else %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            {% endif %}
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-light-100">Certificate Authority</p>
+                        <p class="text-xs text-gray-500">
+                            {% if organization.certificate_authorities.exists %}
+                                Created on {{ organization.certificate_authorities.first.created_at|date:"M d, Y" }}
+                            {% else %}
+                                Required for node creation
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                    <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="text-primary-400 hover:underline">Create now</a>
+                                {% endif %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Network Range Status -->
+                <div class="flex items-center">
+                    <div class="p-2 rounded-full {% if organization.network_ranges.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.network_ranges.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            {% if organization.network_ranges.exists %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            {% else %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            {% endif %}
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-light-100">Network Range</p>
+                        <p class="text-xs text-gray-500">
+                            {% if organization.network_ranges.exists %}
+                                {{ organization.network_ranges.first.cidr }}
+                            {% else %}
+                                Required for IP assignment
+                                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                    <a href="{% url 'organizations:network_range' slug=organization.slug %}" class="text-primary-400 hover:underline">Configure now</a>
+                                {% endif %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Lighthouse Status -->
+                <div class="flex items-center">
+                    <div class="p-2 rounded-full {% if organization.lighthouse_nodes.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.lighthouse_nodes.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            {% if organization.lighthouse_nodes.exists %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            {% else %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            {% endif %}
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-light-100">Lighthouse Node</p>
+                        <p class="text-xs text-gray-500">
+                            {% if organization.lighthouse_nodes.exists %}
+                                {{ organization.lighthouse_nodes.first.name }} 
+                                ({{ organization.lighthouse_nodes.first.nebula_ip }})
+                            {% else %}
+                                Required for network connectivity
+                                {% if organization.role == 'owner' or organization.role == 'admin' and organization.certificate_authorities.exists and organization.network_ranges.exists %}
+                                    <a href="/docs/node-mgmt-cli/" class="text-primary-400 hover:underline">See documentation for adding a Lighthouse node using the Management CLI</a>
+                                {% else %}
+                                    <span class="text-gray-400">(Complete prerequisites first)</span>
+                                {% endif %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Setup Progress Bar -->
+            <div class="mt-4">
+                <div class="w-full bg-dark-800 rounded-full h-2.5">
+                    <div class="bg-primary-500 h-2.5 rounded-full" style="width: {{ setup_steps_percent }}%"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-1 text-right">{{ setup_steps_completed }} of {{ setup_steps_total }} setup steps completed</p>
+            </div>
+        </div>
+
+        <!-- Resource Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Nodes Card -->
+            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex items-center mb-2">
+                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-medium ml-2 text-light-100">Nodes</h2>
+                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.nodes.count }}</span>
+                </div>
+                <div class="mt-2 flex justify-between">
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all nodes</a>
+                </div>
+            </div>
+            
+            <!-- Registration Tokens Card -->
+            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex items-center mb-2">
+                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-medium ml-2 text-light-100">Registration Tokens</h2>
+                </div>
+                <div class="mt-2 flex justify-between">
+                    <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Manage tokens</a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'nodes_org:token_create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Create token</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Security Groups Card -->
+            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex items-center mb-2">
+                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-medium ml-2 text-light-100">Security Groups</h2>
+                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.security_groups.count }}</span>
+                </div>
+                <div class="mt-2 flex justify-between">
+                    <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all groups</a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                        {% if organization.nodes.exists %}
+                            <a href="{% url 'security_groups_org:create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Add group</a>
+                        {% else %}
+                            <span class="text-sm text-gray-400" title="Create at least one node first">Add group</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Certificates Card -->
+            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex items-center mb-2">
+                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-medium ml-2 text-light-100">Certificate Authorities</h2>
+                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.certificate_authorities.count }}</span>
+                </div>
+                <div class="mt-2 flex justify-between">
+                    <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all certificates</a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Add CA</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Webhooks Card -->
+            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
+                <div class="flex items-center mb-2">
+                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-medium ml-2 text-light-100">Webhooks</h2>
+                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.webhooks.count|default:"0" }}</span>
+                </div>
+                <div class="mt-2 flex justify-between">
+                    <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all webhooks</a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Node/Lighthouse Management Instructions -->
+        <div id="cli-instructions" class="bg-dark-900 p-6 rounded-lg shadow border border-primary-700 hover-glow mb-8">
+            <h2 class="text-xl font-bold text-primary-400 mb-2">Add Nodes & Lighthouses via Management CLI</h2>
+            <p class="text-light-200 mb-4">To add new nodes or lighthouse nodes to your organization, use the {{ project_meta.NAME }} Management CLI. This approach is more secure and flexible than using the dashboard. Follow the steps below for your operating system.</p>
+            <div class="mb-4">
+                <span class="font-semibold text-light-100">Download the {{ project_meta.NAME }} CLI:</span>
+                <ul class="list-disc ml-6 mt-2">
+                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64" class="text-primary-400 hover:underline" download>Linux (x86_64)</a></li>
+                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64" class="text-primary-400 hover:underline" download>macOS (Intel)</a></li>
+                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-arm64" class="text-primary-400 hover:underline" download>macOS (Apple Silicon)</a></li>
+                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" class="text-primary-400 hover:underline" download>Windows (x86_64)</a></li>
+                </ul>
+            </div>
+            <div>
+                <div class="tabbed-instructions">
+                    <div class="tabs mb-2 flex space-x-2">
+                        <button class="tab-btn px-3 py-1 rounded bg-primary-700 text-white" onclick="showTab('linux')">Linux</button>
+                        <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('macos')">macOS</button>
+                        <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('windows')">Windows</button>
+                    </div>
+                    <div id="tab-linux" class="tab-content w-full max-w-full">
+                        <ol class="list-decimal ml-6 mb-2">
+                            <li>Download the CLI binary:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">wget https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64
+chmod +x catalyst-networks-linux-amd64
+sudo mv catalyst-networks-linux-amd64 /usr/local/bin/catalyst-networks</pre>
+                        <ol start="2" class="list-decimal ml-6 mb-2">
+                            <li>Run the following command to add a node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
+                        <ol start="3" class="list-decimal ml-6 mb-2">
+                            <li>To add a lighthouse node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+                    </div>
+                    <div id="tab-macos" class="tab-content hidden w-full max-w-full">
+                        <ol class="list-decimal ml-6 mb-2">
+                            <li>Download the CLI binary:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">curl -LO https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64
+chmod +x catalyst-networks-darwin-amd64
+sudo mv catalyst-networks-darwin-amd64 /usr/local/bin/catalyst-networks</pre>
+                        <ol start="2" class="list-decimal ml-6 mb-2">
+                            <li>Run the following command to add a node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
+                        <ol start="3" class="list-decimal ml-6 mb-2">
+                            <li>To add a lighthouse node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+                    </div>
+                    <div id="tab-windows" class="tab-content hidden w-full max-w-full">
+                        <ol class="list-decimal ml-6 mb-2">
+                            <li>Download the CLI binary:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">Invoke-WebRequest -Uri `
+  "https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" `
+  -OutFile "catalyst-networks.exe"</pre>
+                        <ol start="2" class="list-decimal ml-6 mb-2">
+                            <li>Run the following command to add a node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">.\catalyst-networks.exe create --name mynode --hostname mynode.example.com</pre>
+                        <ol start="3" class="list-decimal ml-6 mb-2">
+                            <li>To add a lighthouse node:</li>
+                        </ol>
+                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">.\catalyst-networks.exe create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
+                    </div>
+                </div>
+                <script>
+                function showTab(tab) {
+                    document.getElementById('tab-linux').classList.add('hidden');
+                    document.getElementById('tab-macos').classList.add('hidden');
+                    document.getElementById('tab-windows').classList.add('hidden');
+                    document.querySelectorAll('.tab-btn').forEach(btn => {
+                        btn.classList.remove('bg-primary-700', 'text-white');
+                        btn.classList.add('bg-dark-700', 'text-light-200');
+                    });
+                    document.getElementById('tab-' + tab).classList.remove('hidden');
+                    document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.add('bg-primary-700', 'text-white');
+                    document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.remove('bg-dark-700', 'text-light-200');
+                }
+                // Default to Linux tab
+                showTab('linux');
+                </script>
+            </div>
+            <div class="mt-4 text-sm text-light-300">
+                <strong>Tip:</strong> You can generate registration tokens in the "Registration Tokens" section above. Use the token when prompted by the CLI to register new nodes or lighthouses.
+                <div class="mt-2">
+                    <a href="/docs/node-mgmt-cli/" class="text-primary-400 hover:underline">View full Node Management CLI docs</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Nodes Section -->
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-medium text-light-100">Recent Nodes</h2>
+                <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all</a>
+            </div>
+            {% if organization.nodes.exists %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">IP Address</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Created</th>
+                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-dark-900 divide-y divide-gray-700">
+                            {% for node in organization.nodes.all|slice:":5" %}
+                                <tr class="hover:bg-dark-700 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ node.name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ node.nebula_ip }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                                        {% if node.is_lighthouse %}
+                                            <span class="px-2 py-1 text-xs rounded-full bg-primary-700 bg-opacity-20 text-primary-400">Lighthouse</span>
+                                        {% else %}
+                                            <span class="px-2 py-1 text-xs rounded-full bg-primary-700 bg-opacity-20 text-primary-400">Standard</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ node.created_at|date:"M d, Y" }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="text-primary-400 hover:text-primary-300">View</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <p class="text-gray-400">No nodes found in this organization.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Recent Security Groups Section -->
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-medium text-light-100">Security Groups</h2>
+                <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all</a>
+            </div>
+            {% if organization.security_groups.exists %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-dark-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nodes</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Rules</th>
+                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-dark-900 divide-y divide-gray-700">
+                            {% for sg in organization.security_groups.all|slice:":5" %}
+                                <tr class="hover:bg-dark-700 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ sg.name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ sg.nodes.count }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ sg.firewall_rules.count }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=sg.id %}" class="text-primary-400 hover:text-primary-300">View</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <p class="text-gray-400">No security groups found in this organization.</p>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                        {% if organization.nodes.exists %}
+                            <a href="{% url 'security_groups_org:create' slug=organization.slug %}" class="mt-2 inline-block text-primary-400 hover:underline">Create your first security group</a>
+                        {% else %}
+                            <p class="mt-2 text-gray-500">Create at least one node before creating security groups</p>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Recent Activity Section -->
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
+            <h2 class="text-xl font-medium mb-4 text-light-100">Recent Activity</h2>
+            <div id="organization-activity" hx-get="{% url 'organizations:detail' slug=organization.slug %}activity/" hx-trigger="load" hx-swap="innerHTML" class="">
+                <div class="text-center py-4">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+                    <p class="mt-2 text-gray-400">Loading activity...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    {% for membership in organization.memberships.all %}
+    <!-- Change Role Modal -->
+    <div id="change-role-modal-{{ membership.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+            <div class="mt-3">
+                <h3 class="text-lg leading-6 font-medium text-light-100">Change Member Role</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-400">Change role for {{ membership.user.email }}</p>
+                    <form method="post" action="{% url 'organizations:change_member_role' organization.slug membership.id %}" class="mt-4">
+                        {% csrf_token %}
+                        <select name="role" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-700 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md bg-dark-700 text-light-100">
+                            <option value="member" {% if membership.role == 'member' %}selected{% endif %}>Member</option>
+                            <option value="admin" {% if membership.role == 'admin' %}selected{% endif %}>Admin</option>
+                            {% if organization.role == 'owner' %}
+                            <option value="owner" {% if membership.role == 'owner' %}selected{% endif %}>Owner</option>
+                            {% endif %}
+                        </select>
+                        <div class="mt-5 flex justify-end space-x-3">
+                            <button type="button" onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.add('hidden')"
+                                    class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                                Save Changes
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remove Member Modal -->
+    <div id="remove-member-modal-{{ membership.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+            <div class="mt-3">
+                <h3 class="text-lg leading-6 font-medium text-light-100">Remove Member</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-400">Are you sure you want to remove {{ membership.user.email }} from {{ organization.name }}?</p>
+                    <div class="mt-5 flex justify-end space-x-3">
+                        <button type="button" onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.add('hidden')"
+                                class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
+                            Cancel
+                        </button>
+                        <form method="post" action="{% url 'organizations:remove_member' organization.slug membership.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                                Remove
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% for invitation in organization.invitations.all %}
+    {% if invitation.status == 'pending' %}
+    <!-- Revoke Invitation Modal -->
+    <div id="revoke-invitation-modal-{{ invitation.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+            <div class="mt-3">
+                <h3 class="text-lg leading-6 font-medium text-light-100">Revoke Invitation</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-400">Are you sure you want to revoke the invitation sent to {{ invitation.email }}?</p>
+                    <div class="mt-5 flex justify-end space-x-3">
+                        <button type="button" onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.add('hidden')"
+                                class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
+                            Cancel
+                        </button>
+                        <form method="post" action="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                                Revoke
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <!-- Delete Organization Modal -->
+    <div id="delete-modal" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
+            <div class="mt-3 text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-900 bg-opacity-30">
+                    <svg class="h-6 w-6 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-light-100 mt-2">Delete Organization</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-light-300">Are you sure you want to delete <span class="font-semibold text-light-100">{{ organization.name }}</span>?</p>
+                    <p class="text-red-400 mt-2 text-sm">This action cannot be undone. All nodes, certificates, security groups, and other resources will be permanently deleted.</p>
+                </div>
+                <div class="flex justify-center space-x-4 mt-4">
+                    <button id="cancel-btn" 
+                            onclick="document.getElementById('delete-modal').classList.add('hidden')"
+                            class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dark-700">
+                        Cancel
+                    </button>
+                    <form method="post" action="{% url 'organizations:delete' slug=organization.slug %}">
+                        {% csrf_token %}
+                        <button type="submit" 
+                                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% block extra_js %}
+    <script>
+        function resendInvitation(invitationId) {
+            fetch(`/organizations/{{ organization.slug }}/invitations/${invitationId}/resend/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Invitation resent successfully');
+                } else {
+                    alert('Failed to resend invitation');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while resending the invitation');
+            });
+        }
+    </script>
+    {% endblock %}
+{% endblock %} 

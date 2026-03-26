@@ -1,0 +1,60 @@
+{% extends "base/base.html" %}
+
+{% block title %}Nodes - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Nodes{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Nodes</h1>
+            <p class="ui-page-subtitle">Provision and manage the Nebula nodes that belong to {{ organization.name }}. Use registration tokens for enrollment and create mobile devices once setup is ready.</p>
+        </div>
+        <div class="ui-page-actions">
+            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Registration Tokens</a>
+                {% if organization.certificate_authorities.exists and organization.network_ranges.exists %}
+                    <a href="{% url 'nodes_org:create_mobile' slug=organization.slug %}" class="btn-enhanced ui-button-primary ui-button-sm">Create Mobile Node</a>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    {% if organization.role == 'owner' or organization.role == 'admin' %}
+    {% if not organization.certificate_authorities.exists or not organization.network_ranges.exists %}
+    <div class="ui-callout">
+        <div>
+            <p class="font-semibold text-light-100">Mobile device setup is not ready yet.</p>
+            <p class="mt-1 text-sm text-light-300">
+                {% if not organization.certificate_authorities.exists %}
+                    Add a certificate authority first.
+                {% elif not organization.network_ranges.exists %}
+                    Add a network range first.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <div class="ui-toolbar">
+        <p class="ui-toolbar-title">Search nodes</p>
+        <form id="node-search-form" class="ui-search" hx-get="." hx-target="#node-table" hx-push-url="true" hx-trigger="submit">
+            <input type="text" name="search" placeholder="Search by name or Nebula IP" value="{{ search_query }}">
+            <button type="submit" class="btn-enhanced ui-button-secondary ui-button-sm">Search</button>
+        </form>
+    </div>
+
+    <div class="ui-form-section">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Node Inventory</h2>
+                <p class="card-subtitle">Review every node currently registered to this workspace.</p>
+            </div>
+        </div>
+        <div id="node-table">
+            {% include "nodes/_org_node_table.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

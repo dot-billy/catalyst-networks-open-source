@@ -1,0 +1,79 @@
+{% comment %}
+    Enhanced Form Field Component with improved styling and validation feedback
+    
+    Usage: {% include "components/form_field.html" with field=form.field_name label="Custom Label" help_text="Help text description" %}
+    
+    Parameters:
+    - field: Required. The form field object.
+    - label: Optional. Override the field's label.
+    - help_text: Optional. Additional help text to display.
+    - required: Optional. Whether to mark the field as required.
+    - field_type: Optional. Field type for specific styling (text, email, password, textarea, select, checkbox, radio)
+{% endcomment %}
+
+{% with field_id=field.auto_id %}
+<div class="form-field-group mb-6" 
+     x-data="{ 
+         hasError: {{ field.errors|yesno:'true,false' }},
+         isFocused: false,
+         hasValue: false
+     }"
+     x-init="hasValue = $refs.field.value !== ''"
+     @focusin="isFocused = true"
+     @focusout="isFocused = false; hasValue = $refs.field.value !== ''">
+    
+    <!-- Label with improved styling -->
+    <label for="{{ field_id }}" 
+           class="block text-sm font-semibold text-light-100 mb-2 transition-colors duration-200"
+           :class="{ 'text-red-400': hasError, 'text-primary-400': isFocused && !hasError }">
+        {{ label|default:field.label }}
+        {% if field.field.required or required %}
+            <span class="text-red-400 ml-1" aria-label="required">*</span>
+        {% endif %}
+    </label>
+    
+    <!-- Field wrapper with enhanced styling -->
+    <div class="relative">
+        {{ field|add_class:"form-input-enhanced" }}
+        
+        <!-- Focus indicator -->
+        <div class="absolute inset-0 rounded-lg pointer-events-none transition-all duration-200"
+             :class="{ 'ring-2 ring-primary-400 ring-opacity-20': isFocused && !hasError, 'ring-2 ring-red-400 ring-opacity-20': hasError }">
+        </div>
+        
+        <!-- Success/Error icons -->
+        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            {% if field.errors %}
+                <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            {% elif field.value and not field.errors %}
+                <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Error messages with improved styling -->
+    {% if field.errors %}
+        <div class="mt-2 flex items-start space-x-2" x-show="hasError" x-transition>
+            <svg class="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="text-sm text-red-400">
+                {% for error in field.errors %}
+                    <p class="mb-1 last:mb-0">{{ error }}</p>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+    
+    <!-- Help text with improved styling -->
+    {% if help_text or field.help_text %}
+        <p class="mt-2 text-sm text-gray-500 leading-relaxed">
+            {{ help_text|default:field.help_text }}
+        </p>
+    {% endif %}
+</div>
+{% endwith %} 

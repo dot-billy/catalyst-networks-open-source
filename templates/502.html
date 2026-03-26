@@ -1,0 +1,29 @@
+{% extends "base/base.html" %}
+
+{% block title %}Service Unavailable - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Service Unavailable{% endblock %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+    <div class="ui-form-section max-w-2xl w-full text-center">
+        <span class="ui-badge ui-badge-warning">502 error</span>
+        <h1 class="mt-6 text-7xl font-semibold tracking-tight text-gray-900 sm:text-8xl">502</h1>
+        <h2 class="mt-4 text-3xl font-semibold text-gray-900">Service Unavailable</h2>
+        <p class="mt-4 text-base text-gray-600">
+            The app is reachable, but an upstream service is temporarily unavailable. Try again in a moment or return to a stable page.
+        </p>
+
+        <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="{% url 'dashboard:dashboard' %}" class="btn-enhanced ui-button-primary">Go to Dashboard</a>
+            <button onclick="window.location.reload()" class="btn-enhanced ui-button-secondary">Try Again</button>
+            <a href="{% url 'organizations:list' %}" class="btn-enhanced ui-button-secondary">Organizations</a>
+        </div>
+
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <p class="text-sm text-gray-500">
+                If the outage continues, <a href="mailto:support@catalystnetworks.com" class="text-primary-600 hover:text-primary-700">contact support</a> and include what you were trying to load.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

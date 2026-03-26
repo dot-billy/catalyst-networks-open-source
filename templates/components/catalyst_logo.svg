@@ -1,0 +1,122 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Professional cyber gradient -->
+    <linearGradient id="cyberGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9"/>
+      <stop offset="50%" style="stop-color:#1e40af"/>
+      <stop offset="100%" style="stop-color:#1e1b4b"/>
+    </linearGradient>
+    
+    <!-- Accent for nodes -->
+    <radialGradient id="nodeGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#38bdf8"/>
+      <stop offset="100%" style="stop-color:#0ea5e9"/>
+    </radialGradient>
+    
+    <!-- Subtle glow for professional feel -->
+    <filter id="subtleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Security pattern -->
+    <pattern id="securityPattern" patternUnits="userSpaceOnUse" width="4" height="4">
+      <rect width="4" height="4" fill="none"/>
+      <circle cx="2" cy="2" r="0.5" fill="rgba(56, 189, 248, 0.1)"/>
+    </pattern>
+  </defs>
+  
+  <!-- Background security mesh -->
+  <rect width="120" height="120" fill="url(#securityPattern)" opacity="0.3"/>
+  
+  <!-- Main hexagonal network architecture -->
+  <g transform="translate(60, 60)">
+    <!-- Central catalyst node (hexagonal for strength/security) -->
+    <polygon points="0,-18 15.59,-9 15.59,9 0,18 -15.59,9 -15.59,-9" 
+             fill="url(#cyberGradient)" 
+             stroke="rgba(56, 189, 248, 0.4)" 
+             stroke-width="1.5"
+             filter="url(#subtleGlow)"/>
+    
+    <!-- Inner secure core -->
+    <circle cx="0" cy="0" r="6" fill="url(#nodeGradient)" opacity="0.8"/>
+    
+    <!-- Security indicator -->
+    <circle cx="0" cy="0" r="2" fill="#ffffff" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;0.6;0.9" dur="4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Network perimeter nodes (enterprise endpoints) -->
+  <g>
+    <!-- Primary nodes (servers/critical infrastructure) -->
+    <circle cx="60" cy="20" r="5" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    <circle cx="95" cy="40" r="4" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    <circle cx="95" cy="80" r="4" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    <circle cx="60" cy="100" r="5" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    <circle cx="25" cy="80" r="4" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    <circle cx="25" cy="40" r="4" fill="url(#nodeGradient)" filter="url(#subtleGlow)"/>
+    
+    <!-- Status indicators on key nodes -->
+    <circle cx="60" cy="20" r="1.5" fill="#10b981" opacity="0.8">
+      <animate attributeName="opacity" values="0.8;0.4;0.8" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="60" cy="100" r="1.5" fill="#10b981" opacity="0.8">
+      <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Secure connection paths -->
+  <g stroke="url(#cyberGradient)" stroke-width="1.5" fill="none" opacity="0.6">
+    <!-- Primary secure channels -->
+    <line x1="60" y1="42" x2="60" y2="20"/>
+    <line x1="75" y1="51" x2="95" y2="40"/>
+    <line x1="75" y1="69" x2="95" y2="80"/>
+    <line x1="60" y1="78" x2="60" y2="100"/>
+    <line x1="45" y1="69" x2="25" y2="80"/>
+    <line x1="45" y1="51" x2="25" y2="40"/>
+  </g>
+  
+  <!-- Zero-trust mesh overlay -->
+  <g stroke="rgba(56, 189, 248, 0.3)" stroke-width="1" fill="none" stroke-dasharray="2,2">
+    <line x1="60" y1="20" x2="95" y2="40">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="95" y1="40" x2="95" y2="80">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2.5s" repeatCount="indefinite"/>
+    </line>
+    <line x1="95" y1="80" x2="60" y2="100">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2.2s" repeatCount="indefinite"/>
+    </line>
+    <line x1="60" y1="100" x2="25" y2="80">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2.8s" repeatCount="indefinite"/>
+    </line>
+    <line x1="25" y1="80" x2="25" y2="40">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2.3s" repeatCount="indefinite"/>
+    </line>
+    <line x1="25" y1="40" x2="60" y2="20">
+      <animate attributeName="stroke-dashoffset" values="0;4" dur="2.7s" repeatCount="indefinite"/>
+    </line>
+  </g>
+  
+  <!-- Data flow indicators (subtle) -->
+  <g>
+    <!-- Encrypted data packets -->
+    <circle cx="47" cy="35" r="1" fill="#38bdf8" opacity="0">
+      <animate attributeName="opacity" values="0;0.8;0" dur="2s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="translate" values="0,0; 13,-15; 26,-30" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="73" cy="85" r="1" fill="#38bdf8" opacity="0">
+      <animate attributeName="opacity" values="0;0.8;0" dur="2.5s" repeatCount="indefinite"/>
+      <animateTransform attributeName="transform" type="translate" values="0,0; -13,15; -26,30" dur="2.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- Security perimeter (subtle) -->
+  <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(56, 189, 248, 0.1)" stroke-width="1" stroke-dasharray="5,10" opacity="0.5">
+    <animate attributeName="stroke-dashoffset" values="0;15" dur="8s" repeatCount="indefinite"/>
+  </circle>
+</svg> 

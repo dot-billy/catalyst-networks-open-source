@@ -1,0 +1,147 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+*.mo
+*.pot
+.mypy_cache/
+.pyre/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Environment variables
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+.env.prod
+
+# Security and certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+*.p8
+*.pkey
+*.priv
+*.pub
+*.cert
+*.ca
+*.ca-bundle
+*.chain
+*.srl
+*.req
+*.der
+*.p7b
+*.p7c
+*.p7s
+*.p7m
+*.p10
+
+# Node files (contains certificates and configs)
+node_files/
+
+# Certificate data (private keys)
+certs_data/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+*.rdb
+
+# Node.js
+node_modules/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Build and deployment
+build_deploy_logs.json
+*.tar.gz
+*.zip
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+debug.log
+logs/
+
+# Backup and sync
+backup/
+backups/
