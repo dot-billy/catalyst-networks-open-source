@@ -1,0 +1,97 @@
+{% extends "base/base.html" %}
+{% load static %}
+
+{% block title %}Getting Started - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">Getting Started</h1>
+        <p class="ui-page-subtitle max-w-3xl">Catalyst Networks is an open-source platform for managing <a href="https://github.com/slackhq/nebula" class="text-blue-600 hover:underline">Nebula</a> mesh VPN networks. This guide walks you through initial setup.</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Prerequisites</h2>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li><a href="https://docs.docker.com/get-docker/" class="text-blue-600 hover:underline">Docker</a> and Docker Compose installed</li>
+          <li>Git</li>
+          <li>A terminal / command line</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">1. Clone and Configure</h2>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">git clone https://github.com/your-org/catalyst-networks-open-source.git
+cd catalyst-networks-open-source
+cp .env.example .env</pre>
+        <p class="text-sm text-gray-700 mb-2">Generate the required secrets and add them to your <code>.env</code> file:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm"># Generate a Django secret key
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# Generate a registration token
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">2. Start the Services</h2>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose up --build -d</pre>
+        <p class="text-sm text-gray-700 mt-2">This starts the web application, PostgreSQL, Redis, Celery worker, and Celery beat scheduler.</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">3. Initialize the Database</h2>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python manage.py migrate
+docker compose exec web python manage.py createsuperuser</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">4. First-Time Setup</h2>
+        <p class="text-sm text-gray-700 mb-2">Once logged in, follow these steps to get your first network running:</p>
+        <ol class="list-decimal ml-6 space-y-2 text-sm text-gray-700">
+          <li><strong>Create an Organization</strong> &mdash; Go to Organizations and create one. This is your tenant boundary.</li>
+          <li><strong>Add a Network Range</strong> &mdash; In your organization, add a CIDR range (e.g., <code>10.42.0.0/24</code>). This is the IP pool for your Nebula nodes.</li>
+          <li><strong>Create a Certificate Authority</strong> &mdash; Go to Certificates and create a CA. This generates the Nebula CA keypair used to sign node certificates.</li>
+          <li><strong>Add Your First Node</strong> &mdash; Create a node (start with a lighthouse). The platform auto-assigns an IP and generates a signed certificate.</li>
+          <li><strong>Download the Config</strong> &mdash; Download the node's configuration bundle (cert, key, and YAML config) and deploy it to your server.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Architecture Overview</h2>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Technology</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Web App</td><td>Django 5.2 LTS + HTMX</td><td>Management UI and REST API</td></tr>
+              <tr><td>Database</td><td>PostgreSQL 15</td><td>Persistent storage</td></tr>
+              <tr><td>Cache / Broker</td><td>Redis 7</td><td>Celery task queue and caching</td></tr>
+              <tr><td>Task Worker</td><td>Celery</td><td>Async certificate operations and webhooks</td></tr>
+              <tr><td>Scheduler</td><td>Celery Beat</td><td>Periodic cert expiry checks</td></tr>
+              <tr><td>VPN Engine</td><td>Nebula</td><td>Mesh overlay network (deployed on nodes)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">What's Next?</h2>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li><a href="/docs/network-setup/" class="text-blue-600 hover:underline">Network Setup</a> &mdash; CIDR ranges and IP allocation</li>
+          <li><a href="/docs/certificate-management/" class="text-blue-600 hover:underline">Certificate Management</a> &mdash; CA creation, cert renewal, expiry monitoring</li>
+          <li><a href="/docs/api-reference/" class="text-blue-600 hover:underline">API Reference</a> &mdash; Automate node registration via the REST API</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

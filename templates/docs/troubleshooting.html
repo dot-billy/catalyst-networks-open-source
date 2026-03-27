@@ -1,0 +1,114 @@
+{% extends "base/base.html" %}
+
+{% block title %}Troubleshooting - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">Troubleshooting</h1>
+        <p class="ui-page-subtitle max-w-3xl">Common issues and how to resolve them.</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">"No certificate authority exists"</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> You're trying to create a node, but no CA has been created for this organization.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong> Go to <strong>Certificates &rarr; Create Certificate Authority</strong> in your organization. You need the <code>nebula-cert</code> binary available in your Docker container (it's included in the default Dockerfile).</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">"No network range configured"</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> The organization doesn't have a CIDR range for IP allocation.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong> Go to your organization's detail page and add a network range (e.g., <code>10.42.0.0/24</code>).</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">"DJANGO_SECRET_KEY environment variable is not set"</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> The <code>.env</code> file is missing or doesn't have a <code>DJANGO_SECRET_KEY</code> value.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong></p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">cp .env.example .env
+# Generate and set DJANGO_SECRET_KEY:
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Certificate generation fails</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> The <code>nebula-cert</code> binary is not found or not executable.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong> Verify <code>nebula-cert</code> is installed in the container:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web which nebula-cert
+docker compose exec web nebula-cert --version</pre>
+        <p class="text-sm text-gray-700 mt-2">If not present, check your Dockerfile includes the Nebula binary download step.</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Database connection errors</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> PostgreSQL is not ready or credentials are wrong.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong></p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm"># Check if the database container is running
+docker compose ps db
+
+# Check database logs
+docker compose logs db
+
+# Verify your .env has the correct values:
+# POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST=db</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Celery tasks not running</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> Celery worker or beat is not started, or Redis is unavailable.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong></p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm"># Check all services are running
+docker compose ps
+
+# Check Celery worker logs
+docker compose logs celery
+
+# Check Celery beat logs
+docker compose logs celery-beat
+
+# Check Redis connectivity
+docker compose exec web python -c "import redis; r = redis.Redis(host='redis'); print(r.ping())"</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Nodes can't find each other</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> Lighthouse is unreachable, or node configs are stale.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong></p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li>Verify the lighthouse's public IP/FQDN is correct and the UDP port (default 4242) is open</li>
+          <li>Re-download the node config from the web UI &mdash; it includes the latest lighthouse addresses</li>
+          <li>Check that the CA certificate on each node matches the CA that signed its certificate</li>
+          <li>Run <code>nebula -config config.yaml -test</code> on the node to validate the config</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Rate limit exceeded on API registration</h2>
+        <p class="text-sm text-gray-700 mb-2"><strong>Cause:</strong> Too many registration requests from the same IP or organization.</p>
+        <p class="text-sm text-gray-700"><strong>Fix:</strong> Wait for the rate limit window to reset (1 hour). Limits are: 5 per IP per hour, 10 per organization per hour. For large deployments, space out registrations or use the <a href="/docs/bulk-operations/" class="text-blue-600 hover:underline">CSV import</a> feature instead.</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Running the healthcheck</h2>
+        <p class="text-sm text-gray-700 mb-3">The built-in healthcheck script verifies Django can start, connect to the database, and import the WSGI application:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python healthcheck.py</pre>
+        <p class="text-sm text-gray-700 mt-2">The health endpoint is also available at <code>/health/</code> for monitoring tools.</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Getting Help</h2>
+        <p class="text-sm text-gray-700">If your issue isn't covered here, open an issue on the <a href="https://github.com/your-org/catalyst-networks-open-source/issues" class="text-blue-600 hover:underline">GitHub repository</a> with:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700 mt-2">
+          <li>Steps to reproduce the problem</li>
+          <li>Relevant error messages or logs</li>
+          <li>Your environment (OS, Docker version)</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

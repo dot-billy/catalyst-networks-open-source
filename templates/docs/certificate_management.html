@@ -1,0 +1,97 @@
+{% extends "base/base.html" %}
+
+{% block title %}Certificate Management - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">Certificate Management</h1>
+        <p class="ui-page-subtitle max-w-3xl">Catalyst Networks uses Nebula's built-in PKI to manage Certificate Authorities and node certificates. Every node gets a signed certificate that proves its identity on the mesh.</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Certificate Authority (CA)</h2>
+        <p class="text-sm text-gray-700 mb-3">Each organization has one or more CAs. The CA keypair is used to sign all node certificates in that organization. When you create a CA, the platform runs <code>nebula-cert ca</code> to generate the keypair.</p>
+        <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 mb-3">
+          <strong>Security:</strong> The CA private key is the root of trust for your entire network. Protect it accordingly. In production, consider using encrypted storage for the <code>CERT_STORAGE_ROOT</code> volume.
+        </div>
+        <p class="text-sm text-gray-700">To create a CA:</p>
+        <ol class="list-decimal ml-6 space-y-1 text-sm text-gray-700">
+          <li>Navigate to your organization</li>
+          <li>Go to <strong>Certificates</strong></li>
+          <li>Click <strong>Create Certificate Authority</strong></li>
+          <li>Provide a name (e.g., "Production CA 2026")</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Node Certificates</h2>
+        <p class="text-sm text-gray-700 mb-3">When a node is created (via the web UI, API, or CSV import), a certificate is automatically generated and signed by the organization's latest CA. The certificate includes:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li>The node's name</li>
+          <li>Its assigned Nebula IP (with /24 subnet)</li>
+          <li>Security group memberships (as Nebula groups)</li>
+          <li>An expiration date</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Certificate Renewal</h2>
+        <p class="text-sm text-gray-700 mb-3">Certificates can be renewed in three ways:</p>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Manual (Single Node)</h3>
+        <p class="text-sm text-gray-700 mb-3">From the node detail page, click <strong>Renew Certificate</strong>. This regenerates the cert with the same parameters.</p>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Bulk Renewal (Web UI)</h3>
+        <p class="text-sm text-gray-700 mb-3">Go to <strong>Nodes &rarr; Bulk Renew</strong>. Filter by expiration window (7/14/30/60/90 days), select nodes, and renew all at once. See <a href="/docs/bulk-operations/" class="text-blue-600 hover:underline">Bulk Operations</a> for details.</p>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Management Command</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-2"># Renew all certs expiring within 14 days
+docker compose exec web python manage.py renew_certificates
+
+# Renew for a specific organization
+docker compose exec web python manage.py renew_certificates --organization-id 1
+
+# Renew a specific node
+docker compose exec web python manage.py renew_certificates --node-id 42
+
+# Dry run (see what would be renewed)
+docker compose exec web python manage.py renew_certificates --dry-run
+
+# Force renew regardless of expiration
+docker compose exec web python manage.py renew_certificates --organization-id 1 --force</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Expiration Monitoring</h2>
+        <p class="text-sm text-gray-700 mb-3">Catalyst Networks monitors certificate expiration automatically:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li><strong>Dashboard warnings</strong> &mdash; Certificates expiring within 30 days appear as alerts on the dashboard</li>
+          <li><strong>Celery Beat</strong> &mdash; A scheduled task checks for expiring certificates and sends webhook notifications</li>
+          <li><strong>Webhook events</strong> &mdash; <code>cert.expiring</code> events are fired for certificates approaching expiration</li>
+        </ul>
+        <p class="text-sm text-gray-700 mt-3">Configuration in <code>.env</code>:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">CERTIFICATE_RENEWAL_WINDOW_DAYS=14     # Auto-renew window
+CERTIFICATE_RENEWAL_BATCH_SIZE=10      # Batch size for processing
+CERTIFICATE_EXPIRY_NOTIFICATION_DAYS=30  # Webhook alert window</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Mobile Device Enrollment</h2>
+        <p class="text-sm text-gray-700 mb-3">For mobile devices (phones, tablets), Catalyst Networks supports QR code enrollment:</p>
+        <ol class="list-decimal ml-6 space-y-1 text-sm text-gray-700">
+          <li>Create a mobile node and assign it to a user</li>
+          <li>A QR code is automatically generated</li>
+          <li>The user scans the QR code with the Nebula mobile app</li>
+          <li>The enrollment endpoint provides the signed certificate bundle</li>
+        </ol>
+        <p class="text-sm text-gray-700 mt-2">QR enrollment tokens expire after 7 days by default.</p>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

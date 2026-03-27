@@ -138,7 +138,7 @@
                             </svg>
                             Organizations
                         </a>
-                        <a href="/docs/node-mgmt-cli/" class="catalyst-menu-link {% if '/docs/' in request.path %}active{% endif %}">
+                        <a href="/docs/getting-started/" class="catalyst-menu-link {% if '/docs/' in request.path %}active{% endif %}">
                             <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 11h10M7 15h6" />
                             </svg>
@@ -218,7 +218,7 @@
                     <h1 class="catalyst-topbar-title">{% block page_title %}Administration{% endblock %}</h1>
                 </div>
                 <div class="catalyst-topbar-actions">
-                    <a href="/docs/">Docs</a>
+                    <a href="/docs/getting-started/">Docs</a>
                     {% if user.is_authenticated %}
                     <a href="{% url 'profile' %}">{{ user.email }}</a>
                     {% else %}
@@ -260,7 +260,7 @@
                 <div class="catalyst-footer-inner">
                     <p>&copy; {% now "Y" %} {{ project_meta.NAME }}. Administrative platform.</p>
                     <div class="catalyst-footer-links">
-                        <a href="/docs/">Documentation</a>
+                        <a href="/docs/getting-started/">Documentation</a>
                     </div>
                 </div>
             </footer>

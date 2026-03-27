@@ -1,0 +1,101 @@
+{% extends "base/base.html" %}
+
+{% block title %}Bulk Renew Certificates - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Bulk Renew{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Bulk Certificate Renewal</h1>
+            <p class="ui-page-subtitle">Renew certificates for nodes in {{ organization.name }}. Nodes with certificates expiring within the selected window are shown by default.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Back to Nodes</a>
+        </div>
+    </div>
+
+    <div class="ui-toolbar">
+        <p class="ui-toolbar-title">Expiration window</p>
+        <form class="ui-search" method="get">
+            <select name="days" onchange="this.form.submit()" class="catalyst-select" style="width: auto;">
+                <option value="7" {% if days == 7 %}selected{% endif %}>Next 7 days</option>
+                <option value="14" {% if days == 14 %}selected{% endif %}>Next 14 days</option>
+                <option value="30" {% if days == 30 %}selected{% endif %}>Next 30 days</option>
+                <option value="60" {% if days == 60 %}selected{% endif %}>Next 60 days</option>
+                <option value="90" {% if days == 90 %}selected{% endif %}>Next 90 days</option>
+                <option value="365" {% if days == 365 %}selected{% endif %}>All (next year)</option>
+            </select>
+        </form>
+    </div>
+
+    {% if expiring_nodes %}
+    <form method="post">
+        {% csrf_token %}
+        <div class="ui-form-section">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Expiring Certificates</h2>
+                    <p class="card-subtitle">{{ expiring_nodes|length }} node(s) with certificates expiring within {{ days }} days.</p>
+                </div>
+                <div>
+                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="select-all" class="rounded">
+                        <span>Select All</span>
+                    </label>
+                </div>
+            </div>
+            <div class="ui-table-wrapper">
+                <table class="ui-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="w-10"></th>
+                            <th scope="col">Name</th>
+                            <th scope="col">IP Address</th>
+                            <th scope="col">Cert Expiration</th>
+                            <th scope="col">Days Remaining</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for node in expiring_nodes %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="node_ids" value="{{ node.id }}" class="node-checkbox rounded" checked>
+                            </td>
+                            <td class="font-medium text-gray-900">{{ node.name }}</td>
+                            <td class="text-gray-500">{{ node.nebula_ip }}</td>
+                            <td class="text-gray-500">{{ node.cert_expiration|date:"M d, Y" }}</td>
+                            <td>
+                                {% with days_left=node.cert_expiration|timeuntil %}
+                                <span class="ui-badge {% if '0 ' in days_left %}ui-badge-error{% else %}ui-badge-warning{% endif %}">
+                                    {{ days_left }}
+                                </span>
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-enhanced ui-button-primary">Renew Selected Certificates</button>
+            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <script>
+    document.getElementById('select-all').addEventListener('change', function() {
+        document.querySelectorAll('.node-checkbox').forEach(cb => cb.checked = this.checked);
+    });
+    </script>
+    {% else %}
+    <div class="ui-form-section">
+        <div class="ui-empty-state">
+            <p class="text-sm text-gray-500 py-4">No certificates expiring within {{ days }} days.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

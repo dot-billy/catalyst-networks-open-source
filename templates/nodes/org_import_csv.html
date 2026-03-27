@@ -1,0 +1,72 @@
+{% extends "base/base.html" %}
+
+{% block title %}Import Nodes - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Import Nodes{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Import Nodes from CSV</h1>
+            <p class="ui-page-subtitle">Upload a CSV file to bulk-create nodes for {{ organization.name }}. Each row becomes a new node with an auto-assigned IP and generated certificate.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Back to Nodes</a>
+        </div>
+    </div>
+
+    {% if errors %}
+    <div class="ui-form-section">
+        <div class="card-header">
+            <h2 class="card-title">Import Results</h2>
+            <p class="card-subtitle">{{ created }} node(s) created, {{ errors|length }} row(s) had issues.</p>
+        </div>
+        <div class="p-4 space-y-1">
+            {% for error in errors %}
+            <p class="text-sm text-red-600">{{ error }}</p>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not has_ca or not has_ranges %}
+    <div class="ui-callout">
+        <p class="font-semibold">Import is not available yet.</p>
+        <p class="mt-1 text-sm">
+            {% if not has_ca %}Create a certificate authority first.{% endif %}
+            {% if not has_ranges %}Add a network range first.{% endif %}
+        </p>
+    </div>
+    {% else %}
+    <div class="ui-form-section">
+        <div class="card-header">
+            <h2 class="card-title">Upload CSV</h2>
+            <p class="card-subtitle">The CSV must have a <code>name</code> column. Optional columns: <code>is_lighthouse</code>, <code>public_ip</code>, <code>fqdn</code>, <code>external_port</code>.</p>
+        </div>
+        <form method="post" enctype="multipart/form-data" class="p-4 space-y-4">
+            {% csrf_token %}
+            <div>
+                <label for="csv_file" class="catalyst-label">CSV File</label>
+                <input type="file" name="csv_file" id="csv_file" accept=".csv" required
+                       class="catalyst-input">
+            </div>
+            <button type="submit" class="btn-enhanced ui-button-primary">Import Nodes</button>
+        </form>
+    </div>
+
+    <div class="ui-form-section">
+        <div class="card-header">
+            <h2 class="card-title">CSV Format</h2>
+            <p class="card-subtitle">Example CSV content. Only <code>name</code> is required; IPs are auto-assigned.</p>
+        </div>
+        <div class="p-4">
+            <pre class="bg-gray-50 border border-gray-200 rounded-lg p-3 overflow-x-auto text-sm">name,is_lighthouse,public_ip,fqdn,external_port
+web-server-01,false,,,
+web-server-02,false,,,
+lighthouse-east,true,203.0.113.1,lh-east.example.com,4242
+lighthouse-west,true,198.51.100.5,lh-west.example.com,4242</pre>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

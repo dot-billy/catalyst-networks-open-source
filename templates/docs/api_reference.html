@@ -1,0 +1,158 @@
+{% extends "base/base.html" %}
+
+{% block title %}API Reference - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">API Reference</h1>
+        <p class="ui-page-subtitle max-w-3xl">Catalyst Networks provides a REST API for node registration and management. Interactive documentation is available at <a href="/api/docs/" class="text-blue-600 hover:underline">/api/docs/</a> (Swagger) and <a href="/api/redoc/" class="text-blue-600 hover:underline">/api/redoc/</a> (ReDoc).</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Authentication</h2>
+        <p class="text-sm text-gray-700 mb-3">The API supports two authentication methods:</p>
+
+        <h3 class="text-base font-medium mb-2 mt-4">JWT Tokens (User Authentication)</h3>
+        <p class="text-sm text-gray-700 mb-2">Obtain a token pair by posting credentials:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/token/
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "your-password"
+}
+
+# Response:
+{
+  "access": "eyJ0eXAiOiJKV1Qi...",
+  "refresh": "eyJ0eXAiOiJKV1Qi..."
+}</pre>
+        <p class="text-sm text-gray-700 mb-2">Use the access token in subsequent requests:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">Authorization: Bearer eyJ0eXAiOiJKV1Qi...</pre>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Registration Tokens (Fleet Deployment)</h3>
+        <p class="text-sm text-gray-700 mb-3">For automated deployments, use registration tokens created in the web UI. These are time-limited and can restrict the number of uses and node types.</p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Node Registration</h2>
+        <p class="text-sm text-gray-700 mb-3">Register a new node and receive its certificate bundle.</p>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Authenticated Registration</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/org/{slug}/nodes/register/
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "node_name": "web-server-01",
+  "is_lighthouse": false
+}</pre>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Token-Based Registration</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/nodes/register/
+Content-Type: application/json
+
+{
+  "organization_slug": "my-org",
+  "node_name": "edge-node-05",
+  "registration_token": "your-registration-token",
+  "is_lighthouse": false
+}</pre>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Lighthouse Registration</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/org/{slug}/nodes/register/
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "node_name": "lighthouse-east",
+  "is_lighthouse": true,
+  "public_ip": "203.0.113.1",
+  "fqdn": "lh-east.example.com",
+  "external_port": 4242
+}</pre>
+
+        <h3 class="text-base font-medium mb-2 mt-4">Response</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">HTTP 200 OK
+Content-Type: application/json
+
+{
+  "node_id": 42,
+  "node_name": "web-server-01",
+  "nebula_ip": "10.42.0.5",
+  "is_lighthouse": false,
+  "api_token": "a1b2c3d4...",
+  "certificate": "-----BEGIN NEBULA CERTIFICATE-----\n...",
+  "key": "-----BEGIN NEBULA X25519 PRIVATE KEY-----\n...",
+  "ca_certificate": "-----BEGIN NEBULA CERTIFICATE-----\n...",
+  "config_yaml": "pki:\n  ca: /etc/nebula/ca.crt\n  ...",
+  "expiration": "2027-03-27T00:00:00Z"
+}</pre>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Rate Limits</h2>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Scope</th><th>Limit</th><th>Window</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Per IP address</td><td>5 registrations</td><td>1 hour</td></tr>
+              <tr><td>Per organization</td><td>10 registrations</td><td>1 hour</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Node Management Endpoints</h2>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>GET</code></td><td><code>/api/org/{slug}/nodes/</code></td><td>List all nodes in an organization</td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/org/{slug}/nodes/register/</code></td><td>Register a new node</td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/org/{slug}/nodes/{id}/</code></td><td>Get node details</td></tr>
+              <tr><td><code>PATCH</code></td><td><code>/api/org/{slug}/nodes/{id}/</code></td><td>Update a node</td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/org/{slug}/nodes/{id}/renew_cert/</code></td><td>Renew node certificate</td></tr>
+              <tr><td><code>POST</code></td><td><code>/api/org/{slug}/nodes/{id}/checkin/</code></td><td>Node heartbeat check-in</td></tr>
+              <tr><td><code>GET</code></td><td><code>/api/org/{slug}/nodes/{id}/security_groups/</code></td><td>Get node's security groups</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Error Responses</h2>
+        <p class="text-sm text-gray-700 mb-3">All error responses follow this format:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">{
+  "error": "A human-readable error message"
+}</pre>
+        <div class="overflow-x-auto mt-3">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Status</th><th>Meaning</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>400</code></td><td>Bad request (missing fields, invalid data)</td></tr>
+              <tr><td><code>401</code></td><td>Unauthorized (invalid or missing token)</td></tr>
+              <tr><td><code>403</code></td><td>Forbidden (insufficient permissions)</td></tr>
+              <tr><td><code>404</code></td><td>Organization or node not found</td></tr>
+              <tr><td><code>429</code></td><td>Rate limit exceeded</td></tr>
+              <tr><td><code>500</code></td><td>Internal server error</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

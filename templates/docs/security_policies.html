@@ -1,0 +1,101 @@
+{% extends "base/base.html" %}
+
+{% block title %}Security Policies - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">Security Policies</h1>
+        <p class="ui-page-subtitle max-w-3xl">Security groups and firewall rules let you control which nodes can communicate and on which ports. Groups are applied as Nebula groups in node certificates.</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Security Groups</h2>
+        <p class="text-sm text-gray-700 mb-3">A security group is a named collection of nodes within an organization. Groups serve two purposes:</p>
+        <ol class="list-decimal ml-6 space-y-1 text-sm text-gray-700">
+          <li><strong>Nebula groups</strong> &mdash; When a node's certificate is generated, its security group names are embedded as Nebula groups. This allows Nebula's built-in firewall to enforce group-based rules.</li>
+          <li><strong>Firewall rule targets</strong> &mdash; Rules can reference security groups as sources or destinations.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Firewall Rules</h2>
+        <p class="text-sm text-gray-700 mb-3">Each security group can have multiple firewall rules. A rule defines:</p>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Protocol</td><td>TCP, UDP, ICMP, or Any</td><td><code>tcp</code></td></tr>
+              <tr><td>Port / Range</td><td>Single port or range</td><td><code>443</code> or <code>8000-8999</code></td></tr>
+              <tr><td>Direction</td><td>Inbound or Outbound</td><td><code>inbound</code></td></tr>
+              <tr><td>Source CIDRs</td><td>IP ranges allowed</td><td><code>10.42.0.0/24</code></td></tr>
+              <tr><td>Source Groups</td><td>Security groups allowed</td><td><code>web-servers</code></td></tr>
+              <tr><td>Source Nodes</td><td>Individual nodes allowed</td><td><code>monitoring-01</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Rule Templates</h2>
+        <p class="text-sm text-gray-700 mb-3">Catalyst Networks provides built-in templates for common services:</p>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Template</th><th>Protocol</th><th>Port</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>SSH</td><td>TCP</td><td>22</td></tr>
+              <tr><td>HTTP</td><td>TCP</td><td>80</td></tr>
+              <tr><td>HTTPS</td><td>TCP</td><td>443</td></tr>
+              <tr><td>MySQL</td><td>TCP</td><td>3306</td></tr>
+              <tr><td>PostgreSQL</td><td>TCP</td><td>5432</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Example: Web Server Policy</h2>
+        <p class="text-sm text-gray-700 mb-3">To allow only your monitoring nodes to SSH into web servers:</p>
+        <ol class="list-decimal ml-6 space-y-2 text-sm text-gray-700">
+          <li>Create a security group called <strong>web-servers</strong></li>
+          <li>Create a security group called <strong>monitoring</strong></li>
+          <li>Add your web server nodes to <strong>web-servers</strong></li>
+          <li>Add your monitoring node to <strong>monitoring</strong></li>
+          <li>On <strong>web-servers</strong>, add an inbound rule:
+            <ul class="list-disc ml-6 mt-1">
+              <li>Protocol: TCP, Port: 22</li>
+              <li>Source group: <strong>monitoring</strong></li>
+            </ul>
+          </li>
+          <li>Add another inbound rule for HTTPS:
+            <ul class="list-disc ml-6 mt-1">
+              <li>Protocol: TCP, Port: 443</li>
+              <li>Source CIDR: <code>10.42.0.0/24</code> (all mesh nodes)</li>
+            </ul>
+          </li>
+        </ol>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Assigning Nodes</h2>
+        <p class="text-sm text-gray-700 mb-3">Nodes can be assigned to security groups in two ways:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li><strong>From the node detail page</strong> &mdash; Click "Security Groups" to add/remove group memberships</li>
+          <li><strong>From the security group page</strong> &mdash; Click "Assign Nodes" to add nodes to the group</li>
+        </ul>
+        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <strong>Note:</strong> When you change a node's security group assignments, its certificate should be regenerated for the new groups to take effect in Nebula's firewall.
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

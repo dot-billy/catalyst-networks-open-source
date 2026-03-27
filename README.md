@@ -11,8 +11,10 @@ An open-source platform for managing [Nebula](https://github.com/slackhq/nebula)
 - **Security groups** — logical firewall groupings for nodes
 - **Webhook notifications** — event-driven webhooks for node and certificate lifecycle events
 - **Audit logging** — full change history via django-simple-history
+- **Bulk operations** — CSV import/export, batch deletion, and batch certificate renewal
 - **REST API** with OpenAPI/Swagger documentation
 - **Web dashboard** built with Django templates and HTMX
+- **Built-in documentation** — in-app guides for setup, networking, certificates, API, and troubleshooting
 
 ## Quick Start
 

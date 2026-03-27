@@ -12,6 +12,10 @@
         </div>
         <div class="ui-page-actions">
             {% if organization.role == 'owner' or organization.role == 'admin' %}
+                <a href="{% url 'nodes_org:export_csv' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Export CSV</a>
+                <a href="{% url 'nodes_org:import_csv' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Import CSV</a>
+                <a href="{% url 'nodes_org:bulk_renew' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Bulk Renew</a>
+                <a href="{% url 'nodes_org:bulk_delete' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Bulk Delete</a>
                 <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Registration Tokens</a>
                 {% if organization.certificate_authorities.exists and organization.network_ranges.exists %}
                     <a href="{% url 'nodes_org:create_mobile' slug=organization.slug %}" class="btn-enhanced ui-button-primary ui-button-sm">Create Mobile Node</a>

@@ -18,7 +18,13 @@ urlpatterns = [
     path('<int:pk>/enroll/', views.org_node_enroll, name='enroll'),
     path('<int:pk>/renew-cert/', views.org_node_renew_cert, name='renew_cert'),
     path('<int:pk>/security-groups/', views.org_node_security_groups, name='assign_security_group'),
-    
+
+    # Bulk operations
+    path('export-csv/', views.org_node_export_csv, name='export_csv'),
+    path('import-csv/', views.org_node_import_csv, name='import_csv'),
+    path('bulk-delete/', views.org_node_bulk_delete, name='bulk_delete'),
+    path('bulk-renew/', views.org_node_bulk_renew, name='bulk_renew'),
+
     # Node registration token management
     path('registration-tokens/', views.org_registration_token_list, name='token_list'),
     path('registration-tokens/create/', views.org_registration_token_create, name='token_create'),

@@ -1,7 +1,31 @@
-<nav class="bg-dark-800 p-4 h-full min-h-screen w-64 border-r border-dark-700 rounded-xl">
-  <ul class="space-y-2">
-    <li>
-      <a href="/docs/node-mgmt-cli/" class="block text-light-100 font-semibold hover:text-primary-400">Node Management CLI</a>
-    </li>
-  </ul>
-</nav> 
+<nav class="w-64 flex-shrink-0">
+  <div class="ui-form-section p-4 space-y-4 sticky top-4">
+    <h3 class="card-title text-sm">Documentation</h3>
+    <ul class="space-y-1 text-sm">
+      <li>
+        <a href="/docs/getting-started/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/getting-started/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Getting Started</a>
+      </li>
+      <li>
+        <a href="/docs/network-setup/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/network-setup/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Network Setup</a>
+      </li>
+      <li>
+        <a href="/docs/certificate-management/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/certificate-management/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Certificate Management</a>
+      </li>
+      <li>
+        <a href="/docs/security-policies/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/security-policies/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Security Policies</a>
+      </li>
+      <li>
+        <a href="/docs/bulk-operations/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/bulk-operations/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Bulk Operations</a>
+      </li>
+      <li>
+        <a href="/docs/api-reference/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/api-reference/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">API Reference</a>
+      </li>
+      <li>
+        <a href="/docs/node-mgmt-cli/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/node-mgmt-cli/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Node Management CLI</a>
+      </li>
+      <li>
+        <a href="/docs/troubleshooting/" class="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-700 hover:text-gray-900 transition-colors {% if request.path == '/docs/troubleshooting/' %}bg-gray-50 font-semibold text-gray-900{% endif %}">Troubleshooting</a>
+      </li>
+    </ul>
+  </div>
+</nav>

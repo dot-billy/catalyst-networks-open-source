@@ -1,0 +1,86 @@
+{% extends "base/base.html" %}
+
+{% block title %}Bulk Delete Nodes - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Bulk Delete{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Bulk Delete Nodes</h1>
+            <p class="ui-page-subtitle">Select nodes to permanently delete from {{ organization.name }}. This removes the node, its certificates, and keys.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Back to Nodes</a>
+        </div>
+    </div>
+
+    {% if nodes %}
+    <form method="post" id="bulk-delete-form">
+        {% csrf_token %}
+        <div class="ui-form-section">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Select Nodes</h2>
+                    <p class="card-subtitle">{{ nodes|length }} node(s) in this organization.</p>
+                </div>
+                <div>
+                    <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="select-all" class="rounded">
+                        <span>Select All</span>
+                    </label>
+                </div>
+            </div>
+            <div class="ui-table-wrapper">
+                <table class="ui-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="w-10"></th>
+                            <th scope="col">Name</th>
+                            <th scope="col">IP Address</th>
+                            <th scope="col">Type</th>
+                            <th scope="col">Last Check-in</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for node in nodes %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="node_ids" value="{{ node.id }}" class="node-checkbox rounded">
+                            </td>
+                            <td class="font-medium text-gray-900">{{ node.name }}</td>
+                            <td class="text-gray-500">{{ node.nebula_ip }}</td>
+                            <td>
+                                <span class="ui-badge {% if node.is_lighthouse %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                                    {% if node.is_lighthouse %}Lighthouse{% else %}Standard{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-gray-500">{{ node.last_checkin|date:"M d, Y H:i"|default:"Never" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-enhanced ui-button-primary" style="background: var(--catalyst-error); border-color: var(--catalyst-error);"
+                    onclick="return confirm('Are you sure? This will permanently delete the selected nodes and their certificates.')">
+                Delete Selected Nodes
+            </button>
+            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <script>
+    document.getElementById('select-all').addEventListener('change', function() {
+        document.querySelectorAll('.node-checkbox').forEach(cb => cb.checked = this.checked);
+    });
+    </script>
+    {% else %}
+    <div class="ui-empty-state">
+        <p class="text-sm text-gray-500">No nodes in this organization.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

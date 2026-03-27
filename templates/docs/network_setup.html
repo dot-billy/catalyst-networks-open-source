@@ -1,0 +1,82 @@
+{% extends "base/base.html" %}
+
+{% block title %}Network Setup - Documentation - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Documentation{% endblock %}
+
+{% block content %}
+<div class="flex gap-6 flex-col lg:flex-row">
+  {% include "docs/sidebar.html" %}
+  <main class="flex-1 w-full max-w-full ui-form-section">
+    <div class="p-6 space-y-8">
+      <div>
+        <h1 class="ui-page-title mb-2">Network Setup</h1>
+        <p class="ui-page-subtitle max-w-3xl">Configure CIDR ranges and understand how Catalyst Networks allocates IP addresses across your Nebula mesh.</p>
+      </div>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Network Ranges</h2>
+        <p class="text-sm text-gray-700 mb-3">Each organization has one or more network ranges defined as CIDR blocks. When a node is created, Catalyst Networks automatically assigns the next available IP from the range.</p>
+        <p class="text-sm text-gray-700 mb-3">Only private (RFC 1918) and CGNAT ranges are allowed:</p>
+        <div class="overflow-x-auto">
+          <table class="ui-table text-sm">
+            <thead>
+              <tr><th>Range</th><th>CIDR</th><th>Usable Hosts</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Class A Private</td><td><code>10.0.0.0/8</code></td><td>~16.7 million</td></tr>
+              <tr><td>Class B Private</td><td><code>172.16.0.0/12</code></td><td>~1 million</td></tr>
+              <tr><td>Class C Private</td><td><code>192.168.0.0/16</code></td><td>~65,000</td></tr>
+              <tr><td>CGNAT</td><td><code>100.64.0.0/10</code></td><td>~4 million</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Choosing a Range</h2>
+        <p class="text-sm text-gray-700 mb-3">Pick a range that doesn't conflict with existing infrastructure on your nodes' host networks. Common choices:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li><code>10.42.0.0/24</code> &mdash; 254 hosts, good for small teams</li>
+          <li><code>10.42.0.0/16</code> &mdash; ~65,000 hosts, room to grow</li>
+          <li><code>100.64.0.0/24</code> &mdash; CGNAT range, avoids conflicts with most LANs</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">IP Allocation</h2>
+        <p class="text-sm text-gray-700 mb-3">IPs are assigned sequentially from the first available address in the range. The allocation algorithm:</p>
+        <ol class="list-decimal ml-6 space-y-1 text-sm text-gray-700">
+          <li>Gets all network ranges for the organization</li>
+          <li>Enumerates host addresses in the first range</li>
+          <li>Skips any IP already assigned to an existing node</li>
+          <li>Returns the first unused IP</li>
+        </ol>
+        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <strong>Note:</strong> You can also manually specify an IP when creating a node via the API. The IP must fall within one of the organization's network ranges.
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Lighthouses</h2>
+        <p class="text-sm text-gray-700 mb-3">Lighthouse nodes are the rendezvous points in a Nebula network. They help other nodes find each other. Every organization needs at least one lighthouse before regular nodes can be added.</p>
+        <p class="text-sm text-gray-700 mb-3">Lighthouse requirements:</p>
+        <ul class="list-disc ml-6 space-y-1 text-sm text-gray-700">
+          <li>A public IP address or FQDN reachable by all other nodes</li>
+          <li>A UDP port (default: <code>4242</code>) open in the host firewall</li>
+          <li>Stable uptime &mdash; all nodes depend on the lighthouse for discovery</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold mb-3">Adding a Network Range</h2>
+        <ol class="list-decimal ml-6 space-y-1 text-sm text-gray-700">
+          <li>Navigate to your organization's detail page</li>
+          <li>In the <strong>Network Ranges</strong> section, enter a CIDR block</li>
+          <li>Add an optional description (e.g., "Production overlay network")</li>
+          <li>Save &mdash; the range is now available for node IP allocation</li>
+        </ol>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

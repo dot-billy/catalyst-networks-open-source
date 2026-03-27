@@ -1,3 +1,4 @@
+import csv
 import io
 import os
 import subprocess
@@ -11,7 +12,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files import File
 from django.core.paginator import Paginator
-from django.db import models
+from django.db import models, transaction
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -938,3 +939,221 @@ def org_registration_token_revoke(request, slug, pk):
     }
     
     return render(request, 'nodes/org_token_revoke.html', context)
+
+
+# ── Bulk Operations ──────────────────────────────────────────────────────
+
+@login_required
+def org_node_export_csv(request, slug):
+    """Export all nodes in an organization as a CSV file."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    nodes = Node.objects.filter(organization=org).select_related(
+        'assigned_user', 'certificate_authority', 'created_by'
+    ).order_by('name')
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{org.slug}-nodes.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'name', 'nebula_ip', 'is_lighthouse', 'public_ip', 'fqdn',
+        'external_port', 'assigned_user_email', 'security_groups',
+        'cert_expiration', 'last_checkin', 'created_at',
+    ])
+    for node in nodes:
+        groups = ', '.join(node.security_groups.values_list('name', flat=True))
+        writer.writerow([
+            node.name,
+            node.nebula_ip or '',
+            node.is_lighthouse,
+            node.public_ip or '',
+            node.fqdn or '',
+            node.external_port or 4242,
+            node.assigned_user.email if node.assigned_user else '',
+            groups,
+            node.cert_expiration.isoformat() if node.cert_expiration else '',
+            node.last_checkin.isoformat() if node.last_checkin else '',
+            node.created_at.isoformat() if node.created_at else '',
+        ])
+
+    return response
+
+
+@login_required
+def org_node_import_csv(request, slug):
+    """Import nodes from a CSV file into an organization."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    latest_ca = _get_latest_org_ca(org)
+
+    if request.method == 'GET':
+        context = {
+            'organization': org,
+            'has_ca': latest_ca is not None,
+            'has_ranges': org.network_ranges.exists(),
+        }
+        return render(request, 'nodes/org_import_csv.html', context)
+
+    # POST: process the upload
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        messages.error(request, "No file was uploaded.")
+        return redirect('nodes_org:import_csv', slug=slug)
+
+    if not csv_file.name.endswith('.csv'):
+        messages.error(request, "Please upload a .csv file.")
+        return redirect('nodes_org:import_csv', slug=slug)
+
+    if not latest_ca:
+        messages.error(request, "No certificate authority exists. Create one first.")
+        return redirect('nodes_org:import_csv', slug=slug)
+
+    try:
+        decoded = csv_file.read().decode('utf-8')
+    except UnicodeDecodeError:
+        messages.error(request, "File is not valid UTF-8 text.")
+        return redirect('nodes_org:import_csv', slug=slug)
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    required_fields = {'name'}
+    if not required_fields.issubset(set(reader.fieldnames or [])):
+        messages.error(request, "CSV must have at least a 'name' column.")
+        return redirect('nodes_org:import_csv', slug=slug)
+
+    created = 0
+    errors = []
+
+    for row_num, row in enumerate(reader, start=2):
+        name = row.get('name', '').strip()
+        if not name:
+            errors.append(f"Row {row_num}: name is empty, skipped.")
+            continue
+
+        if Node.objects.filter(organization=org, name=name).exists():
+            errors.append(f"Row {row_num}: node '{name}' already exists, skipped.")
+            continue
+
+        is_lighthouse = row.get('is_lighthouse', '').strip().lower() in ('true', '1', 'yes')
+        public_ip = row.get('public_ip', '').strip() or None
+        fqdn = row.get('fqdn', '').strip() or None
+        external_port = None
+        port_str = row.get('external_port', '').strip()
+        if port_str:
+            try:
+                external_port = int(port_str)
+            except ValueError:
+                errors.append(f"Row {row_num}: invalid external_port '{port_str}', using default.")
+                external_port = 4242
+
+        if is_lighthouse and not public_ip and not fqdn:
+            errors.append(f"Row {row_num}: lighthouse '{name}' needs public_ip or fqdn, skipped.")
+            continue
+
+        try:
+            node = Node(
+                name=name,
+                organization=org,
+                certificate_authority=latest_ca,
+                is_lighthouse=is_lighthouse,
+                public_ip=public_ip,
+                fqdn=fqdn,
+                external_port=external_port or 4242,
+                created_by=request.user,
+            )
+            node.full_clean()
+            node.save()
+            regenerate_certificate(node)
+            created += 1
+        except Exception as e:
+            errors.append(f"Row {row_num}: '{name}' failed — {e}")
+
+    if created:
+        messages.success(request, f"Successfully imported {created} node(s).")
+    if errors:
+        messages.warning(request, f"{len(errors)} row(s) had issues. See details below.")
+
+    context = {
+        'organization': org,
+        'created': created,
+        'errors': errors,
+        'has_ca': latest_ca is not None,
+        'has_ranges': org.network_ranges.exists(),
+    }
+    return render(request, 'nodes/org_import_csv.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def org_node_bulk_delete(request, slug):
+    """Bulk delete selected nodes in an organization."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+
+    if request.method == 'GET':
+        nodes = Node.objects.filter(organization=org).order_by('name')
+        context = {
+            'organization': org,
+            'nodes': nodes,
+        }
+        return render(request, 'nodes/org_bulk_delete.html', context)
+
+    # POST: delete selected nodes
+    node_ids = request.POST.getlist('node_ids')
+    if not node_ids:
+        messages.warning(request, "No nodes were selected.")
+        return redirect('nodes_org:bulk_delete', slug=slug)
+
+    nodes = Node.objects.filter(organization=org, id__in=node_ids)
+    count = nodes.count()
+
+    for node in nodes:
+        node.delete()
+
+    messages.success(request, f"Deleted {count} node(s).")
+    return redirect('nodes_org:list', slug=slug)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def org_node_bulk_renew(request, slug):
+    """Bulk renew certificates for nodes in an organization."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+
+    nodes = Node.objects.filter(organization=org).select_related('certificate_authority').order_by('name')
+
+    # Filter by expiration window
+    days = int(request.GET.get('days', 30))
+    now = timezone.now()
+    threshold = now + timedelta(days=days)
+    expiring_nodes = nodes.filter(cert_expiration__lte=threshold)
+
+    if request.method == 'GET':
+        context = {
+            'organization': org,
+            'expiring_nodes': expiring_nodes,
+            'all_nodes': nodes,
+            'days': days,
+            'now': now,
+        }
+        return render(request, 'nodes/org_bulk_renew.html', context)
+
+    # POST: renew selected nodes
+    node_ids = request.POST.getlist('node_ids')
+    if not node_ids:
+        messages.warning(request, "No nodes were selected.")
+        return redirect('nodes_org:bulk_renew', slug=slug)
+
+    selected_nodes = Node.objects.filter(organization=org, id__in=node_ids)
+    renewed = 0
+    failed = 0
+
+    for node in selected_nodes:
+        if regenerate_certificate(node):
+            renewed += 1
+        else:
+            failed += 1
+
+    if renewed:
+        messages.success(request, f"Successfully renewed {renewed} certificate(s).")
+    if failed:
+        messages.error(request, f"Failed to renew {failed} certificate(s). Check the logs.")
+
+    return redirect('nodes_org:list', slug=slug)
