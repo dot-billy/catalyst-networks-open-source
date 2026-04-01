@@ -68,7 +68,11 @@ else:
 # SSL/HTTPS settings
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
 SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
 USE_HTTPS_IN_ABSOLUTE_URLS = os.environ.get('USE_HTTPS_IN_ABSOLUTE_URLS', 'True').lower() == 'true'
 
 # Handle SECURE_PROXY_SSL_HEADER for deployments behind a proxy
@@ -87,7 +91,6 @@ USE_X_FORWARDED_PORT = os.environ.get('USE_X_FORWARDED_PORT', 'False').lower() =
 if USE_X_FORWARDED_HOST:
     # This ensures Django uses the forwarded host for CSRF checks
     CSRF_USE_SESSIONS = False  # Use cookies for CSRF tokens
-    CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie if needed
 
 # Handle SECURE_REDIRECT_EXEMPT for paths that should not be redirected to HTTPS
 redirect_exempt = os.environ.get('SECURE_REDIRECT_EXEMPT', '')
