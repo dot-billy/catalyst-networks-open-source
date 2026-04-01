@@ -145,3 +145,7 @@ logs/
 # Backup and sync
 backup/
 backups/
+
+# Tailwind CSS build artifacts
+tailwindcss
+static/css/tailwind-output.css

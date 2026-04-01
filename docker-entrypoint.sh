@@ -16,7 +16,14 @@ python healthcheck.py
 # Run migrations if requested
 if [ "$RUN_MIGRATIONS" = "true" ]; then
     echo -e "\nRunning database migrations..."
-    python manage.py migrate --noinput || echo "Migration failed, but continuing..."
+    if ! python manage.py migrate --noinput; then
+        echo "WARNING: migrate command exited non-zero. Checking migration state..."
+        if python manage.py showmigrations --plan | grep -q "\[ \]"; then
+            echo "ERROR: Unapplied migrations remain after failure. Exiting."
+            exit 1
+        fi
+        echo "All migrations applied (likely handled by another replica). Continuing."
+    fi
 fi
 
 # Create superuser if requested
