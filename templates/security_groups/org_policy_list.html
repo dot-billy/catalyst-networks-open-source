@@ -34,12 +34,11 @@
                 <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap text-sm">
                         <span class="ui-badge ui-badge-muted">Source</span>
-                        {% if rule.source_groups.exists %}
-                            {% for group in rule.source_groups.all %}
+                        {% if rule.org_source_groups or rule.org_source_nodes %}
+                            {% for group in rule.org_source_groups %}
                             <span class="ui-badge ui-badge-primary">{{ group.name }}</span>
                             {% endfor %}
-                        {% elif rule.source_nodes.exists %}
-                            {% for node in rule.source_nodes.all %}
+                            {% for node in rule.org_source_nodes %}
                             <span class="ui-badge ui-badge-primary">host: {{ node.name }}</span>
                             {% endfor %}
                         {% elif rule.source_cidr %}

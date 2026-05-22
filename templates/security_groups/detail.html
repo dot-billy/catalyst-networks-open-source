@@ -21,14 +21,14 @@
             {% url 'security_groups_org:edit' slug=organization.slug pk=security_group.id as edit_policy_url %}
             {% url 'security_groups_org:policy_list' slug=organization.slug as policy_list_url %}
             {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_rule_url %}
+            {% include "components/button.html" with text="All Policies" href=policy_list_url variant="ghost" size="sm" %}
+            {% if user_role == 'owner' or user_role == 'admin' %}
             {% include "components/button.html" with text="Add Rule" href=add_rule_url variant="primary" size="sm" %}
             {% include "components/button.html" with text="New Source Policy" href=create_policy_rule_url variant="secondary" size="sm" %}
-            {% include "components/button.html" with text="All Policies" href=policy_list_url variant="ghost" size="sm" %}
             {% include "components/button.html" with text="Assign Nodes" href=assign_nodes_url variant="secondary" size="sm" %}
             {% include "components/button.html" with text="Edit Policy" href=edit_policy_url variant="ghost" size="sm" %}
-            {% endif %}
-            {% if user_role == 'owner' or user_role == 'admin' %}
             {% include "components/button.html" with text="Delete Policy" variant="danger" size="sm" onclick="document.getElementById('delete-modal').classList.remove('hidden')" %}
+            {% endif %}
             {% endif %}
         </div>
     </div>
@@ -75,8 +75,10 @@
                 <h2 class="card-title">Rules</h2>
                 <p class="card-subtitle">Rules are allow-list entries. Add one whenever a source group, node, or network should be able to reach nodes in this policy.</p>
             </div>
+            {% if user_role == 'owner' or user_role == 'admin' %}
             {% if organization %}
             {% include "components/button.html" with text="Add Rule" href=add_rule_url variant="primary" size="sm" %}
+            {% endif %}
             {% endif %}
         </div>
 
@@ -89,7 +91,9 @@
                         <th>Ports</th>
                         <th>Source</th>
                         <th>Description</th>
+                        {% if user_role == 'owner' or user_role == 'admin' %}
                         <th>Actions</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -106,12 +110,11 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if rule.source_groups.exists %}
-                                {% for group in rule.source_groups.all %}
+                            {% if rule.org_source_groups or rule.org_source_nodes %}
+                                {% for group in rule.org_source_groups %}
                                 <div>{{ group.name }}</div>
                                 {% endfor %}
-                            {% elif rule.source_nodes.exists %}
-                                {% for source_node in rule.source_nodes.all %}
+                                {% for source_node in rule.org_source_nodes %}
                                 <div>{{ source_node.name }} ({{ source_node.nebula_ip }})</div>
                                 {% endfor %}
                             {% elif rule.source_cidr %}
@@ -121,6 +124,7 @@
                             {% endif %}
                         </td>
                         <td>{{ rule.description|default:"No description provided." }}</td>
+                        {% if user_role == 'owner' or user_role == 'admin' %}
                         <td>
                             <div class="ui-inline-actions">
                                 {% if organization %}
@@ -132,6 +136,7 @@
                                 {% endif %}
                             </div>
                         </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -144,10 +149,12 @@
             </svg>
             <h3>No rules yet</h3>
             <p>This policy is ready, but nothing can reach it yet. Add the first rule to make it usable.</p>
+            {% if user_role == 'owner' or user_role == 'admin' %}
             {% if organization %}
             <div class="mt-6">
                 {% include "components/button.html" with text="Add First Rule" href=add_rule_url variant="primary" size="sm" %}
             </div>
+            {% endif %}
             {% endif %}
         </div>
         {% endif %}
@@ -159,8 +166,10 @@
                 <h2 class="card-title">Assigned Nodes</h2>
                 <p class="card-subtitle">Assignments determine which nodes start using this policy right away.</p>
             </div>
+            {% if user_role == 'owner' or user_role == 'admin' %}
             {% if organization %}
             {% include "components/button.html" with text="Manage Assignments" href=assign_nodes_url variant="secondary" size="sm" %}
+            {% endif %}
             {% endif %}
         </div>
 
@@ -172,7 +181,9 @@
                         <th>Name</th>
                         <th>Nebula IP</th>
                         <th>Type</th>
+                        {% if user_role == 'owner' or user_role == 'admin' %}
                         <th>Actions</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
@@ -187,6 +198,7 @@
                             <span class="ui-badge ui-badge-muted">Standard</span>
                             {% endif %}
                         </td>
+                        {% if user_role == 'owner' or user_role == 'admin' %}
                         <td>
                             {% if organization and organization.slug %}
                             <form method="post" action="{% url 'security_groups_org:unassign_node' slug=organization.slug sg_id=security_group.id node_id=node.id %}" class="inline">
@@ -195,6 +207,7 @@
                             </form>
                             {% endif %}
                         </td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -207,16 +220,19 @@
             </svg>
             <h3>No nodes assigned</h3>
             <p>When the rules look right, assign this policy to the nodes that should use it.</p>
+            {% if user_role == 'owner' or user_role == 'admin' %}
             {% if organization %}
             <div class="mt-6">
                 {% include "components/button.html" with text="Assign Nodes" href=assign_nodes_url variant="secondary" size="sm" %}
             </div>
+            {% endif %}
             {% endif %}
         </div>
         {% endif %}
     </div>
 </div>
 
+{% if user_role == 'owner' or user_role == 'admin' %}
 <!-- Delete Confirmation Modal -->
 <div id="delete-modal" class="fixed z-10 inset-0 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -256,6 +272,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

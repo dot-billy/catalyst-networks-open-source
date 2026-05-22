@@ -20,7 +20,8 @@ from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.urls import reverse
 from django.utils.translation import gettext as _
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Prefetch, Q
 # from organizations.decorators import organization_owner_or_admin_required
 from organizations.mixins import OrganizationFilterMixin
 
@@ -268,7 +269,19 @@ def security_group_detail(request, pk):
         raise PermissionDenied("You don't have permission to view this security group")
     
     # Get rules and nodes for this security group
-    rules = security_group.firewall_rules.all()
+    from nodes.models import Node
+    rules = security_group.firewall_rules.prefetch_related(
+        Prefetch(
+            'source_groups',
+            queryset=SecurityGroup.objects.filter(organization=security_group.organization).order_by('name'),
+            to_attr='org_source_groups',
+        ),
+        Prefetch(
+            'source_nodes',
+            queryset=Node.objects.filter(organization=security_group.organization).order_by('name'),
+            to_attr='org_source_nodes',
+        ),
+    ).all()
     nodes = security_group.nodes.all()
     
     context = {
@@ -356,7 +369,19 @@ def org_security_group_detail(request, slug, pk):
     security_group = get_object_or_404(SecurityGroup, id=pk, organization=org)
     
     # Get rules and nodes for this security group
-    rules = security_group.firewall_rules.prefetch_related('source_groups', 'source_nodes').all()
+    from nodes.models import Node
+    rules = security_group.firewall_rules.prefetch_related(
+        Prefetch(
+            'source_groups',
+            queryset=SecurityGroup.objects.filter(organization=org).order_by('name'),
+            to_attr='org_source_groups',
+        ),
+        Prefetch(
+            'source_nodes',
+            queryset=Node.objects.filter(organization=org).order_by('name'),
+            to_attr='org_source_nodes',
+        ),
+    ).all()
     nodes = security_group.nodes.all().filter(organization=org)
     
     context = {
@@ -632,8 +657,8 @@ def _policy_form_choices(org):
     }
 
 
-def _apply_policy_fields(rule, org, post):
-    """Apply protocol, port, description, and destination fields to a rule."""
+def _validate_policy_fields(org, post):
+    """Validate protocol, port, description, and destination fields without mutating a rule."""
     from nodes.models import Node
 
     protocol = post.get('protocol')
@@ -643,50 +668,52 @@ def _apply_policy_fields(rule, org, post):
     description = post.get('description', '')
 
     if protocol not in {choice[0] for choice in FirewallRule.PROTOCOL_CHOICES}:
-        return False, 'Choose a protocol.'
-
-    rule.protocol = protocol
-    rule.description = description
+        return False, None, 'Choose a protocol.'
 
     if protocol in ('tcp', 'udp'):
         try:
             port_min = int(port_min_raw) if port_min_raw else None
             port_max = int(port_max_raw) if port_max_raw else port_min
         except ValueError:
-            return False, 'Ports must be numeric.'
+            return False, None, 'Ports must be numeric.'
         if port_min is None:
-            return False, 'A port is required for TCP and UDP rules.'
+            return False, None, 'A port is required for TCP and UDP rules.'
         if port_min < 1 or port_max > 65535 or port_min > port_max:
-            return False, 'Ports must be between 1 and 65535, with the minimum no greater than the maximum.'
-        rule.port_min = port_min
-        rule.port_max = port_max
+            return False, None, 'Ports must be between 1 and 65535, with the minimum no greater than the maximum.'
     else:
-        rule.port_min = None
-        rule.port_max = None
+        port_min = None
+        port_max = None
 
     dest_type = post.get('dest_type')
     dest_group_id = post.get('dest_group')
     dest_node_id = post.get('dest_node')
     if dest_type == 'group' and dest_group_id:
         try:
-            rule.security_group = SecurityGroup.objects.get(id=dest_group_id, organization=org)
-            rule.node = None
+            destination_group = SecurityGroup.objects.get(id=dest_group_id, organization=org)
         except SecurityGroup.DoesNotExist:
-            return False, 'Destination group not found in this organization.'
+            return False, None, 'Destination group not found in this organization.'
+        destination_node = None
     elif dest_type == 'host' and dest_node_id:
         try:
-            rule.node = Node.objects.get(id=dest_node_id, organization=org)
-            rule.security_group = None
+            destination_node = Node.objects.get(id=dest_node_id, organization=org)
         except Node.DoesNotExist:
-            return False, 'Destination host not found in this organization.'
+            return False, None, 'Destination host not found in this organization.'
+        destination_group = None
     else:
-        return False, 'Choose a destination group or host.'
+        return False, None, 'Choose a destination group or host.'
 
-    return True, None
+    return True, {
+        'protocol': protocol,
+        'port_min': port_min,
+        'port_max': port_max,
+        'description': description,
+        'destination_group': destination_group,
+        'destination_node': destination_node,
+    }, None
 
 
-def _apply_policy_source(rule, org, post):
-    """Apply a source group or source host to a saved rule."""
+def _validate_policy_source(org, post):
+    """Validate source group or source host fields without mutating a rule."""
     from nodes.models import Node
 
     source_type = post.get('source_type')
@@ -694,45 +721,66 @@ def _apply_policy_source(rule, org, post):
     source_node_id = post.get('source_node')
 
     if source_type == 'group' and source_group_ids:
-        valid_ids = list(
+        submitted_ids = {str(source_group_id) for source_group_id in source_group_ids}
+        valid_ids = set(
+            str(source_group_id) for source_group_id in
             SecurityGroup.objects.filter(
                 id__in=source_group_ids,
                 organization=org,
             ).values_list('id', flat=True)
         )
-        if not valid_ids:
-            return False, 'Source group not found in this organization.'
-        rule.source_cidr = ''
-        rule.save()
-        rule.source_groups.set(valid_ids)
-        rule.source_nodes.clear()
-        return True, None
+        if valid_ids != submitted_ids:
+            return False, None, 'Source group not found in this organization.'
+        return True, {'source_group_ids': list(valid_ids), 'source_node_ids': []}, None
 
     if source_type == 'host' and source_node_id:
         try:
             node = Node.objects.get(id=source_node_id, organization=org)
         except Node.DoesNotExist:
-            return False, 'Source host not found in this organization.'
-        rule.source_cidr = ''
-        rule.save()
-        rule.source_groups.clear()
-        rule.source_nodes.set([node.id])
-        return True, None
+            return False, None, 'Source host not found in this organization.'
+        return True, {'source_group_ids': [], 'source_node_ids': [node.id]}, None
 
-    return False, 'Choose a source group or host.'
+    return False, None, 'Choose a source group or host.'
+
+
+def _save_policy_rule(rule, field_data, source_data):
+    """Persist a validated policy rule and its sources."""
+    rule.protocol = field_data['protocol']
+    rule.port_min = field_data['port_min']
+    rule.port_max = field_data['port_max']
+    rule.description = field_data['description']
+    rule.security_group = field_data['destination_group']
+    rule.node = field_data['destination_node']
+    rule.source_cidr = ''
+    rule.save()
+    rule.source_groups.set(source_data['source_group_ids'])
+    rule.source_nodes.set(source_data['source_node_ids'])
+    return rule
 
 
 @login_required
 def org_policy_list(request, slug):
     """List source-to-destination firewall policies for an organization."""
     org = check_org_access(request.user, organization_slug=slug)
+    from nodes.models import Node
 
     rules = (
         FirewallRule.objects.filter(
             Q(security_group__organization=org) | Q(node__organization=org)
         )
         .select_related('security_group', 'node')
-        .prefetch_related('source_groups', 'source_nodes')
+        .prefetch_related(
+            Prefetch(
+                'source_groups',
+                queryset=SecurityGroup.objects.filter(organization=org).order_by('name'),
+                to_attr='org_source_groups',
+            ),
+            Prefetch(
+                'source_nodes',
+                queryset=Node.objects.filter(organization=org).order_by('name'),
+                to_attr='org_source_nodes',
+            ),
+        )
         .order_by('-created_at')
     )
 
@@ -756,15 +804,14 @@ def org_policy_create(request, slug):
 
     error_message = None
     if request.method == 'POST':
-        rule = FirewallRule()
-        ok, error_message = _apply_policy_fields(rule, org, request.POST)
+        ok, field_data, error_message = _validate_policy_fields(org, request.POST)
         if ok:
-            rule.save()
-            ok, error_message = _apply_policy_source(rule, org, request.POST)
+            ok, source_data, error_message = _validate_policy_source(org, request.POST)
             if ok:
-                messages.success(request, 'Policy created.')
-                return redirect('security_groups_org:policy_list', slug=slug)
-            rule.delete()
+                with transaction.atomic():
+                    _save_policy_rule(FirewallRule(), field_data, source_data)
+                    messages.success(request, 'Policy created.')
+                    return redirect('security_groups_org:policy_list', slug=slug)
 
     prefill_source_group_ids = []
     prefill_source_node_id = None
@@ -825,16 +872,17 @@ def org_policy_edit(request, slug, rule_id):
 
     error_message = None
     if request.method == 'POST':
-        ok, error_message = _apply_policy_fields(rule, org, request.POST)
+        ok, field_data, error_message = _validate_policy_fields(org, request.POST)
         if ok:
-            rule.save()
-            ok, error_message = _apply_policy_source(rule, org, request.POST)
+            ok, source_data, error_message = _validate_policy_source(org, request.POST)
             if ok:
-                messages.success(request, 'Policy updated.')
-                return redirect('security_groups_org:policy_list', slug=slug)
+                with transaction.atomic():
+                    _save_policy_rule(rule, field_data, source_data)
+                    messages.success(request, 'Policy updated.')
+                    return redirect('security_groups_org:policy_list', slug=slug)
 
-    selected_source_group_ids = list(rule.source_groups.values_list('id', flat=True))
-    selected_source_node_id = rule.source_nodes.values_list('id', flat=True).first()
+    selected_source_group_ids = list(rule.source_groups.filter(organization=org).values_list('id', flat=True))
+    selected_source_node_id = rule.source_nodes.filter(organization=org).values_list('id', flat=True).first()
     context = {
         'organization': org,
         'rule': rule,
