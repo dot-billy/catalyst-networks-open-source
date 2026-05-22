@@ -46,8 +46,16 @@ def check_expiring_certificates():
             'days_until_expiry': days_until_expiry
         })
     
-    # Send notifications to each organization's webhooks
+    # Send notifications to each organization.
     for org_id, expiring_certs in org_expiring_certs.items():
+        notification_data = {
+            'expiring_certificates': expiring_certs,
+            'count': len(expiring_certs)
+        }
+        from notifications.dispatch import queue_notification_event
+
+        queue_notification_event('cert.expiring', org_id, notification_data)
+
         # Get webhooks for this organization that subscribe to cert.expiring events
         webhooks = Webhook.objects.filter(
             organization_id=org_id,
@@ -64,10 +72,7 @@ def check_expiring_certificates():
             'event': 'cert.expiring',
             'organization_id': org_id,
             'timestamp': timezone.now().isoformat(),
-            'data': {
-                'expiring_certificates': expiring_certs,
-                'count': len(expiring_certs)
-            }
+            'data': notification_data
         }
         
         # Send to all webhooks
@@ -111,4 +116,4 @@ def send_webhook_notification(self, webhook_id, payload):
         
         # Retry with exponential backoff
         retry_delay = 2 ** self.request.retries
-        raise self.retry(exc=exc, countdown=retry_delay) 
+        raise self.retry(exc=exc, countdown=retry_delay)

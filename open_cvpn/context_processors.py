@@ -6,22 +6,23 @@ def project_meta(request):
     project_data = copy(settings.PROJECT_METADATA)
     return {
         "project_meta": project_data,
+        "static_asset_version": settings.STATIC_ASSET_VERSION,
     }
 
 def breadcrumb_navigation(request):
     """Add breadcrumb navigation data to template context"""
     breadcrumb_items = []
-    
+
     # Get current path segments
     path_segments = [segment for segment in request.path.split('/') if segment]
-    
+
     # Build breadcrumb items based on current path
     if path_segments:
         current_path = ''
-        
+
         for i, segment in enumerate(path_segments):
             current_path += f'/{segment}'
-            
+
             # Map path segments to human-readable names
             if segment == 'dashboard':
                 name = 'Dashboard'
@@ -57,14 +58,14 @@ def breadcrumb_navigation(request):
                     name = org.name
                 except:
                     name = segment.replace('-', ' ').title()
-            
+
             # Don't include the last segment as a link (current page)
             is_last = i == len(path_segments) - 1
             breadcrumb_items.append({
                 'name': name,
                 'url': current_path if not is_last else None
             })
-    
+
     return {
         "breadcrumb_items": breadcrumb_items,
-    } 
+    }

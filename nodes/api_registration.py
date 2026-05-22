@@ -1,5 +1,6 @@
 import io
 import ipaddress
+import json
 import logging
 import os
 import random
@@ -26,10 +27,14 @@ from certificates.models import CertificateAuthority
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
 from organizations.models import NetworkRange, Organization
 
+from notifications import dispatch as notification_dispatch
+
 from .models import Node, NodeRegistrationToken
 from .serializers import AuthenticatedNodeRegistrationSerializer
+from .tasks import parse_nebula_cert_expiration
 
 logger = logging.getLogger(__name__)
+AUTH_SCHEME = 'Bearer'
 
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
@@ -124,7 +129,7 @@ class NodeRegistrationView(APIView):
         ## Two Registration Flows Supported:
         
         ### 1. Authenticated Registration (Desktop App Flow)
-        - **Authentication**: JWT token in `Authorization: Bearer <token>` header
+        - **Authentication**: JWT token in the Authorization header
         - **Use Case**: Desktop applications, user-initiated registrations
         - **Required Fields**: `node_name` only
         - **Organization**: Determined from URL path parameter
@@ -298,7 +303,8 @@ class NodeRegistrationView(APIView):
         # Check if user is authenticated by looking for JWT token in Authorization header
         is_authenticated = False
         auth_header = request.headers.get('Authorization', '')
-        if auth_header.startswith('Bearer '):
+        auth_parts = auth_header.split(None, 1) if auth_header else []
+        if len(auth_parts) == 2 and auth_parts[0] == AUTH_SCHEME:
             # Try to authenticate the user with the JWT token
             from rest_framework_simplejwt.authentication import JWTAuthentication
             jwt_auth = JWTAuthentication()
@@ -310,12 +316,12 @@ class NodeRegistrationView(APIView):
             except:
                 pass
         
-        has_registration_token = 'registration_token' in request.data
+        has_reg_credential = 'registration_token' in request.data
         
-        if is_authenticated and not has_registration_token:
+        if is_authenticated and not has_reg_credential:
             # Authenticated flow (desktop app) - no token required
             return self._handle_authenticated_registration(request, slug)
-        elif has_registration_token:
+        elif has_reg_credential:
             # Token-based flow (fleet deployment) - token required
             return self._handle_token_registration(request, slug)
         else:
@@ -444,14 +450,11 @@ class NodeRegistrationView(APIView):
                     }, status=status.HTTP_401_UNAUTHORIZED)
             
         except NodeRegistrationToken.DoesNotExist:
-            # Check if it's the master token (fallback for backward compatibility)
-            if token_value != settings.REGISTRATION_MASTER_TOKEN:
-                return Response({
-                    'error': 'Invalid Registration Token',
-                    'detail': f'Registration token "{token_value}" not found for organization "{organization_slug}". Please check your token or contact your administrator.',
-                    'status_code': 401
-                }, status=status.HTTP_401_UNAUTHORIZED)
-            token = None  # No token to increment usage for master token
+            return Response({
+                'error': 'Invalid Registration Token',
+                'detail': f'Registration token not found for organization "{organization_slug}". Please check your token or contact your administrator.',
+                'status_code': 401
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Create node using token
         return self._create_node(
@@ -552,6 +555,11 @@ class NodeRegistrationView(APIView):
             # Create response with certificate, key, and config
             # Note: request is not available in this method, so we'll use default format
             response_data = self._prepare_node_package(node, 'json')
+
+            notification_dispatch.queue_node_lifecycle_events(
+                node,
+                ['node.registered', 'node.created', 'cert.issued', 'ip.allocated'],
+            )
             
             # Add the api_token to the response
             if isinstance(response_data, Response):
@@ -652,7 +660,7 @@ class NodeRegistrationView(APIView):
         
         # REMOVED: We don't add public IP as subnets anymore, it's not essential for certificate
         
-        print(f"Generating certificate with command: {' '.join(cmd)}")
+        logger.info("Generating certificate for node %s (%s)", node.id, node.name)
         
         # Generate certificate
         subprocess.run(cmd, check=True)
@@ -668,48 +676,108 @@ class NodeRegistrationView(APIView):
             '-path', cert_path
         ], capture_output=True, text=True, check=True)
         
-        # Parse expiration from output and convert to Django-compatible format
-        for line in result.stdout.split('\n'):
-            if 'Not After' in line:
-                exp_str = line.split(': ')[1].strip()
-                # Convert the date format to Django-compatible format
-                try:
-                    # Parse the date format: "2025-05-03 11:54:04 +0000 UTC"
-                    # Convert to YYYY-MM-DD HH:MM:SS format
-                    exp_parts = exp_str.split()
-                    if len(exp_parts) >= 3:
-                        # Extract date and time, ignore timezone for now
-                        date_part = exp_parts[0]
-                        time_part = exp_parts[1]
-                        node.cert_expiration = f"{date_part}T{time_part}Z"
-                    else:
-                        # Fallback: use current time + 1 year
-                        node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                except Exception as e:
-                    print(f"Error parsing certificate expiration: {e}")
-                    # Fallback: use current time + 1 year
-                    node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                break
+        try:
+            node.cert_expiration = parse_nebula_cert_expiration(result.stdout)
+        except ValueError as e:
+            logger.warning("Error parsing certificate expiration for node %s: %s", node.id, e)
+            node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
         
         node.save()
+
+    def _expected_certificate_groups(self, node):
+        group_names = []
+        if node.is_lighthouse:
+            group_names.append('lighthouse')
+        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        return sorted(set(group_names))
+
+    def _expected_certificate_networks(self, node):
+        ip = node.nebula_ip
+        if ip and '/' in ip:
+            ip = ip.split('/')[0]
+        return [f'{ip}/24'] if ip else []
+
+    def _certificate_file_exists(self, field_file):
+        if not field_file or not field_file.name:
+            return False
+        try:
+            return field_file.storage.exists(field_file.name)
+        except Exception as exc:
+            logger.warning("Could not check certificate storage path %s: %s", field_file.name, exc)
+            return False
+
+    def _certificate_needs_regeneration(self, node):
+        if not self._certificate_file_exists(node.cert_path):
+            return True
+        if not self._certificate_file_exists(node.key_path):
+            return True
+
+        try:
+            result = subprocess.run(
+                ['nebula-cert', 'print', '-json', '-path', node.cert_path.path],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            cert_info = json.loads(result.stdout)
+        except Exception as exc:
+            logger.warning(
+                "Could not inspect certificate for node %s (%s), regenerating: %s",
+                node.id,
+                node.name,
+                exc,
+            )
+            return True
+
+        details = cert_info.get('details', {})
+        actual_groups = sorted(details.get('groups') or [])
+        expected_groups = self._expected_certificate_groups(node)
+        if actual_groups != expected_groups:
+            logger.info(
+                "Certificate groups out of date for node %s (%s): actual=%s expected=%s",
+                node.id,
+                node.name,
+                actual_groups,
+                expected_groups,
+            )
+            return True
+
+        actual_networks = sorted(details.get('ips') or details.get('networks') or [])
+        expected_networks = sorted(self._expected_certificate_networks(node))
+        if actual_networks != expected_networks:
+            logger.info(
+                "Certificate networks out of date for node %s (%s): actual=%s expected=%s",
+                node.id,
+                node.name,
+                actual_networks,
+                expected_networks,
+            )
+            return True
+
+        return False
     
     def _prepare_node_package(self, node, format_type='json'):
         """
         Prepare a package containing the node's certificates and configuration.
         
         Returns either a JSON response or a ZIP file depending on the format parameter.
+        Missing certificate files, missing key files, and stale certificate
+        claims are regenerated before packaging.
         """
-        print(f"\n==== Preparing package for node {node.id} - {node.name} ====")
+        if self._certificate_needs_regeneration(node):
+            logger.info("Certificate for node %s (%s) is missing or stale, regenerating", node.id, node.name)
+            self._generate_certificate(node)
+            node.refresh_from_db()
         
         # Read certificate and key
-        with open(node.cert_path.path, 'rb') as cert_file:
+        with node.cert_path.open('rb') as cert_file:
             cert_data = cert_file.read()
         
-        with open(node.key_path.path, 'rb') as key_file:
+        with node.key_path.open('rb') as key_file:
             key_data = key_file.read()
         
         # Get CA certificate
-        with open(node.certificate_authority.ca_cert.path, 'rb') as ca_file:
+        with node.certificate_authority.ca_cert.open('rb') as ca_file:
             ca_data = ca_file.read()
         
         # Generate a basic config
@@ -799,17 +867,19 @@ class NodeRegistrationView(APIView):
         
         # Add security group rules
         # Get all security groups this node belongs to
-        print(f"Getting firewall rules for node {node.id} - {node.name}")
         all_firewall_rules = node.get_all_applicable_firewall_rules()
-        print(f"Node has {all_firewall_rules.count()} applicable firewall rules")
+        logger.debug(
+            "Building firewall config for node %s (%s): %d applicable rules",
+            node.id,
+            node.name,
+            all_firewall_rules.count(),
+        )
 
         # Only add the default allow-all rule if there are no explicit rules defined
         if not all_firewall_rules.exists():
-            print(f"No firewall rules applicable to node {node.name}, including default allow-all rule")
             # Add default allow-all rule only if no specific rules exist
             config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
         else:
-            print(f"Adding {all_firewall_rules.count()} firewall rules for node {node.name}")
             # Process all applicable rules
             for rule in all_firewall_rules:
                 firewall_rule = {}
@@ -837,14 +907,22 @@ class NodeRegistrationView(APIView):
                 # 4. Skip rule if no source is specified (avoid empty host field)
                 
                 # Check if rule has source groups
-                group_names = list(rule.source_groups.values_list('name', flat=True))
+                group_names = list(
+                    rule.source_groups.filter(
+                        organization=node.organization,
+                    ).values_list('name', flat=True)
+                )
                 if group_names:
                     # Use the 'groups' field when source groups are specified
                     firewall_rule['groups'] = group_names
                     # Do NOT add an empty 'host' field when groups are specified
                 else:
                     # Only handle host field if no source groups were specified
-                    node_ips = list(rule.source_nodes.values_list('nebula_ip', flat=True))
+                    node_ips = list(
+                        rule.source_nodes.filter(
+                            organization=node.organization,
+                        ).values_list('nebula_ip', flat=True)
+                    )
                     if node_ips:
                         firewall_rule['host'] = node_ips if len(node_ips) > 1 else node_ips[0]
                     # Source CIDR
@@ -852,21 +930,11 @@ class NodeRegistrationView(APIView):
                         firewall_rule['host'] = rule.source_cidr
                     else:
                         # If no source is specified, skip this rule
-                        print(f"  Skipping rule with no source specified: {rule}")
+                        logger.debug("Skipping rule %s with no source specified", rule.id)
                         continue
                 
                 # Add the rule to the config
-                rule_source = "node direct" if rule.node else f"security group: {rule.security_group.name}"
-                print(f"  Adding firewall rule from {rule_source}: {firewall_rule}")
                 config['firewall']['inbound'].append(firewall_rule)
-        
-        # Let's also verify what's in the database directly
-        print(f"Database check: Node {node.id} security groups:")
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM nodes_node_security_groups WHERE node_id = %s", [node.id])
-            assignments = cursor.fetchall()
-            print(f"Raw security group assignments: {assignments}")
             
         # Format as YAML string
         config_yaml = self._dict_to_yaml(config)
@@ -876,8 +944,8 @@ class NodeRegistrationView(APIView):
             buffer = io.BytesIO()
             with zipfile.ZipFile(buffer, 'w') as zip_file:
                 zip_file.writestr('ca.crt', ca_data)
-                zip_file.writestr('host.crt', cert_data)
-                zip_file.writestr('host.key', key_data)
+                zip_file.writestr('node.crt', cert_data)
+                zip_file.writestr('node.key', key_data)
                 zip_file.writestr('config.yml', config_yaml.encode('utf-8'))
             
             buffer.seek(0)
@@ -925,4 +993,3 @@ class NodeRegistrationView(APIView):
             else:
                 yaml += ' ' + str(value) + '\n'
         return yaml
-

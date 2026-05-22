@@ -1,29 +1,31 @@
-{% extends "base/base.html" %}
+{% extends "base/auth_base.html" %}
 
 {% block title %}Access Forbidden - {{ project_meta.NAME }}{% endblock %}
-{% block page_title %}Access Forbidden{% endblock %}
+{% block auth_panel_class %}catalyst-auth-panel-wide{% endblock %}
 
 {% block content %}
-<div class="min-h-[70vh] flex items-center justify-center">
-    <div class="ui-form-section max-w-2xl w-full text-center">
-        <span class="ui-badge ui-badge-warning">403 error</span>
-        <h1 class="mt-6 text-7xl font-semibold tracking-tight text-gray-900 sm:text-8xl">403</h1>
-        <h2 class="mt-4 text-3xl font-semibold text-gray-900">Access Forbidden</h2>
-        <p class="mt-4 text-base text-gray-600">
-            Your account doesn’t currently have permission to view this resource. Check your organization role or try a different workspace.
-        </p>
+<div class="ui-form-section text-center">
+    <span class="ui-badge ui-badge-warning">403 error</span>
+    <h1 class="mt-6 text-7xl font-semibold tracking-tight text-gray-900 sm:text-8xl">403</h1>
+    <h2 class="mt-4 text-3xl font-semibold text-gray-900">Access Forbidden</h2>
+    <p class="mt-4 text-base text-gray-600">
+        This page is not available with the current session. Sign in with the right account or go back to the previous page.
+    </p>
 
-        <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+    <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        {% if request.user.is_authenticated %}
             <a href="{% url 'dashboard:dashboard' %}" class="btn-enhanced ui-button-primary">Go to Dashboard</a>
-            <a href="javascript:history.back()" class="btn-enhanced ui-button-secondary">Go Back</a>
             <a href="{% url 'organizations:list' %}" class="btn-enhanced ui-button-secondary">Organizations</a>
-        </div>
+        {% else %}
+            <a href="{% url 'login' %}" class="btn-enhanced ui-button-primary">Sign in</a>
+        {% endif %}
+        <a href="javascript:history.back()" class="btn-enhanced ui-button-secondary">Go Back</a>
+    </div>
 
-        <div class="mt-8 pt-6 border-t border-gray-200">
-            <p class="text-sm text-gray-500">
-                If you should have access, <a href="mailto:support@catalystnetworks.com" class="text-primary-600 hover:text-primary-700">contact support</a> or check with your organization administrator.
-            </p>
-        </div>
+    <div class="mt-8 pt-6 border-t border-gray-200">
+        <p class="text-sm text-gray-500">
+            If you should have access, check with an organization administrator.
+        </p>
     </div>
 </div>
 {% endblock %}

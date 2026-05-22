@@ -24,6 +24,8 @@ from organizations.access import require_org_access
 from organizations.models import Organization
 from security_groups.models import SecurityGroup
 
+from notifications import dispatch as notification_dispatch
+
 from .api_registration import NodeRegistrationView
 from .models import Node, NodeQRCode, NodeRegistrationToken
 from .services import _get_latest_org_ca
@@ -187,6 +189,12 @@ def org_node_create_mobile(request, slug):
         # Generate the certificate
         cert_success = regenerate_certificate(node)
         qr_success = cert_success and NodeQRCode.objects.filter(node=node).exists()
+
+        if cert_success:
+            notification_dispatch.queue_node_lifecycle_events(
+                node,
+                ['node.created', 'cert.issued', 'ip.allocated'],
+            )
 
         # Build success message
         if cert_success and qr_success:
@@ -517,7 +525,10 @@ def org_node_delete(request, slug, pk):
     node = get_object_or_404(Node, id=pk, organization=org)
     
     if request.method == 'POST':
+        payload = notification_dispatch.node_lifecycle_payload(node)
+        organization_id = node.organization_id
         node.delete()
+        notification_dispatch.queue_notification_event('node.revoked', organization_id, payload)
         return redirect('nodes_org:list', slug=slug)
     
     context = {
@@ -703,6 +714,7 @@ def org_node_renew_cert(request, slug, pk):
     node = get_object_or_404(Node, id=pk, organization=org)
     
     if regenerate_certificate(node):
+        notification_dispatch.queue_node_lifecycle_events(node, ['cert.renewed'])
         messages.success(request, f"Certificate successfully renewed for {node.name}.")
     else:
         messages.error(request, f"Failed to renew certificate for {node.name}. Please check the logs.")
@@ -745,8 +757,11 @@ def org_node_security_groups(request, slug, pk):
             
             # If security groups changed, regenerate the certificate
             if security_groups_changed:
-                regenerate_certificate(node)
-                messages.success(request, f"Certificate regenerated for {node.name} due to security group changes.")
+                if regenerate_certificate(node):
+                    notification_dispatch.queue_node_lifecycle_events(node, ['cert.renewed'])
+                    messages.success(request, f"Certificate regenerated for {node.name} due to security group changes.")
+                else:
+                    messages.error(request, f"Failed to regenerate certificate for {node.name}.")
             
             return redirect('nodes_org:assign_security_group', slug=slug, pk=node.id)
     
@@ -1061,7 +1076,12 @@ def org_node_import_csv(request, slug):
             )
             node.full_clean()
             node.save()
-            regenerate_certificate(node)
+            cert_success = regenerate_certificate(node)
+            if cert_success:
+                notification_dispatch.queue_node_lifecycle_events(
+                    node,
+                    ['node.created', 'cert.issued', 'ip.allocated'],
+                )
             created += 1
         except Exception as e:
             errors.append(f"Row {row_num}: '{name}' failed — {e}")
@@ -1103,9 +1123,15 @@ def org_node_bulk_delete(request, slug):
 
     nodes = Node.objects.filter(organization=org, id__in=node_ids)
     count = nodes.count()
+    revoked_payloads = [
+        (node.organization_id, notification_dispatch.node_lifecycle_payload(node))
+        for node in nodes
+    ]
 
     for node in nodes:
         node.delete()
+    for organization_id, payload in revoked_payloads:
+        notification_dispatch.queue_notification_event('node.revoked', organization_id, payload)
 
     messages.success(request, f"Deleted {count} node(s).")
     return redirect('nodes_org:list', slug=slug)
@@ -1147,6 +1173,7 @@ def org_node_bulk_renew(request, slug):
 
     for node in selected_nodes:
         if regenerate_certificate(node):
+            notification_dispatch.queue_node_lifecycle_events(node, ['cert.renewed'])
             renewed += 1
         else:
             failed += 1

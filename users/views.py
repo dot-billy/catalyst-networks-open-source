@@ -17,6 +17,7 @@ from .serializers import (
 )
 from .forms import UserLoginForm, UserRegistrationForm
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
+from sso.policies import get_enforced_sso_config, get_password_login_block_message
 
 User = get_user_model()
 
@@ -106,13 +107,17 @@ def login_view(request):
             user = authenticate(request, email=email, password=password)
             
             if user is not None:
-                login(request, user)
-                next_url = request.GET.get('next', '')
-                if not next_url or not url_has_allowed_host_and_scheme(
-                    next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-                ):
-                    next_url = 'dashboard:dashboard'
-                return redirect(next_url)
+                enforced_sso_config = get_enforced_sso_config(user)
+                if enforced_sso_config:
+                    messages.error(request, get_password_login_block_message(enforced_sso_config))
+                else:
+                    login(request, user)
+                    next_url = request.GET.get('next', '')
+                    if not next_url or not url_has_allowed_host_and_scheme(
+                        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+                    ):
+                        next_url = 'dashboard:dashboard'
+                    return redirect(next_url)
             else:
                 messages.error(request, 'Invalid email or password.')
     else:
@@ -129,7 +134,7 @@ def register_view(request):
         form = UserRegistrationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user)
+            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, 'Account created successfully!')
             return redirect('dashboard:dashboard')
     else:

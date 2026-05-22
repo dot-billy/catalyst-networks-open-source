@@ -1,0 +1,171 @@
+{% extends "base/base.html" %}
+
+{% block title %}{% if rule %}Edit{% else %}Create{% endif %} Policy - {{ organization.name }}{% endblock %}
+{% block page_title %}{% if rule %}Edit Policy{% else %}Create Policy{% endif %}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">{% if rule %}Edit Policy{% else %}Create Policy{% endif %}</h1>
+            <p class="ui-page-subtitle">A policy allows a source group or host to reach a destination group or host over a specific protocol and port.</p>
+        </div>
+    </div>
+
+    {% if error_message %}
+    <div class="alert alert-error">
+        <div>
+            <h3 class="text-sm font-semibold">{{ error_message }}</h3>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="ui-form-section">
+        <form method="post">
+            {% csrf_token %}
+
+            <div>
+                <label class="block mb-3 text-base font-semibold">Source</label>
+                <div class="ui-inline-actions">
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="source_type" value="group" {% if default_source_type == 'group' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Group</div>
+                            <div class="text-sm text-light-300">Allow traffic from one or more security groups.</div>
+                        </div>
+                    </label>
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="source_type" value="host" {% if default_source_type == 'host' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Host</div>
+                            <div class="text-sm text-light-300">Allow traffic from a single named node.</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="ui-form-grid mt-4">
+                    <div data-role="source-group">
+                        <label for="id_source_group">Source group(s)</label>
+                        <select id="id_source_group" name="source_group" multiple>
+                            {% for group in all_groups %}
+                            <option value="{{ group.id }}" {% if group.id in selected_source_group_ids %}selected{% endif %}>{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div data-role="source-host" style="display:none;">
+                        <label for="id_source_node">Source host</label>
+                        <select id="id_source_node" name="source_node">
+                            <option value="">Select a host...</option>
+                            {% for node in all_nodes %}
+                            <option value="{{ node.id }}" {% if node.id == selected_source_node_id %}selected{% endif %}>{{ node.name }} ({{ node.nebula_ip }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <label class="block mb-3 text-base font-semibold">Destination</label>
+                <div class="ui-inline-actions">
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="dest_type" value="group" {% if default_dest_type == 'group' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Group</div>
+                            <div class="text-sm text-light-300">Apply the rule to all nodes in a security group.</div>
+                        </div>
+                    </label>
+                    <label class="ui-selection-row flex-1">
+                        <input type="radio" name="dest_type" value="host" {% if default_dest_type == 'host' %}checked{% endif %} class="mt-1">
+                        <div>
+                            <div class="font-semibold text-light-100">Host</div>
+                            <div class="text-sm text-light-300">Apply the rule to a single named node.</div>
+                        </div>
+                    </label>
+                </div>
+                <div class="ui-form-grid mt-4">
+                    <div data-role="dest-group">
+                        <label for="id_dest_group">Destination group</label>
+                        <select id="id_dest_group" name="dest_group">
+                            <option value="">Select a group...</option>
+                            {% for group in all_groups %}
+                            <option value="{{ group.id }}" {% if group.id == selected_dest_group_id %}selected{% endif %}>{{ group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div data-role="dest-host" style="display:none;">
+                        <label for="id_dest_node">Destination host</label>
+                        <select id="id_dest_node" name="dest_node">
+                            <option value="">Select a host...</option>
+                            {% for node in all_nodes %}
+                            <option value="{{ node.id }}" {% if node.id == selected_dest_node_id %}selected{% endif %}>{{ node.name }} ({{ node.nebula_ip }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ui-form-grid mt-8">
+                <div>
+                    <label for="id_protocol">Protocol</label>
+                    <select id="id_protocol" name="protocol">
+                        <option value="tcp" {% if rule.protocol == 'tcp' %}selected{% endif %}>TCP</option>
+                        <option value="udp" {% if rule.protocol == 'udp' %}selected{% endif %}>UDP</option>
+                        <option value="icmp" {% if rule.protocol == 'icmp' %}selected{% endif %}>ICMP</option>
+                        <option value="any" {% if rule.protocol == 'any' %}selected{% endif %}>Any Protocol</option>
+                    </select>
+                    <p class="ui-field-help">Use TCP or UDP for port-based rules, ICMP for ping, or Any Protocol when ports do not matter.</p>
+                </div>
+                <div>
+                    <label for="id_port_min">Port (min)</label>
+                    <input type="number" name="port_min" id="id_port_min" min="1" max="65535" value="{{ rule.port_min|default_if_none:'' }}" placeholder="443">
+                    <p class="ui-field-help">Required for TCP/UDP. Leave blank for ICMP or Any Protocol.</p>
+                </div>
+                <div>
+                    <label for="id_port_max">Port (max)</label>
+                    <input type="number" name="port_max" id="id_port_max" min="1" max="65535" value="{{ rule.port_max|default_if_none:'' }}" placeholder="Same as min for a single port">
+                    <p class="ui-field-help">Optional. Leave blank to use the minimum port.</p>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <label for="id_description">Description</label>
+                <input type="text" name="description" id="id_description" value="{{ rule.description|default:'' }}" placeholder="Allow HTTPS from ingress nodes">
+            </div>
+
+            <div class="ui-action-bar mt-8 justify-end">
+                <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Cancel</a>
+                <button type="submit" class="btn-enhanced ui-button-primary ui-button-sm">{% if rule %}Save Changes{% else %}Create Policy{% endif %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        function bindGroup(radioName, groupSelector, hostSelector) {
+            const radios = document.getElementsByName(radioName);
+            const groupElement = document.querySelector(groupSelector);
+            const hostElement = document.querySelector(hostSelector);
+            function sync(value) {
+                if (value === 'host') {
+                    if (groupElement) groupElement.style.display = 'none';
+                    if (hostElement) hostElement.style.display = '';
+                } else {
+                    if (groupElement) groupElement.style.display = '';
+                    if (hostElement) hostElement.style.display = 'none';
+                }
+            }
+            let initial = 'group';
+            radios.forEach(function(radio) {
+                if (radio.checked) initial = radio.value;
+            });
+            sync(initial);
+            radios.forEach(function(radio) {
+                radio.addEventListener('change', function() {
+                    sync(this.value);
+                });
+            });
+        }
+        bindGroup('source_type', '[data-role="source-group"]', '[data-role="source-host"]');
+        bindGroup('dest_type', '[data-role="dest-group"]', '[data-role="dest-host"]');
+    });
+</script>
+{% endblock %}

@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     wget \
+    xmlsec1 \
+    libxmlsec1-dev \
+    libxmlsec1-openssl \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Install nebula-cert with checksum verification
@@ -33,11 +37,13 @@ COPY dashboard/ dashboard/
 COPY docs/ docs/
 COPY health/ health/
 COPY nodes/ nodes/
+COPY notifications/ notifications/
 COPY organizations/ organizations/
 COPY security_groups/ security_groups/
 COPY templates/ templates/
 COPY users/ users/
 COPY webhooks/ webhooks/
+COPY sso/ sso/
 COPY static/ static/
 
 # Build Tailwind CSS from templates
@@ -45,15 +51,15 @@ COPY tailwind.config.js .
 RUN tailwindcss -i static/css/tailwind-input.css -o static/css/tailwind-output.css --minify
 
 # Create necessary directories
-RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles
+RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles /data/certs
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=open_cvpn.settings
 
 # Create a non-root user
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN useradd -m appuser && chown -R appuser:appuser /app /data/certs
 USER appuser
 
 # Default command (can be overridden)
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"] 
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

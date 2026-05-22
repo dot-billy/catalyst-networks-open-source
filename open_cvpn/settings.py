@@ -31,14 +31,18 @@ if not _secret_key:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured(
         "DJANGO_SECRET_KEY environment variable is not set. "
-        "Generate one with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(50))\""
     )
 SECRET_KEY = _secret_key
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']  # Configure appropriately in production
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 # Security headers
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -54,7 +58,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
@@ -72,9 +76,11 @@ INSTALLED_APPS = [
     'nodes',
     'security_groups',
     'webhooks',
+    'notifications',
     'dashboard',
     'health',
     'docs.apps.DocsConfig',
+    'sso.apps.SsoConfig',
 ]
 
 MIDDLEWARE = [
@@ -133,7 +139,7 @@ else:
             "POSTGRES_HOST not set! Database operations will fail.\n"
             "Set POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD environment variables."
         )
-    
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -209,15 +215,31 @@ BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 if BASE_URL.endswith('/'):
     BASE_URL = BASE_URL[:-1]
 
+# Fernet key used to encrypt notification integration secrets.
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY')
+
 # Project Metadata - catalyst_network branding
 PROJECT_METADATA = {
     "NAME": "catalyst_network",
     "URL": BASE_URL,
-    "DESCRIPTION": "catalyst_network is an advanced mesh network management system for enterprise-grade network security.",
+    "DESCRIPTION": "catalyst_network is an advanced mesh network management system for secure network operations.",
     "IMAGE": "",  # Temporarily disabled to avoid static file errors
-    "KEYWORDS": "vpn management, nebula vpn, network security, enterprise security, node management",
+    "KEYWORDS": "vpn management, nebula vpn, network security, node management",
     "CONTACT_EMAIL": DEFAULT_FROM_EMAIL,
 }
+
+
+def _read_project_version():
+    try:
+        import tomllib
+
+        with open(BASE_DIR / "pyproject.toml", "rb") as pyproject_file:
+            return tomllib.load(pyproject_file)["project"]["version"]
+    except (FileNotFoundError, KeyError, OSError, tomllib.TOMLDecodeError):
+        return "dev"
+
+
+STATIC_ASSET_VERSION = os.getenv("STATIC_ASSET_VERSION") or _read_project_version()
 
 # Update email subject prefix with branding
 EMAIL_SUBJECT_PREFIX = "[catalyst_network] "
@@ -245,7 +267,7 @@ REST_FRAMEWORK = {
 # Spectacular settings for OpenAPI documentation
 SPECTACULAR_SETTINGS = {
     'TITLE': 'catalyst_network API',
-    'DESCRIPTION': 'The catalyst_network API supports node provisioning and runtime actions for the customer administration platform.',
+    'DESCRIPTION': 'The catalyst_network API supports node provisioning and runtime actions for the administration platform.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
@@ -330,6 +352,9 @@ CERTIFICATE_RENEWAL_WINDOW_DAYS = 14  # Renew certificates 14 days before expira
 CERTIFICATE_RENEWAL_BATCH_SIZE = 10   # Process renewal in batches of 10 nodes
 CERTIFICATE_EXPIRY_NOTIFICATION_DAYS = 30  # Notify about expiring certificates 30 days in advance
 
+_log_handlers = ['console']
+_log_file = os.getenv('DJANGO_LOG_FILE')
+
 # Logging configuration
 LOGGING = {
     'version': 1,
@@ -349,30 +374,33 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'debug.log',
-            'formatter': 'verbose',
-        },
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'INFO',
             'propagate': True,
         },
         'nodes': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'DEBUG',
             'propagate': True,
         },
         'organizations': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'DEBUG',
             'propagate': True,
         },
     },
 }
+
+if _log_file:
+    LOGGING['handlers']['file'] = {
+        'class': 'logging.FileHandler',
+        'filename': _log_file,
+        'formatter': 'verbose',
+    }
+    _log_handlers.append('file')
 
 # Authentication backends (axes must be first for rate limiting)
 AUTHENTICATION_BACKENDS = [

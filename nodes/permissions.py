@@ -18,7 +18,6 @@ class NodeAccessPermission(BasePermission):
         logger.info("=== Starting NodeAccessPermission.has_permission ===")
         logger.info(f"Request path: {request.path}")
         logger.info(f"Request method: {request.method}")
-        logger.info(f"Request headers: {dict(request.headers)}")
         logger.info(f"View: {view.__class__.__name__}")
         logger.info(f"View action: {getattr(view, 'action', 'unknown')}")
         logger.info(f"View kwargs: {getattr(view, 'kwargs', {})}")
@@ -108,4 +107,4 @@ class NodeAccessPermission(BasePermission):
                 logger.error(traceback.format_exc())
                 return False
                 
-        return False 
+        return False

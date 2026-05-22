@@ -1,18 +1,71 @@
 from celery import shared_task
 from django.utils import timezone
-from datetime import timedelta
+from django.utils.dateparse import parse_datetime
+from datetime import timedelta, timezone as datetime_timezone
 from django.conf import settings
 from django.core.files import File
+import json
 import os
 import subprocess
 import logging
-import ipaddress
 from .models import Node
 
 logger = logging.getLogger(__name__)
 
 # How many days before expiration to renew certificates
 RENEWAL_WINDOW_DAYS = getattr(settings, 'CERTIFICATE_RENEWAL_WINDOW_DAYS', 14)
+
+
+def _expected_certificate_groups(node):
+    group_names = []
+    if node.is_lighthouse:
+        group_names.append('lighthouse')
+    group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+    return sorted(set(group_names))
+
+
+def parse_nebula_cert_expiration(output):
+    """
+    Parse nebula-cert print output from current JSON or legacy text formats.
+    """
+    output = (output or '').strip()
+    if not output:
+        raise ValueError("nebula-cert print output was empty")
+
+    try:
+        cert_info = json.loads(output)
+    except json.JSONDecodeError:
+        cert_info = None
+
+    if cert_info is not None:
+        details = cert_info.get('details', {}) if isinstance(cert_info, dict) else {}
+        expiration_value = details.get('notAfter')
+        if not expiration_value:
+            raise ValueError("nebula-cert JSON output did not include details.notAfter")
+        return _parse_nebula_expiration_value(expiration_value)
+
+    for line in output.splitlines():
+        if 'Not After' in line:
+            try:
+                expiration_value = line.split(': ', 1)[1].strip()
+            except IndexError as exc:
+                raise ValueError("legacy Not After line was not parseable") from exc
+            return _parse_nebula_expiration_value(expiration_value)
+
+    raise ValueError("nebula-cert output did not include an expiration")
+
+
+def _parse_nebula_expiration_value(expiration_value):
+    expiration_value = str(expiration_value).strip()
+    parsed = parse_datetime(expiration_value)
+    if parsed is None and expiration_value.endswith(' UTC'):
+        parsed = parse_datetime(expiration_value[:-4])
+    if parsed is None:
+        raise ValueError(f"could not parse certificate expiration {expiration_value!r}")
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone=datetime_timezone.utc)
+    return parsed
+
 
 @shared_task
 def renew_expiring_certificates():
@@ -111,15 +164,19 @@ def renew_node_certificate(node_id):
         key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
         
         # Generate new certificate using nebula-cert
-        subprocess.run([
+        cmd = [
             'nebula-cert', 'sign',
             '-name', name,
             '-ip', f'{ip}/24',
             '-ca-crt', ca.ca_cert.path,
             '-ca-key', ca.ca_key.path,
             '-out-crt', cert_path,
-            '-out-key', key_path
-        ], check=True)
+            '-out-key', key_path,
+        ]
+        group_names = _expected_certificate_groups(node)
+        if group_names:
+            cmd.extend(['-groups', ','.join(group_names)])
+        subprocess.run(cmd, check=True)
         
         # Keep track of old paths to clean up
         old_cert_path = node.cert_path.path if node.cert_path else None
@@ -136,32 +193,12 @@ def renew_node_certificate(node_id):
             '-path', cert_path
         ], capture_output=True, text=True, check=True)
         
-        # Parse expiration from output
-        new_expiration = None
-        for line in result.stdout.split('\n'):
-            if 'Not After' in line:
-                exp_str = line.split(': ')[1].strip()
-                # Convert the date format to Django-compatible format
-                try:
-                    # Parse the date format: "2025-05-03 11:54:04 +0000 UTC"
-                    # Convert to YYYY-MM-DD HH:MM:SS format
-                    exp_parts = exp_str.split()
-                    if len(exp_parts) >= 3:
-                        # Extract date and time, ignore timezone for now
-                        date_part = exp_parts[0]
-                        time_part = exp_parts[1]
-                        new_expiration = f"{date_part}T{time_part}Z"
-                        node.cert_expiration = new_expiration
-                    else:
-                        # Fallback: use current time + 1 year
-                        node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                        new_expiration = node.cert_expiration.isoformat()
-                except Exception as e:
-                    logger.error(f"Error parsing certificate expiration: {e}")
-                    # Fallback: use current time + 1 year
-                    node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                    new_expiration = node.cert_expiration.isoformat()
-                break
+        try:
+            node.cert_expiration = parse_nebula_cert_expiration(result.stdout)
+        except ValueError as e:
+            logger.error(f"Error parsing certificate expiration: {e}")
+            node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
+        new_expiration = node.cert_expiration.isoformat()
         
         node.save()
         
@@ -175,6 +212,20 @@ def renew_node_certificate(node_id):
             # Log but don't fail if cleanup fails
             logger.warning(f"Could not remove old certificate files: {str(e)}")
         
+        renewal_notification_data = {
+            'node_id': node.id,
+            'node_name': node.name,
+            'nebula_ip': node.nebula_ip,
+            'old_expiration': old_expiration,
+            'new_expiration': new_expiration,
+            'renewal': True
+        }
+
+        # Send notifications about certificate renewal.
+        from notifications.dispatch import queue_notification_event
+
+        queue_notification_event('cert.renewed', node.organization.id, renewal_notification_data)
+
         # Send webhook notification about certificate renewal
         try:
             from webhooks.models import Webhook
@@ -193,21 +244,14 @@ def renew_node_certificate(node_id):
                     'event': 'cert.issued',
                     'organization_id': node.organization.id,
                     'timestamp': timezone.now().isoformat(),
-                    'data': {
-                        'node_id': node.id,
-                        'node_name': node.name,
-                        'nebula_ip': node.nebula_ip,
-                        'old_expiration': old_expiration,
-                        'new_expiration': new_expiration,
-                        'renewal': True
-                    }
+                    'data': renewal_notification_data
                 }
                 
                 for webhook in webhooks:
                     try:
                         send_webhook_notification.delay(webhook.id, payload)
                     except Exception as e:
-                        logger.error(f"Failed to queue webhook notification to {webhook.url}: {str(e)}")
+                        logger.error("Failed to queue webhook notification %s: %s", webhook.id, e)
         except Exception as e:
             logger.error(f"Failed to send webhook notifications: {str(e)}")
         
@@ -235,4 +279,98 @@ def renew_node_certificate(node_id):
         return {
             'success': False,
             'error': f"Unexpected error: {str(e)}"
-        } 
+        }
+
+
+@shared_task
+def cleanup_stale_cert_files():
+    """
+    Remove delivered certificate/key files and orphaned files from storage.
+
+    Nodes that have checked in and whose local certificate artifacts are older
+    than CERT_FILE_RETENTION_DAYS no longer need server-side copies for normal
+    operation. Missing files are regenerated on demand when a node downloads
+    config again.
+    """
+    retention_days = getattr(settings, 'CERT_FILE_RETENTION_DAYS', 30)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    results = {'cleaned_nodes': 0, 'orphaned_files_removed': 0, 'errors': []}
+
+    candidate_nodes = Node.objects.filter(last_checkin__isnull=False)
+
+    for node in candidate_nodes:
+        try:
+            cleared_fields = []
+            for field in (node.cert_path, node.key_path):
+                if not field or not field.name:
+                    continue
+                modified_at = _certificate_file_modified_at(field)
+                if modified_at is None or modified_at >= cutoff:
+                    continue
+                if _delete_storage_file(field):
+                    cleared_fields.append(field.field.name)
+                else:
+                    results['errors'].append(f"Node {node.id}: could not delete {field.name}")
+            if cleared_fields:
+                update_values = {field_name: '' for field_name in cleared_fields}
+                Node.objects.filter(pk=node.pk).update(**update_values)
+                results['cleaned_nodes'] += 1
+        except Exception as exc:
+            results['errors'].append(f"Node {node.id}: {exc}")
+
+    certs_root = os.path.join(settings.CERT_STORAGE_ROOT, 'certs')
+    if os.path.isdir(certs_root):
+        known_paths = set()
+        for node in Node.objects.exclude(cert_path='').exclude(cert_path__isnull=True):
+            try:
+                known_paths.add(os.path.abspath(node.cert_path.path))
+            except (ValueError, Exception):
+                pass
+        for node in Node.objects.exclude(key_path='').exclude(key_path__isnull=True):
+            try:
+                known_paths.add(os.path.abspath(node.key_path.path))
+            except (ValueError, Exception):
+                pass
+
+        for dirpath, _dirnames, filenames in os.walk(certs_root):
+            for filename in filenames:
+                if not filename.endswith(('.crt', '.key')):
+                    continue
+                path = os.path.abspath(os.path.join(dirpath, filename))
+                if path in known_paths:
+                    continue
+                try:
+                    os.remove(path)
+                    results['orphaned_files_removed'] += 1
+                except OSError as exc:
+                    results['errors'].append(f"Orphan {path}: {exc}")
+
+    logger.info(
+        "Cert cleanup: %s nodes cleaned, %s orphaned files removed, %s errors",
+        results['cleaned_nodes'],
+        results['orphaned_files_removed'],
+        len(results['errors']),
+    )
+    return results
+
+
+def _certificate_file_modified_at(field):
+    try:
+        if not field.storage.exists(field.name):
+            return None
+        modified_at = field.storage.get_modified_time(field.name)
+    except Exception as exc:
+        logger.warning("Could not inspect certificate file %s: %s", field.name, exc)
+        return None
+    if timezone.is_naive(modified_at):
+        modified_at = timezone.make_aware(modified_at, timezone=datetime_timezone.utc)
+    return modified_at
+
+
+def _delete_storage_file(field):
+    try:
+        field.storage.delete(field.name)
+        return not field.storage.exists(field.name)
+    except Exception as exc:
+        logger.warning("Could not remove certificate file %s: %s", field.name, exc)
+        return False
