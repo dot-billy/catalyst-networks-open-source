@@ -9,7 +9,9 @@ An open-source platform for managing [Nebula](https://github.com/slackhq/nebula)
 - **Node provisioning** — register and manage Nebula endpoints (lighthouses and nodes)
 - **IP address management** — automatic IP allocation from organization-scoped CIDR ranges
 - **Security groups** — logical firewall groupings for nodes
+- **SAML SSO** — organization-managed SAML login enforcement
 - **Webhook notifications** — event-driven webhooks for node and certificate lifecycle events
+- **Slack notifications** — optional incoming webhook delivery for organization events
 - **Audit logging** — full change history via django-simple-history
 - **Bulk operations** — CSV import/export, batch deletion, and batch certificate renewal
 - **REST API** with OpenAPI/Swagger documentation
@@ -67,16 +69,37 @@ All configuration is done via environment variables. See `.env.example` for the 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DJANGO_SECRET_KEY` | **Required.** Django secret key | — |
-| `DJANGO_DEBUG` | Enable debug mode | `True` |
+| `DJANGO_DEBUG` | Enable debug mode | `False` in settings; `.env.example` enables it for local use |
+| `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hostnames | `localhost,127.0.0.1` |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
 | `POSTGRES_PASSWORD` | Database password | `postgres` |
 | `REDIS_HOST` | Redis hostname | `redis` |
 | `JWT_SECRET_KEY` | JWT signing key | Falls back to `DJANGO_SECRET_KEY` |
 | `REGISTRATION_MASTER_TOKEN` | **Required.** Token for node registration API | — |
+| `FIELD_ENCRYPTION_KEY` | Fernet key for Slack webhook storage | Empty; required before saving Slack webhooks |
 | `DEFAULT_FROM_EMAIL` | Sender email address | `noreply@example.com` |
 | `BASE_URL` | Public URL of the application | `http://localhost:8000` |
+| `STATIC_ASSET_VERSION` | Optional cache-busting version for static URLs | Project version |
 | `CERT_STORAGE_ROOT` | Path for certificate storage | `/data/certs` |
+
+The default Docker Compose stack publishes only the Django web service on `8000`.
+PostgreSQL and Redis stay on the internal Compose network.
+
+### DigitalOcean Smoke Test
+
+For a temporary remote smoke test, create a small Ubuntu droplet, copy this
+repository to it, generate a fresh `.env`, and run:
+
+```bash
+docker compose up --build -d
+docker compose exec web python manage.py migrate
+curl -fsS http://DROPLET_IP:8000/health/
+curl -fsSI http://DROPLET_IP:8000/login/
+```
+
+Set `DJANGO_ALLOWED_HOSTS` to include the droplet IP and delete the droplet when
+the smoke test is complete.
 
 ## Architecture
 
@@ -86,7 +109,7 @@ All configuration is done via environment variables. See `.env.example` for the 
 | Database | PostgreSQL 15 |
 | Task Queue | Celery + Redis 7 |
 | Frontend | Django templates + HTMX |
-| Auth | JWT (simplejwt) + custom User model |
+| Auth | JWT (simplejwt), SAML SSO, custom User model |
 | API Docs | OpenAPI/Swagger (drf-spectacular) |
 | Audit | django-simple-history |
 | Security | django-axes (brute-force protection) |
