@@ -33,6 +33,7 @@ COPY dashboard/ dashboard/
 COPY docs/ docs/
 COPY health/ health/
 COPY nodes/ nodes/
+COPY notifications/ notifications/
 COPY organizations/ organizations/
 COPY security_groups/ security_groups/
 COPY templates/ templates/

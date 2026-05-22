@@ -1,9 +1,11 @@
 from unittest import mock
 
 from cryptography.fernet import Fernet
+from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+import requests
 
 from organizations.models import Membership, Organization
 
@@ -64,6 +66,28 @@ class NotificationIntegrationTests(TestCase):
         self.assertIn("node-1", kwargs["json"]["text"])
 
     @mock.patch("notifications.dispatch.requests.post")
+    def test_failed_slack_delivery_does_not_store_or_log_webhook_url(self, post):
+        webhook_url = "https://hooks.slack.com/services/T000/B000/secret"
+        integration = self.enabled_slack_integration()
+        response = requests.Response()
+        response.status_code = 500
+        response.reason = "Internal Server Error"
+        response.url = webhook_url
+        response._content = b"upstream failure"
+        response.request = requests.Request("POST", webhook_url).prepare()
+        post.return_value = response
+
+        with self.assertLogs("notifications.dispatch", level="ERROR") as captured:
+            dispatch_notification(self.organization, "node.registered", {"node": "node-1"})
+
+        integration.refresh_from_db()
+        log_output = "\n".join(captured.output)
+        self.assertNotIn(webhook_url, integration.last_delivery_error)
+        self.assertNotIn(webhook_url, log_output)
+        self.assertIn("HTTP 500", integration.last_delivery_error)
+        self.assertIn("HTTP 500", log_output)
+
+    @mock.patch("notifications.dispatch.requests.post")
     def test_dispatch_filters_inactive_and_unsubscribed_events(self, post):
         integration = self.enabled_slack_integration(events=["cert.expiring"])
 
@@ -83,6 +107,30 @@ class NotificationIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "https://hooks.slack.com/services/T000/B000/secret")
         self.assertContains(response, "Encrypted webhook saved")
+
+    @override_settings(**{"FIELD_ENCRYPTION_KEY": "not-a-valid-fernet-key"})
+    def test_invalid_encryption_key_shows_form_error(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("notifications_org:slack", kwargs={"slug": self.organization.slug}),
+            {
+                "webhook_url": "https://hooks.slack.com/services/T000/B000/secret",
+                "active": "on",
+                "events": ["node.registered"],
+            },
+            follow=True,
+        )
+
+        messages = [message.message for message in get_messages(response.wsgi_request)]
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any("FIELD_ENCRYPTION_KEY" in message for message in messages))
+        integration = NotificationIntegration.objects.get(
+            organization=self.organization,
+            kind=NotificationIntegration.Kind.SLACK,
+        )
+        self.assertFalse(integration.active)
+        self.assertFalse(integration.has_webhook_url)
 
     def test_org_member_cannot_manage_slack_notifications(self):
         self.client.force_login(self.member)

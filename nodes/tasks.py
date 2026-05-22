@@ -212,6 +212,23 @@ def renew_node_certificate(node_id):
             # Log but don't fail if cleanup fails
             logger.warning(f"Could not remove old certificate files: {str(e)}")
         
+        renewal_notification_data = {
+            'node_id': node.id,
+            'node_name': node.name,
+            'nebula_ip': node.nebula_ip,
+            'old_expiration': old_expiration,
+            'new_expiration': new_expiration,
+            'renewal': True
+        }
+
+        # Send notifications about certificate renewal.
+        try:
+            from notifications.dispatch import dispatch_event
+
+            dispatch_event('cert.renewed', node.organization.id, renewal_notification_data)
+        except Exception as e:
+            logger.error("Failed to queue certificate renewal notification for node %s: %s", node.id, e)
+
         # Send webhook notification about certificate renewal
         try:
             from webhooks.models import Webhook
@@ -230,14 +247,7 @@ def renew_node_certificate(node_id):
                     'event': 'cert.issued',
                     'organization_id': node.organization.id,
                     'timestamp': timezone.now().isoformat(),
-                    'data': {
-                        'node_id': node.id,
-                        'node_name': node.name,
-                        'nebula_ip': node.nebula_ip,
-                        'old_expiration': old_expiration,
-                        'new_expiration': new_expiration,
-                        'renewal': True
-                    }
+                    'data': renewal_notification_data
                 }
                 
                 for webhook in webhooks:

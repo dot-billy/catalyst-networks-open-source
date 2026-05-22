@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import URLValidator
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
@@ -89,7 +89,11 @@ def org_slack_integration(request, slug):
             return redirect("notifications_org:slack", slug=slug)
 
         if webhook_url:
-            integration.set_secret_url(webhook_url)
+            try:
+                integration.set_secret_url(webhook_url)
+            except (ImproperlyConfigured, ValidationError) as exc:
+                messages.error(request, f"Notification integration encryption is not configured: {exc}")
+                return redirect("notifications_org:slack", slug=slug)
         integration.events = [event.value for event in EventType if event.value in selected_events]
         integration.active = active
         integration.save()

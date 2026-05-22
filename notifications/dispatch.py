@@ -1,11 +1,47 @@
 import logging
+import re
 
 import requests
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.utils import timezone
 
 from .models import NotificationIntegration
 
 logger = logging.getLogger(__name__)
+
+SLACK_WEBHOOK_URL_RE = re.compile(r"https://hooks\.slack\.com/services/[^\s'\"<>]+")
+URL_RE = re.compile(r"https?://[^\s'\"<>]+")
+BODY_SNIPPET_LIMIT = 300
+
+
+def _redact_urls(value):
+    value = SLACK_WEBHOOK_URL_RE.sub("[redacted-slack-webhook]", value or "")
+    return URL_RE.sub("[redacted-url]", value)
+
+
+def _body_snippet(response):
+    text = getattr(response, "text", "") or ""
+    text = _redact_urls(text).replace("\n", " ").strip()
+    return text[:BODY_SNIPPET_LIMIT]
+
+
+def _delivery_error_summary(exc):
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status_code = getattr(response, "status_code", None)
+        reason = getattr(response, "reason", "") or ""
+        summary = f"HTTP {status_code}" if status_code else "HTTP error"
+        if reason:
+            summary = f"{summary} {reason}"
+        snippet = _body_snippet(response)
+        if snippet:
+            summary = f"{summary}: {snippet}"
+        return summary
+
+    if isinstance(exc, (ImproperlyConfigured, ValidationError)):
+        return "Notification integration secret is not configured correctly."
+
+    return "Slack delivery failed before receiving a response."
 
 
 def format_slack_message(event_type, organization, payload):
@@ -48,8 +84,9 @@ def dispatch_notification(organization, event_type, payload=None):
             continue
 
         try:
+            webhook_url = integration.get_secret_url()
             response = requests.post(
-                integration.get_secret_url(),
+                webhook_url,
                 json={"text": format_slack_message(event_type, organization, payload)},
                 timeout=10,
             )
@@ -58,10 +95,11 @@ def dispatch_notification(organization, event_type, payload=None):
             integration.last_delivery_status = response.status_code
             integration.last_delivery_error = ""
         except Exception as exc:
+            error_summary = _delivery_error_summary(exc)
             integration.last_delivery_at = timezone.now()
             integration.last_delivery_status = getattr(getattr(exc, "response", None), "status_code", None)
-            integration.last_delivery_error = str(exc)[:1000]
-            logger.error("Failed to deliver Slack notification integration %s: %s", integration.id, exc)
+            integration.last_delivery_error = error_summary[:1000]
+            logger.error("Failed to deliver Slack notification integration %s: %s", integration.id, error_summary)
         finally:
             integration.save(
                 update_fields=[

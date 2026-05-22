@@ -374,6 +374,39 @@ class NodeCertificateReliabilityTests(TestCase):
         self.assertIn('-groups', sign_command)
         self.assertEqual(sign_command[sign_command.index('-groups') + 1], 'web')
 
+    @mock.patch('notifications.dispatch.dispatch_event')
+    def test_certificate_renewal_queues_slack_notification(self, dispatch_event):
+        def run_nebula_cert(command, *args, **kwargs):
+            if command[:2] == ['nebula-cert', 'sign']:
+                cert_path = command[command.index('-out-crt') + 1]
+                key_path = command[command.index('-out-key') + 1]
+                with open(cert_path, 'wb') as cert_file:
+                    cert_file.write(b'renewed-cert')
+                with open(key_path, 'wb') as key_file:
+                    key_file.write(b'renewed-key')
+                return subprocess.CompletedProcess(command, 0, '', '')
+            if command[:2] == ['nebula-cert', 'print']:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    'Not After: 2030-01-01 00:00:00 +0000 UTC\n',
+                    '',
+                )
+            raise AssertionError(f'Unexpected command: {command}')
+
+        with mock.patch('nodes.tasks.subprocess.run', side_effect=run_nebula_cert):
+            from nodes.tasks import renew_node_certificate
+
+            result = renew_node_certificate(self.node.id)
+
+        self.assertTrue(result['success'])
+        dispatch_event.assert_called_once()
+        event_type, organization_id, payload = dispatch_event.call_args.args
+        self.assertEqual(event_type, 'cert.renewed')
+        self.assertEqual(organization_id, self.organization.id)
+        self.assertEqual(payload['node_name'], self.node.name)
+        self.assertTrue(payload['renewal'])
+
     def test_cleanup_stale_cert_files_keeps_fresh_files_for_old_checked_in_node(self):
         self._save_node_certificate_files()
         self._mark_node_checked_in_before_retention()
