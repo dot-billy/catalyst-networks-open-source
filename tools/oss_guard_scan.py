@@ -31,9 +31,9 @@ BUSINESS_PATTERNS = re.compile(
     r"(catalystnetworks\.io|catalystnetworks\.com|app\.catalystnetworks\.io|"
     r"demo\.catalystnetworks\.io|/etc/catalyst|customer-app-secrets|do-prod|"
     r"LicenseMiddleware|license_context|LICENSE_FILE|(^|/)licensing/|"
-    r"\b(pro|enterprise) license\b|\bpaid edition\b|\btrial\b|\bbilling\b|"
-    r"\bsubscription\b|\bupgrade\b|customer administration|\bSLA\b|"
-    r"\btelemetry\b|\banalytics\b)",
+    r"\b(pro|enterprise) license\b|\blicense gate\b|\benterprise plan limits\b|"
+    r"\bdemo mode flows\b|\bpaid edition\b|\btrial\b|\bbilling\b|\bsubscription\b|"
+    r"\bupgrade\b|customer administration|\bSLA\b|\btelemetry\b|\banalytics\b)",
     re.IGNORECASE,
 )
 
@@ -49,6 +49,12 @@ SAFE_PLACEHOLDER_VALUES = (
 )
 
 SAFE_EXACT_VALUES = {"", "postgres"}
+
+SAFE_PLUMBING_PATTERNS = re.compile(
+    r"^\s*[A-Z0-9_]*\s*=\s*("
+    r"_secret_key|_registration_token|os\.getenv\([\"'][A-Z0-9_]+[\"']\)"
+    r")\s*(#.*)?$"
+)
 
 ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
@@ -74,7 +80,7 @@ def changed_files() -> list[Path]:
         )
         for line in proc.stdout.splitlines():
             name = line.strip()
-            if name:
+            if name and (ROOT / name).exists():
                 names[name] = None
     return [ROOT / name for name in names]
 
@@ -114,6 +120,8 @@ def expand_path(path: Path) -> tuple[list[Path], list[str]]:
 def is_safe_placeholder_secret(line: str) -> bool:
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
+        return True
+    if SAFE_PLUMBING_PATTERNS.search(stripped):
         return True
     if "=" not in stripped:
         return False
