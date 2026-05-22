@@ -352,6 +352,9 @@ CERTIFICATE_RENEWAL_WINDOW_DAYS = 14  # Renew certificates 14 days before expira
 CERTIFICATE_RENEWAL_BATCH_SIZE = 10   # Process renewal in batches of 10 nodes
 CERTIFICATE_EXPIRY_NOTIFICATION_DAYS = 30  # Notify about expiring certificates 30 days in advance
 
+_log_handlers = ['console']
+_log_file = os.getenv('DJANGO_LOG_FILE')
+
 # Logging configuration
 LOGGING = {
     'version': 1,
@@ -371,30 +374,33 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'debug.log',
-            'formatter': 'verbose',
-        },
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'INFO',
             'propagate': True,
         },
         'nodes': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'DEBUG',
             'propagate': True,
         },
         'organizations': {
-            'handlers': ['console', 'file'],
+            'handlers': _log_handlers,
             'level': 'DEBUG',
             'propagate': True,
         },
     },
 }
+
+if _log_file:
+    LOGGING['handlers']['file'] = {
+        'class': 'logging.FileHandler',
+        'filename': _log_file,
+        'formatter': 'verbose',
+    }
+    _log_handlers.append('file')
 
 # Authentication backends (axes must be first for rate limiting)
 AUTHENTICATION_BACKENDS = [

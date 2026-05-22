@@ -72,6 +72,7 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_DEBUG` | Enable debug mode | `False` in settings; `.env.example` enables it for local use |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hostnames | `localhost,127.0.0.1` |
 | `WEB_PORT` | Host port used by Docker Compose for the web service | `8000` |
+| `DJANGO_LOG_FILE` | Optional writable file path for Django logs | Empty; logs go to console |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
 | `POSTGRES_PASSWORD` | Database password | `postgres` |
