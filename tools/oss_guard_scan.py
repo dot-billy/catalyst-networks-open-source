@@ -38,21 +38,16 @@ BUSINESS_PATTERNS = re.compile(
 )
 
 SAFE_PLACEHOLDER_VALUES = (
-    "example",
     "change-me",
     "changeme",
     "placeholder",
-    "your-",
-    "test",
-    "dummy",
-    "local",
 )
 
-SAFE_EXACT_VALUES = {"", "postgres"}
+SAFE_EXACT_VALUES = {"", "postgres", "localhost", "local", "test", "dummy", "example"}
 
 SAFE_PLUMBING_PATTERNS = re.compile(
-    r"^\s*[A-Z0-9_]*\s*=\s*("
-    r"_secret_key|_registration_token|os\.getenv\([\"'][A-Z0-9_]+[\"']\)"
+    r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*("
+    r"_[A-Za-z0-9_]*|os\.(getenv|environ\.get)\([\"'][A-Z0-9_]+[\"']\)"
     r")\s*(#.*)?$"
 )
 
@@ -138,7 +133,10 @@ def is_safe_placeholder_secret(line: str) -> bool:
     )
     if value.startswith("AKIA") or (len(compact) >= 32 and character_classes >= 3):
         return False
-    return lowered in SAFE_EXACT_VALUES or any(token in lowered for token in SAFE_PLACEHOLDER_VALUES)
+    placeholderish = lowered.startswith("your-") or any(
+        token in lowered for token in SAFE_PLACEHOLDER_VALUES
+    )
+    return lowered in SAFE_EXACT_VALUES or placeholderish
 
 
 def scan_file(path: Path) -> list[str]:
