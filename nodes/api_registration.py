@@ -714,7 +714,7 @@ class NodeRegistrationView(APIView):
 
         try:
             result = subprocess.run(
-                ['nebula-cert', 'print', '-path', node.cert_path.path],
+                ['nebula-cert', 'print', '-json', '-path', node.cert_path.path],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -742,7 +742,7 @@ class NodeRegistrationView(APIView):
             )
             return True
 
-        actual_networks = sorted(details.get('networks') or [])
+        actual_networks = sorted(details.get('ips') or details.get('networks') or [])
         expected_networks = sorted(self._expected_certificate_networks(node))
         if actual_networks != expected_networks:
             logger.info(

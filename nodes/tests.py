@@ -487,6 +487,27 @@ class NodeCertificateReliabilityTests(TestCase):
 
         self.assertTrue(needs_regeneration)
 
+    def test_certificate_freshness_uses_nebula_json_ips(self):
+        self._save_node_certificate_files()
+        cert_info = {
+            'details': {
+                'groups': [],
+                'ips': ['10.44.0.10/24'],
+            }
+        }
+        completed = subprocess.CompletedProcess(
+            args=['nebula-cert', 'print'],
+            returncode=0,
+            stdout=json.dumps(cert_info),
+            stderr='',
+        )
+
+        with mock.patch('nodes.api_registration.subprocess.run', return_value=completed) as run:
+            needs_regeneration = NodeRegistrationView()._certificate_needs_regeneration(self.node)
+
+        self.assertFalse(needs_regeneration)
+        self.assertEqual(run.call_args.args[0][:3], ['nebula-cert', 'print', '-json'])
+
     @mock.patch('notifications.dispatch.queue_notification_event')
     def test_mobile_node_creation_queues_lifecycle_notifications(self, queue_notification_event):
         self.client.force_login(self.owner)
