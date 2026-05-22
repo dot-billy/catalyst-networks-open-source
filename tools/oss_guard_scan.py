@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BLOCKED_PATHS = re.compile(
     r"(^|/)(\.git|licensing|plans|support|analytics|certs_data|media|staticfiles|"
     r"\.superpowers|\.claude|\.cursor|\.codex|\.agents|venv|__pycache__)(/|$)|"
-    r"(^|/)(\.env(\..*)?|cookies\.txt|debug\.log|build_deploy_logs\.json|celerybeat-schedule)$"
+    r"(^|/)(\.env(?!\.example$|\.prod\.example$)(\..*)?|cookies\.txt|debug\.log|"
+    r"build_deploy_logs\.json|celerybeat-schedule)$"
 )
 
 SECRET_PATTERNS = re.compile(
@@ -77,6 +78,8 @@ def expand_path(path: Path) -> tuple[list[Path], list[str]]:
         return [], [f"{path}: outside repository"]
     if BLOCKED_PATHS.search(relative):
         return [path], []
+    if not path.exists():
+        return [], [f"{relative}: path does not exist"]
     if not path.is_dir():
         return [path], []
 
