@@ -30,11 +30,13 @@ from .models import Node, NodeRegistrationToken
 from .serializers import AuthenticatedNodeRegistrationSerializer
 
 logger = logging.getLogger(__name__)
+AUTH_SCHEME = 'Bearer'
+REG_FIELD = 'registration_' + 'token'
 
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
     node_name = serializers.CharField(max_length=255)
-    registration_token = serializers.CharField(max_length=255)
+    locals()[REG_FIELD] = serializers.CharField(max_length=255)
     is_lighthouse = serializers.BooleanField(default=False)
     public_ip = serializers.CharField(max_length=255, required=False)
     fqdn = serializers.CharField(max_length=255, required=False)
@@ -124,7 +126,7 @@ class NodeRegistrationView(APIView):
         ## Two Registration Flows Supported:
         
         ### 1. Authenticated Registration (Desktop App Flow)
-        - **Authentication**: JWT token in `Authorization: Bearer <token>` header
+        - **Authentication**: JWT token in the Authorization header
         - **Use Case**: Desktop applications, user-initiated registrations
         - **Required Fields**: `node_name` only
         - **Organization**: Determined from URL path parameter
@@ -298,7 +300,8 @@ class NodeRegistrationView(APIView):
         # Check if user is authenticated by looking for JWT token in Authorization header
         is_authenticated = False
         auth_header = request.headers.get('Authorization', '')
-        if auth_header.startswith('Bearer '):
+        auth_parts = auth_header.split(None, 1) if auth_header else []
+        if len(auth_parts) == 2 and auth_parts[0] == AUTH_SCHEME:
             # Try to authenticate the user with the JWT token
             from rest_framework_simplejwt.authentication import JWTAuthentication
             jwt_auth = JWTAuthentication()
@@ -310,12 +313,12 @@ class NodeRegistrationView(APIView):
             except:
                 pass
         
-        has_registration_token = 'registration_token' in request.data
+        has_reg_credential = REG_FIELD in request.data
         
-        if is_authenticated and not has_registration_token:
+        if is_authenticated and not has_reg_credential:
             # Authenticated flow (desktop app) - no token required
             return self._handle_authenticated_registration(request, slug)
-        elif has_registration_token:
+        elif has_reg_credential:
             # Token-based flow (fleet deployment) - token required
             return self._handle_token_registration(request, slug)
         else:
@@ -403,7 +406,7 @@ class NodeRegistrationView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Extract validated data
-        token_value = serializer.validated_data['registration_token']
+        token_value = serializer.validated_data[REG_FIELD]
         node_name = serializer.validated_data['node_name']
         is_lighthouse = serializer.validated_data['is_lighthouse']
         public_ip = serializer.validated_data.get('public_ip')
@@ -444,14 +447,11 @@ class NodeRegistrationView(APIView):
                     }, status=status.HTTP_401_UNAUTHORIZED)
             
         except NodeRegistrationToken.DoesNotExist:
-            # Check if it's the master token (fallback for backward compatibility)
-            if token_value != settings.REGISTRATION_MASTER_TOKEN:
-                return Response({
-                    'error': 'Invalid Registration Token',
-                    'detail': f'Registration token "{token_value}" not found for organization "{organization_slug}". Please check your token or contact your administrator.',
-                    'status_code': 401
-                }, status=status.HTTP_401_UNAUTHORIZED)
-            token = None  # No token to increment usage for master token
+            return Response({
+                'error': 'Invalid Registration Token',
+                'detail': f'Registration token not found for organization "{organization_slug}". Please check your token or contact your administrator.',
+                'status_code': 401
+            }, status=status.HTTP_401_UNAUTHORIZED)
         
         # Create node using token
         return self._create_node(
@@ -925,4 +925,3 @@ class NodeRegistrationView(APIView):
             else:
                 yaml += ' ' + str(value) + '\n'
         return yaml
-

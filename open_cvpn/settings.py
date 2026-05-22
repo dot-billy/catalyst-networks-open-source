@@ -36,9 +36,13 @@ if not _secret_key:
 SECRET_KEY = _secret_key
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']  # Configure appropriately in production
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 # Security headers
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -245,7 +249,7 @@ REST_FRAMEWORK = {
 # Spectacular settings for OpenAPI documentation
 SPECTACULAR_SETTINGS = {
     'TITLE': 'catalyst_network API',
-    'DESCRIPTION': 'The catalyst_network API supports node provisioning and runtime actions for the customer administration platform.',
+    'DESCRIPTION': 'The catalyst_network API supports node provisioning and runtime actions for the administration platform.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,

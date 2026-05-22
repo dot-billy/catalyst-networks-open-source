@@ -1,11 +1,10 @@
 import logging
-import traceback
 
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
-from rest_framework.decorators import action, api_view, authentication_classes, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 
@@ -73,36 +72,10 @@ class NodeViewSet(viewsets.ModelViewSet):
         
         Authentication options:
         - Node API token (for nodes to access their own config)
-        - Registration token (legacy, for bootstrapping)
         - User authentication (for admin access)
         """
         node = self.get_object()
         format_type = request.query_params.get('format', 'json')
-
-        # Legacy registration token fallback (if needed)
-        auth_header = request.headers.get('Authorization')
-        if (not hasattr(request, 'node')) and auth_header and auth_header.lower().startswith('bearer '):
-            reg_token = auth_header[7:].strip()
-            from .models import NodeRegistrationToken
-            from django.conf import settings
-            org = node.organization
-            valid = False
-            if reg_token == getattr(settings, 'REGISTRATION_MASTER_TOKEN', None):
-                valid = True
-            else:
-                try:
-                    token_obj = NodeRegistrationToken.objects.get(
-                        organization=org,
-                        token=reg_token,
-                        is_active=True
-                    )
-                    if token_obj.is_valid():
-                        valid = True
-                except NodeRegistrationToken.DoesNotExist:
-                    pass
-            if not valid:
-                # Don't proceed if token is invalid (will likely fail permission check)
-                pass
 
         # Generate and return the node package
         reg_view = NodeRegistrationView()
@@ -197,44 +170,29 @@ class NodeViewSet(viewsets.ModelViewSet):
         If the request has a node attribute (set by NodeAPITokenAuthentication),
         return that node directly without permission checks.
         """
-        logger.info("=== Starting NodeViewSet.get_object ===")
-        logger.info(f"Request path: {self.request.path}")
-        logger.info(f"Request headers: {dict(self.request.headers)}")
-        
         if hasattr(self.request, 'node') and self.request.node:
-            logger.info("Request has node attribute")
-            logger.info(f"Node details: id={self.request.node.id}, name={self.request.node.name}, org={self.request.node.organization.slug}")
-            
             # If authenticated by NodeAPITokenAuthentication, return that node
             # This bypasses permission checks for the node's own resources
             lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
             node_id = self.kwargs.get(lookup_url_kwarg)
-            logger.info(f"Looking up node with ID: {node_id}")
             
             if str(self.request.node.id) == str(node_id):
-                logger.info("Node ID matches request node")
                 # For organization-specific endpoints, verify the node belongs to the correct organization
                 if hasattr(self, 'get_organization'):
                     try:
                         org = self.get_organization()
-                        logger.info(f"View organization: {org.slug}")
                         if self.request.node.organization.id != org.id:
-                            logger.warning(f"Node {node_id} does not belong to organization {org.slug}")
+                            logger.warning("Authenticated node does not belong to requested organization")
                             raise NotFound(f"Node {node_id} not found in organization {org.slug}")
-                        logger.info("Node belongs to correct organization")
-                    except NotFound as e:
-                        logger.error(f"Organization not found: {str(e)}")
+                    except NotFound:
                         raise
                     except Exception as e:
-                        logger.error(f"Error checking organization: {str(e)}")
-                        logger.error(traceback.format_exc())
+                        logger.error("Error checking organization: %s", e)
                         raise
-                logger.info("Returning node object")
                 return self.request.node
             else:
-                logger.warning(f"Node ID mismatch: request.node.id={self.request.node.id}, lookup_id={node_id}")
+                logger.warning("Authenticated node attempted to access a different node")
         
-        logger.info("Falling back to parent's get_object")
         return super().get_object()
 
 class OrgNodeViewSet(OrganizationFilterMixin, NodeViewSet):
@@ -406,7 +364,6 @@ class OrgNodeViewSet(OrganizationFilterMixin, NodeViewSet):
         
         Authentication options:
         - Node API token (for nodes to access their own config)
-        - Registration token (legacy, for bootstrapping)
         - User authentication (for admin access)
         """
         return super().download_config(request, pk, **kwargs)
@@ -439,31 +396,6 @@ class OrgNodeViewSet(OrganizationFilterMixin, NodeViewSet):
         Updates the node's last_checkin timestamp.
         """
         return super().checkin(request, pk)
-    
-    @action(detail=True, methods=['get'], authentication_classes=[NodeAPITokenAuthentication], permission_classes=[AllowAny])
-    def debug_access(self, request, pk=None):
-        """
-        Debug endpoint to test node access.
-        This endpoint will simply return the node details with minimal permission checks.
-        """
-        logger.info("=== Debug access endpoint called ===")
-        logger.info(f"Request path: {request.path}")
-        logger.info(f"Request headers: {dict(request.headers)}")
-        
-        if hasattr(request, 'node'):
-            logger.info(f"Request has node: {request.node.id} (name={request.node.name})")
-        else:
-            logger.info("Request has no node attribute")
-            
-        node = self.get_object()
-        logger.info(f"Retrieved node: {node.id} (name={node.name})")
-        
-        return Response({
-            'success': True,
-            'node_id': node.id,
-            'node_name': node.name,
-            'organization': node.organization.slug
-        })
         
     def get_organization(self):
         """
@@ -557,4 +489,3 @@ class OrgTokenViewSet(OrganizationFilterMixin, TokenViewSet):
             return organization
         except Organization.DoesNotExist:
             raise NotFound(f'Organization with slug {org_slug} does not exist')
-

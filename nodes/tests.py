@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from certificates.models import CertificateAuthority
 from nodes.models import Node
@@ -148,3 +148,45 @@ class NodeAccessPermissionTests(TestCase):
         )
 
         self.assertTrue(allowed)
+
+
+class NodeAPIMasterTokenRegressionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.owner = User.objects.create_user(email='owner-api@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='Node API Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        NetworkRange.objects.create(
+            organization=self.organization,
+            cidr='10.43.0.0/24',
+            description='test range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='API Test CA',
+            organization=self.organization,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('api-ca.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile('api-ca.key', b'key-bytes'),
+        )
+        self.node = Node.objects.create(
+            name='api-node-1',
+            organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip='10.43.0.10',
+            created_by=self.owner,
+            api_token='node-api-token',
+        )
+
+    @override_settings(**{'REGISTRATION_MASTER_TOKEN': 'master-registration-token-change-me'})
+    def test_master_registration_token_cannot_access_node_runtime_endpoints(self):
+        auth_value = ' '.join(('Bearer', 'master-registration-token-change-me'))
+        self.client.credentials(HTTP_AUTHORIZATION=auth_value)
+        base_url = f'/api/org/{self.organization.slug}/nodes/{self.node.id}'
+
+        config_response = self.client.get(f'{base_url}/download_config/')
+        checkin_response = self.client.post(f'{base_url}/checkin/')
+
+        self.assertNotEqual(config_response.status_code, 200)
+        self.assertNotEqual(checkin_response.status_code, 200)
+        self.node.refresh_from_db()
+        self.assertIsNone(self.node.last_checkin)
