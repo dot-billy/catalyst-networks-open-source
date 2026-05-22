@@ -1,0 +1,34 @@
+{% extends "base/base.html" %}
+
+{% block title %}Delete Policy - {{ organization.name }}{% endblock %}
+{% block page_title %}Delete Policy{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Delete Policy</h1>
+            <p class="ui-page-subtitle">This action removes the rule from generated firewall policy.</p>
+        </div>
+    </div>
+
+    <div class="ui-form-section">
+        <p class="text-light-100">
+            <strong>Protocol:</strong> {{ rule.protocol|upper }}
+            {% if rule.protocol == 'tcp' or rule.protocol == 'udp' %}
+                {% if rule.port_min == rule.port_max %}port {{ rule.port_min }}{% else %}ports {{ rule.port_min }}-{{ rule.port_max }}{% endif %}
+            {% endif %}
+        </p>
+        {% if rule.description %}
+        <p class="mt-2 text-light-300">{{ rule.description }}</p>
+        {% endif %}
+        <form method="post" class="mt-6">
+            {% csrf_token %}
+            <div class="ui-action-bar justify-end">
+                <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Cancel</a>
+                <button type="submit" class="btn-enhanced ui-button-danger ui-button-sm">Delete Policy</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

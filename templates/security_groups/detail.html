@@ -19,7 +19,11 @@
             {% url 'security_groups_org:add_rule' slug=organization.slug sg_id=security_group.id as add_rule_url %}
             {% url 'security_groups_org:assign_nodes' slug=organization.slug sg_id=security_group.id as assign_nodes_url %}
             {% url 'security_groups_org:edit' slug=organization.slug pk=security_group.id as edit_policy_url %}
+            {% url 'security_groups_org:policy_list' slug=organization.slug as policy_list_url %}
+            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_rule_url %}
             {% include "components/button.html" with text="Add Rule" href=add_rule_url variant="primary" size="sm" %}
+            {% include "components/button.html" with text="New Source Policy" href=create_policy_rule_url variant="secondary" size="sm" %}
+            {% include "components/button.html" with text="All Policies" href=policy_list_url variant="ghost" size="sm" %}
             {% include "components/button.html" with text="Assign Nodes" href=assign_nodes_url variant="secondary" size="sm" %}
             {% include "components/button.html" with text="Edit Policy" href=edit_policy_url variant="ghost" size="sm" %}
             {% endif %}
@@ -284,4 +288,4 @@
         });
     });
 </script>
-{% endblock %} 
+{% endblock %}

@@ -20,6 +20,7 @@ from django.core.exceptions import PermissionDenied
 from django.contrib import messages
 from django.urls import reverse
 from django.utils.translation import gettext as _
+from django.db.models import Q
 # from organizations.decorators import organization_owner_or_admin_required
 from organizations.mixins import OrganizationFilterMixin
 
@@ -619,6 +620,258 @@ def org_assign_nodes(request, slug, sg_id):
     }
     
     return render(request, 'security_groups/org_assign_nodes.html', context)
+
+
+def _policy_form_choices(org):
+    """Shared choices for source and destination policy selectors."""
+    from nodes.models import Node
+
+    return {
+        'all_groups': SecurityGroup.objects.filter(organization=org).order_by('name'),
+        'all_nodes': Node.objects.filter(organization=org).order_by('name'),
+    }
+
+
+def _apply_policy_fields(rule, org, post):
+    """Apply protocol, port, description, and destination fields to a rule."""
+    from nodes.models import Node
+
+    protocol = post.get('protocol')
+    port = post.get('port')
+    port_min_raw = post.get('port_min') or port
+    port_max_raw = post.get('port_max') or port
+    description = post.get('description', '')
+
+    if protocol not in {choice[0] for choice in FirewallRule.PROTOCOL_CHOICES}:
+        return False, 'Choose a protocol.'
+
+    rule.protocol = protocol
+    rule.description = description
+
+    if protocol in ('tcp', 'udp'):
+        try:
+            port_min = int(port_min_raw) if port_min_raw else None
+            port_max = int(port_max_raw) if port_max_raw else port_min
+        except ValueError:
+            return False, 'Ports must be numeric.'
+        if port_min is None:
+            return False, 'A port is required for TCP and UDP rules.'
+        if port_min < 1 or port_max > 65535 or port_min > port_max:
+            return False, 'Ports must be between 1 and 65535, with the minimum no greater than the maximum.'
+        rule.port_min = port_min
+        rule.port_max = port_max
+    else:
+        rule.port_min = None
+        rule.port_max = None
+
+    dest_type = post.get('dest_type')
+    dest_group_id = post.get('dest_group')
+    dest_node_id = post.get('dest_node')
+    if dest_type == 'group' and dest_group_id:
+        try:
+            rule.security_group = SecurityGroup.objects.get(id=dest_group_id, organization=org)
+            rule.node = None
+        except SecurityGroup.DoesNotExist:
+            return False, 'Destination group not found in this organization.'
+    elif dest_type == 'host' and dest_node_id:
+        try:
+            rule.node = Node.objects.get(id=dest_node_id, organization=org)
+            rule.security_group = None
+        except Node.DoesNotExist:
+            return False, 'Destination host not found in this organization.'
+    else:
+        return False, 'Choose a destination group or host.'
+
+    return True, None
+
+
+def _apply_policy_source(rule, org, post):
+    """Apply a source group or source host to a saved rule."""
+    from nodes.models import Node
+
+    source_type = post.get('source_type')
+    source_group_ids = post.getlist('source_group')
+    source_node_id = post.get('source_node')
+
+    if source_type == 'group' and source_group_ids:
+        valid_ids = list(
+            SecurityGroup.objects.filter(
+                id__in=source_group_ids,
+                organization=org,
+            ).values_list('id', flat=True)
+        )
+        if not valid_ids:
+            return False, 'Source group not found in this organization.'
+        rule.source_cidr = ''
+        rule.save()
+        rule.source_groups.set(valid_ids)
+        rule.source_nodes.clear()
+        return True, None
+
+    if source_type == 'host' and source_node_id:
+        try:
+            node = Node.objects.get(id=source_node_id, organization=org)
+        except Node.DoesNotExist:
+            return False, 'Source host not found in this organization.'
+        rule.source_cidr = ''
+        rule.save()
+        rule.source_groups.clear()
+        rule.source_nodes.set([node.id])
+        return True, None
+
+    return False, 'Choose a source group or host.'
+
+
+@login_required
+def org_policy_list(request, slug):
+    """List source-to-destination firewall policies for an organization."""
+    org = check_org_access(request.user, organization_slug=slug)
+
+    rules = (
+        FirewallRule.objects.filter(
+            Q(security_group__organization=org) | Q(node__organization=org)
+        )
+        .select_related('security_group', 'node')
+        .prefetch_related('source_groups', 'source_nodes')
+        .order_by('-created_at')
+    )
+
+    search_query = request.GET.get('search', '').strip()
+    if search_query:
+        rules = rules.filter(description__icontains=search_query)
+
+    context = {
+        'organization': org,
+        'rules': rules,
+        'search_query': search_query,
+        'user_role': get_org_role(request.user, org),
+    }
+    return render(request, 'security_groups/org_policy_list.html', context)
+
+
+@login_required
+def org_policy_create(request, slug):
+    """Create a source-to-destination firewall policy."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+
+    error_message = None
+    if request.method == 'POST':
+        rule = FirewallRule()
+        ok, error_message = _apply_policy_fields(rule, org, request.POST)
+        if ok:
+            rule.save()
+            ok, error_message = _apply_policy_source(rule, org, request.POST)
+            if ok:
+                messages.success(request, 'Policy created.')
+                return redirect('security_groups_org:policy_list', slug=slug)
+            rule.delete()
+
+    prefill_source_group_ids = []
+    prefill_source_node_id = None
+    prefill_dest_group_id = None
+    prefill_dest_node_id = None
+    if request.method == 'GET':
+        try:
+            source_group_id = int(request.GET.get('source_group', '') or 0) or None
+            if source_group_id and SecurityGroup.objects.filter(id=source_group_id, organization=org).exists():
+                prefill_source_group_ids = [source_group_id]
+        except ValueError:
+            pass
+        try:
+            dest_group_id = int(request.GET.get('dest_group', '') or 0) or None
+            if dest_group_id and SecurityGroup.objects.filter(id=dest_group_id, organization=org).exists():
+                prefill_dest_group_id = dest_group_id
+        except ValueError:
+            pass
+        from nodes.models import Node
+        try:
+            source_node_id = int(request.GET.get('source_node', '') or 0) or None
+            if source_node_id and Node.objects.filter(id=source_node_id, organization=org).exists():
+                prefill_source_node_id = source_node_id
+        except ValueError:
+            pass
+        try:
+            dest_node_id = int(request.GET.get('dest_node', '') or 0) or None
+            if dest_node_id and Node.objects.filter(id=dest_node_id, organization=org).exists():
+                prefill_dest_node_id = dest_node_id
+        except ValueError:
+            pass
+
+    context = {
+        'organization': org,
+        'rule': None,
+        'error_message': error_message,
+        'default_source_type': 'host' if prefill_source_node_id else request.POST.get('source_type') or 'group',
+        'default_dest_type': 'host' if prefill_dest_node_id else request.POST.get('dest_type') or 'group',
+        'selected_source_group_ids': prefill_source_group_ids,
+        'selected_source_node_id': prefill_source_node_id,
+        'selected_dest_group_id': prefill_dest_group_id,
+        'selected_dest_node_id': prefill_dest_node_id,
+        **_policy_form_choices(org),
+    }
+    return render(request, 'security_groups/org_policy_form.html', context)
+
+
+@login_required
+def org_policy_edit(request, slug, rule_id):
+    """Edit an existing source-to-destination firewall policy."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    rule = get_object_or_404(
+        FirewallRule.objects.filter(
+            Q(security_group__organization=org) | Q(node__organization=org)
+        ),
+        id=rule_id,
+    )
+
+    error_message = None
+    if request.method == 'POST':
+        ok, error_message = _apply_policy_fields(rule, org, request.POST)
+        if ok:
+            rule.save()
+            ok, error_message = _apply_policy_source(rule, org, request.POST)
+            if ok:
+                messages.success(request, 'Policy updated.')
+                return redirect('security_groups_org:policy_list', slug=slug)
+
+    selected_source_group_ids = list(rule.source_groups.values_list('id', flat=True))
+    selected_source_node_id = rule.source_nodes.values_list('id', flat=True).first()
+    context = {
+        'organization': org,
+        'rule': rule,
+        'error_message': error_message,
+        'selected_source_group_ids': selected_source_group_ids,
+        'selected_source_node_id': selected_source_node_id,
+        'selected_dest_group_id': rule.security_group_id,
+        'selected_dest_node_id': rule.node_id,
+        'default_source_type': 'group' if selected_source_group_ids else 'host' if selected_source_node_id else 'group',
+        'default_dest_type': 'group' if rule.security_group_id else 'host',
+        **_policy_form_choices(org),
+    }
+    return render(request, 'security_groups/org_policy_form.html', context)
+
+
+@login_required
+def org_policy_delete(request, slug, rule_id):
+    """Delete a source-to-destination firewall policy."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    rule = get_object_or_404(
+        FirewallRule.objects.filter(
+            Q(security_group__organization=org) | Q(node__organization=org)
+        ),
+        id=rule_id,
+    )
+
+    if request.method == 'POST':
+        rule.delete()
+        messages.success(request, 'Policy deleted.')
+        return redirect('security_groups_org:policy_list', slug=slug)
+
+    return render(
+        request,
+        'security_groups/org_policy_delete.html',
+        {'organization': org, 'rule': rule},
+    )
+
 
 @login_required
 def org_unassign_node(request, slug, sg_id, node_id):

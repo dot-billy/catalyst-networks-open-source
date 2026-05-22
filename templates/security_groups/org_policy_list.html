@@ -1,0 +1,99 @@
+{% extends "base/base.html" %}
+
+{% block title %}Policies - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Policies{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Policies</h1>
+            <p class="ui-page-subtitle">Each policy allows a source group or host to reach a destination group or host over a specific protocol and port.</p>
+        </div>
+        <div class="ui-page-actions">
+            {% if user_role == 'owner' or user_role == 'admin' %}
+            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% include "components/button.html" with text="Create Policy" href=create_policy_url variant="primary" size="sm" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ui-toolbar">
+        <p class="ui-toolbar-title">Policy index</p>
+        <form method="get" class="ui-search">
+            <input type="text" name="search" id="search" value="{{ search_query }}" placeholder="Search by description">
+            {% include "components/button.html" with text="Search" type="submit" variant="secondary" size="sm" %}
+        </form>
+    </div>
+
+    {% if rules %}
+    <div class="ui-list">
+        {% for rule in rules %}
+        <div class="ui-list-item">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap text-sm">
+                        <span class="ui-badge ui-badge-muted">Source</span>
+                        {% if rule.source_groups.exists %}
+                            {% for group in rule.source_groups.all %}
+                            <span class="ui-badge ui-badge-primary">{{ group.name }}</span>
+                            {% endfor %}
+                        {% elif rule.source_nodes.exists %}
+                            {% for node in rule.source_nodes.all %}
+                            <span class="ui-badge ui-badge-primary">host: {{ node.name }}</span>
+                            {% endfor %}
+                        {% elif rule.source_cidr %}
+                            <span class="ui-badge ui-badge-primary">{{ rule.source_cidr }}</span>
+                        {% else %}
+                            <span class="ui-badge ui-badge-muted">Unspecified</span>
+                        {% endif %}
+                        <span class="text-light-300">-&gt;</span>
+                        <span class="ui-badge ui-badge-muted">Destination</span>
+                        {% if rule.security_group %}
+                            <span class="ui-badge ui-badge-primary">{{ rule.security_group.name }}</span>
+                        {% elif rule.node %}
+                            <span class="ui-badge ui-badge-primary">host: {{ rule.node.name }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="mt-2 text-sm text-light-100">
+                        <span class="font-semibold">{{ rule.protocol|upper }}</span>
+                        {% if rule.protocol == 'tcp' or rule.protocol == 'udp' %}
+                            {% if rule.port_min == rule.port_max %}port {{ rule.port_min }}{% else %}ports {{ rule.port_min }}-{{ rule.port_max }}{% endif %}
+                        {% endif %}
+                    </p>
+                    {% if rule.description %}
+                    <p class="mt-1 text-sm text-light-300">{{ rule.description }}</p>
+                    {% endif %}
+                    <div class="ui-meta-list">
+                        <span>Created {{ rule.created_at|date:"F j, Y" }}</span>
+                    </div>
+                </div>
+                {% if user_role == 'owner' or user_role == 'admin' %}
+                <div class="ui-inline-actions">
+                    {% url 'security_groups_org:policy_edit' slug=organization.slug rule_id=rule.id as edit_url %}
+                    {% include "components/button.html" with text="Edit" href=edit_url variant="secondary" size="sm" %}
+                    {% url 'security_groups_org:policy_delete' slug=organization.slug rule_id=rule.id as delete_url %}
+                    {% include "components/button.html" with text="Delete" href=delete_url variant="secondary" size="sm" %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ui-empty-state">
+        <svg class="mx-auto h-12 w-12 text-primary-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <h3>No policies yet</h3>
+        <p>Create your first policy to allow a source group or host to reach a destination over a specific protocol and port.</p>
+        {% if user_role == 'owner' or user_role == 'admin' %}
+        <div class="mt-6">
+            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% include "components/button.html" with text="Create First Policy" href=create_policy_url variant="primary" size="lg" %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
