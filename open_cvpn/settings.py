@@ -31,7 +31,7 @@ if not _secret_key:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured(
         "DJANGO_SECRET_KEY environment variable is not set. "
-        "Generate one with: python -c \"from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())\""
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(50))\""
     )
 SECRET_KEY = _secret_key
 
