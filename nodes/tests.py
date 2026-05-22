@@ -83,6 +83,25 @@ class NodeAccessPermissionTests(TestCase):
 
         self.assertTrue(allowed)
 
+    def test_permission_logging_does_not_include_authorization_header_value(self):
+        permission = NodeAccessPermission()
+        supplied_secret = 'node-runtime-token-change-me'
+        request = self.factory.get(
+            '/api/org/node-org/nodes/1/download_config/',
+            HTTP_AUTHORIZATION=' '.join(('Bearer', supplied_secret)),
+        )
+        request.user = self.outsider
+        request.node = self.node
+        request.parser_context = {'kwargs': {'slug': self.organization.slug}}
+
+        with self.assertLogs('nodes.permissions', level='INFO') as captured:
+            allowed = permission.has_permission(request, SimpleNamespace(action='download_config'))
+
+        self.assertTrue(allowed)
+        log_output = '\n'.join(captured.output)
+        self.assertNotIn(supplied_secret, log_output)
+        self.assertNotIn('Authorization', log_output)
+
     def test_member_lacks_manager_permission_for_org_node_action(self):
         permission = NodeAccessPermission()
         request = self._request('/api/org/node-org/nodes/1/', user=self.member)
@@ -186,7 +205,7 @@ class NodeAPIMasterTokenRegressionTests(TestCase):
         config_response = self.client.get(f'{base_url}/download_config/')
         checkin_response = self.client.post(f'{base_url}/checkin/')
 
-        self.assertNotEqual(config_response.status_code, 200)
-        self.assertNotEqual(checkin_response.status_code, 200)
+        self.assertIn(config_response.status_code, (401, 403))
+        self.assertIn(checkin_response.status_code, (401, 403))
         self.node.refresh_from_db()
         self.assertIsNone(self.node.last_checkin)
