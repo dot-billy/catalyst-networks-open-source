@@ -6,13 +6,21 @@ from django.core.files import File
 import os
 import subprocess
 import logging
-import ipaddress
 from .models import Node
 
 logger = logging.getLogger(__name__)
 
 # How many days before expiration to renew certificates
 RENEWAL_WINDOW_DAYS = getattr(settings, 'CERTIFICATE_RENEWAL_WINDOW_DAYS', 14)
+
+
+def _expected_certificate_groups(node):
+    group_names = []
+    if node.is_lighthouse:
+        group_names.append('lighthouse')
+    group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+    return sorted(set(group_names))
+
 
 @shared_task
 def renew_expiring_certificates():
@@ -111,15 +119,19 @@ def renew_node_certificate(node_id):
         key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
         
         # Generate new certificate using nebula-cert
-        subprocess.run([
+        cmd = [
             'nebula-cert', 'sign',
             '-name', name,
             '-ip', f'{ip}/24',
             '-ca-crt', ca.ca_cert.path,
             '-ca-key', ca.ca_key.path,
             '-out-crt', cert_path,
-            '-out-key', key_path
-        ], check=True)
+            '-out-key', key_path,
+        ]
+        group_names = _expected_certificate_groups(node)
+        if group_names:
+            cmd.extend(['-groups', ','.join(group_names)])
+        subprocess.run(cmd, check=True)
         
         # Keep track of old paths to clean up
         old_cert_path = node.cert_path.path if node.cert_path else None
@@ -207,7 +219,7 @@ def renew_node_certificate(node_id):
                     try:
                         send_webhook_notification.delay(webhook.id, payload)
                     except Exception as e:
-                        logger.error(f"Failed to queue webhook notification to {webhook.url}: {str(e)}")
+                        logger.error("Failed to queue webhook notification %s: %s", webhook.id, e)
         except Exception as e:
             logger.error(f"Failed to send webhook notifications: {str(e)}")
         
@@ -235,4 +247,75 @@ def renew_node_certificate(node_id):
         return {
             'success': False,
             'error': f"Unexpected error: {str(e)}"
-        } 
+        }
+
+
+@shared_task
+def cleanup_stale_cert_files():
+    """
+    Remove delivered certificate/key files and orphaned files from storage.
+
+    Nodes that have checked in and whose local certificate artifacts are older
+    than CERT_FILE_RETENTION_DAYS no longer need server-side copies for normal
+    operation. Missing files are regenerated on demand when a node downloads
+    config again.
+    """
+    retention_days = getattr(settings, 'CERT_FILE_RETENTION_DAYS', 30)
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    results = {'cleaned_nodes': 0, 'orphaned_files_removed': 0, 'errors': []}
+
+    stale_nodes = Node.objects.filter(
+        created_at__lt=cutoff,
+        last_checkin__isnull=False,
+    ).exclude(cert_path='').exclude(cert_path__isnull=True)
+
+    for node in stale_nodes:
+        try:
+            for field in (node.cert_path, node.key_path):
+                if not field:
+                    continue
+                try:
+                    path = field.path
+                    if os.path.isfile(path):
+                        os.remove(path)
+                except (ValueError, OSError) as exc:
+                    logger.warning("Could not remove certificate file for node %s: %s", node.id, exc)
+            Node.objects.filter(pk=node.pk).update(cert_path='', key_path='')
+            results['cleaned_nodes'] += 1
+        except Exception as exc:
+            results['errors'].append(f"Node {node.id}: {exc}")
+
+    certs_root = os.path.join(settings.CERT_STORAGE_ROOT, 'certs')
+    if os.path.isdir(certs_root):
+        known_paths = set()
+        for node in Node.objects.exclude(cert_path='').exclude(cert_path__isnull=True):
+            try:
+                known_paths.add(os.path.abspath(node.cert_path.path))
+            except (ValueError, Exception):
+                pass
+        for node in Node.objects.exclude(key_path='').exclude(key_path__isnull=True):
+            try:
+                known_paths.add(os.path.abspath(node.key_path.path))
+            except (ValueError, Exception):
+                pass
+
+        for dirpath, _dirnames, filenames in os.walk(certs_root):
+            for filename in filenames:
+                if not filename.endswith(('.crt', '.key')):
+                    continue
+                path = os.path.abspath(os.path.join(dirpath, filename))
+                if path in known_paths:
+                    continue
+                try:
+                    os.remove(path)
+                    results['orphaned_files_removed'] += 1
+                except OSError as exc:
+                    results['errors'].append(f"Orphan {path}: {exc}")
+
+    logger.info(
+        "Cert cleanup: %s nodes cleaned, %s orphaned files removed, %s errors",
+        results['cleaned_nodes'],
+        results['orphaned_files_removed'],
+        len(results['errors']),
+    )
+    return results

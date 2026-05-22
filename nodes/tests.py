@@ -1,15 +1,23 @@
+import io
+import json
+import subprocess
+import zipfile
 from types import SimpleNamespace
+from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 
 from certificates.models import CertificateAuthority
+from nodes.api_registration import NodeRegistrationView
 from nodes.models import Node
 from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
+from security_groups.models import SecurityGroup
 
 User = get_user_model()
 
@@ -209,3 +217,144 @@ class NodeAPIMasterTokenRegressionTests(TestCase):
         self.assertIn(checkin_response.status_code, (401, 403))
         self.node.refresh_from_db()
         self.assertIsNone(self.node.last_checkin)
+
+
+class NodeCertificateReliabilityTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.raise_request_exception = False
+        self.owner = User.objects.create_user(email='cert-owner@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='Certificate Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        NetworkRange.objects.create(
+            organization=self.organization,
+            cidr='10.44.0.0/24',
+            description='test range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='Certificate Test CA',
+            organization=self.organization,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('cert-ca.crt', b'ca-certificate-bytes'),
+            ca_key=SimpleUploadedFile('cert-ca.key', b'ca-key-bytes'),
+        )
+        self.node = Node.objects.create(
+            name='cert-node-1',
+            organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip='10.44.0.10',
+            created_by=self.owner,
+            api_token='node-cert-token',
+        )
+        self.config_url = f'/api/org/{self.organization.slug}/nodes/{self.node.id}/download_config/'
+
+    def _save_node_certificate_files(self, cert_data=b'node-certificate-bytes', key_data=b'node-key-bytes'):
+        self.node.cert_path.save('node-current.crt', ContentFile(cert_data), save=False)
+        self.node.key_path.save('node-current.key', ContentFile(key_data), save=False)
+        self.node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
+        self.node.save(update_fields=['cert_path', 'key_path', 'cert_expiration'])
+        self.node.refresh_from_db()
+
+    def test_config_download_regenerates_missing_certificate_files(self):
+        self.node.cert_path = 'certs/missing.crt'
+        self.node.key_path = 'certs/missing.key'
+        self.node.save(update_fields=['cert_path', 'key_path'])
+
+        def regenerate(_view, node):
+            node.cert_path.save('node-regenerated.crt', ContentFile(b'regenerated-cert'), save=False)
+            node.key_path.save('node-regenerated.key', ContentFile(b'regenerated-key'), save=False)
+            node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
+            node.save(update_fields=['cert_path', 'key_path', 'cert_expiration'])
+
+        with mock.patch.object(NodeRegistrationView, '_generate_certificate', autospec=True, side_effect=regenerate):
+            response = self.client.get(
+                self.config_url,
+                HTTP_AUTHORIZATION=' '.join(('Bearer', self.node.api_token)),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.node.refresh_from_db()
+        self.assertTrue(self.node.cert_path)
+        self.assertTrue(self.node.key_path)
+        self.assertIn('regenerated-cert', response.json()['certificate'])
+        self.assertIn('regenerated-key', response.json()['key'])
+
+    def test_zip_config_bundle_uses_stable_certificate_names(self):
+        self._save_node_certificate_files()
+
+        with mock.patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False, create=True):
+            response = NodeRegistrationView()._prepare_node_package(self.node, 'zip')
+
+        bundle = b''.join(response.streaming_content)
+        with zipfile.ZipFile(io.BytesIO(bundle)) as zip_file:
+            names = zip_file.namelist()
+
+        self.assertIn('node.crt', names)
+        self.assertIn('node.key', names)
+
+    def test_certificate_regenerates_when_security_group_claims_are_stale(self):
+        self._save_node_certificate_files()
+        security_group = SecurityGroup.objects.create(
+            name='web',
+            organization=self.organization,
+            description='web nodes',
+        )
+        self.node.security_groups.add(security_group)
+
+        cert_info = {
+            'details': {
+                'groups': [],
+                'networks': ['10.44.0.10/24'],
+            }
+        }
+        completed = subprocess.CompletedProcess(
+            args=['nebula-cert', 'print'],
+            returncode=0,
+            stdout=json.dumps(cert_info),
+            stderr='',
+        )
+
+        with mock.patch('nodes.api_registration.subprocess.run', return_value=completed):
+            needs_regeneration = NodeRegistrationView()._certificate_needs_regeneration(self.node)
+
+        self.assertTrue(needs_regeneration)
+
+    def test_certificate_renewal_includes_security_group_claims(self):
+        security_group = SecurityGroup.objects.create(
+            name='web',
+            organization=self.organization,
+            description='web nodes',
+        )
+        self.node.security_groups.add(security_group)
+
+        sign_commands = []
+
+        def run_nebula_cert(command, *args, **kwargs):
+            if command[:2] == ['nebula-cert', 'sign']:
+                sign_commands.append(command)
+                cert_path = command[command.index('-out-crt') + 1]
+                key_path = command[command.index('-out-key') + 1]
+                with open(cert_path, 'wb') as cert_file:
+                    cert_file.write(b'renewed-cert')
+                with open(key_path, 'wb') as key_file:
+                    key_file.write(b'renewed-key')
+                return subprocess.CompletedProcess(command, 0, '', '')
+            if command[:2] == ['nebula-cert', 'print']:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    'Not After: 2030-01-01 00:00:00 +0000 UTC\n',
+                    '',
+                )
+            raise AssertionError(f'Unexpected command: {command}')
+
+        with mock.patch('nodes.tasks.subprocess.run', side_effect=run_nebula_cert):
+            from nodes.tasks import renew_node_certificate
+
+            result = renew_node_certificate(self.node.id)
+
+        self.assertTrue(result['success'])
+        self.assertTrue(sign_commands)
+        sign_command = sign_commands[0]
+        self.assertIn('-groups', sign_command)
+        self.assertEqual(sign_command[sign_command.index('-groups') + 1], 'web')
