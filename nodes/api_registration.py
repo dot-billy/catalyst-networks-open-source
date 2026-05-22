@@ -31,12 +31,11 @@ from .serializers import AuthenticatedNodeRegistrationSerializer
 
 logger = logging.getLogger(__name__)
 AUTH_SCHEME = 'Bearer'
-REG_FIELD = 'registration_' + 'token'
 
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
     node_name = serializers.CharField(max_length=255)
-    locals()[REG_FIELD] = serializers.CharField(max_length=255)
+    registration_token = serializers.CharField(max_length=255)
     is_lighthouse = serializers.BooleanField(default=False)
     public_ip = serializers.CharField(max_length=255, required=False)
     fqdn = serializers.CharField(max_length=255, required=False)
@@ -313,7 +312,7 @@ class NodeRegistrationView(APIView):
             except:
                 pass
         
-        has_reg_credential = REG_FIELD in request.data
+        has_reg_credential = 'registration_token' in request.data
         
         if is_authenticated and not has_reg_credential:
             # Authenticated flow (desktop app) - no token required
@@ -406,7 +405,7 @@ class NodeRegistrationView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Extract validated data
-        token_value = serializer.validated_data[REG_FIELD]
+        token_value = serializer.validated_data['registration_token']
         node_name = serializer.validated_data['node_name']
         is_lighthouse = serializer.validated_data['is_lighthouse']
         public_ip = serializer.validated_data.get('public_ip')

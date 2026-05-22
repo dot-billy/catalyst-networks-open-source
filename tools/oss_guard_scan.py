@@ -51,6 +51,10 @@ SAFE_PLUMBING_PATTERNS = re.compile(
     r")\s*(#.*)?$"
 )
 
+SAFE_SERIALIZER_FIELD_PATTERN = re.compile(
+    r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*serializers\.[A-Za-z0-9_]+Field\("
+)
+
 ENV_ASSIGNMENT_PATTERN = re.compile(r"\b[A-Z0-9_]+\s*=\s*([^\s`,;]+)")
 
 ALLOWLIST = {
@@ -138,6 +142,8 @@ def is_safe_placeholder_secret(line: str) -> bool:
     if not stripped or stripped.startswith("#"):
         return True
     if SAFE_PLUMBING_PATTERNS.search(stripped):
+        return True
+    if SAFE_SERIALIZER_FIELD_PATTERN.search(stripped):
         return True
     if "=" not in stripped:
         return False
