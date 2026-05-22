@@ -61,7 +61,7 @@ services:
 
   celery-beat:
     build: .
-    command: celery -A open_cvpn beat -l INFO
+    command: celery -A open_cvpn beat -l INFO --schedule /tmp/celerybeat-schedule
     volumes:
       - .:/app
       - certs_data:/data/certs
