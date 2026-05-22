@@ -106,13 +106,28 @@ def login_view(request):
             user = authenticate(request, email=email, password=password)
             
             if user is not None:
-                login(request, user)
-                next_url = request.GET.get('next', '')
-                if not next_url or not url_has_allowed_host_and_scheme(
-                    next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-                ):
-                    next_url = 'dashboard:dashboard'
-                return redirect(next_url)
+                # Check if user belongs to an org with enforced SSO
+                from sso.models import SSOConfiguration
+                enforced_orgs = SSOConfiguration.objects.filter(
+                    is_enabled=True,
+                    enforce_sso=True,
+                    organization__memberships__user=user,
+                ).select_related('organization')
+                if enforced_orgs.exists():
+                    org = enforced_orgs.first().organization
+                    messages.error(
+                        request,
+                        f'Your organization "{org.name}" requires SSO login. '
+                        f'Use the SSO login with organization slug "{org.slug}".'
+                    )
+                else:
+                    login(request, user)
+                    next_url = request.GET.get('next', '')
+                    if not next_url or not url_has_allowed_host_and_scheme(
+                        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+                    ):
+                        next_url = 'dashboard:dashboard'
+                    return redirect(next_url)
             else:
                 messages.error(request, 'Invalid email or password.')
     else:

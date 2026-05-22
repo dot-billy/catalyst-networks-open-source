@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     'dashboard',
     'health',
     'docs.apps.DocsConfig',
+    'sso.apps.SsoConfig',
 ]
 
 MIDDLEWARE = [
@@ -217,9 +218,9 @@ if BASE_URL.endswith('/'):
 PROJECT_METADATA = {
     "NAME": "catalyst_network",
     "URL": BASE_URL,
-    "DESCRIPTION": "catalyst_network is an advanced mesh network management system for enterprise-grade network security.",
+    "DESCRIPTION": "catalyst_network is an advanced mesh network management system for secure network operations.",
     "IMAGE": "",  # Temporarily disabled to avoid static file errors
-    "KEYWORDS": "vpn management, nebula vpn, network security, enterprise security, node management",
+    "KEYWORDS": "vpn management, nebula vpn, network security, node management",
     "CONTACT_EMAIL": DEFAULT_FROM_EMAIL,
 }
 

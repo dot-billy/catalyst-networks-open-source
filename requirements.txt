@@ -23,3 +23,4 @@ whitenoise>=6.8.0
 Pillow>=12.1.1
 qrcode[pil]>=7.4.2
 django-axes>=6.1.0
+python3-saml>=1.16.0

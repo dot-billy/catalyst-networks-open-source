@@ -17,6 +17,8 @@
                 </span>
                 {% if organization.role == 'owner' or organization.role == 'admin' %}
                 {% include "components/button.html" with text="Invite Member" href=invite_member_url variant="secondary" size="sm" %}
+                {% url 'sso:configure' organization.slug as sso_configure_url %}
+                {% include "components/button.html" with text="SSO Settings" href=sso_configure_url variant="secondary" size="sm" %}
                 {% endif %}
                 {% if organization.role == 'owner' %}
                 {% include "components/button.html" with text="Delete Organization" variant="danger" size="sm" onclick="document.getElementById('delete-modal').classList.remove('hidden')" %}

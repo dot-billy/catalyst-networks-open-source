@@ -65,6 +65,19 @@
                 Don&apos;t have an account?
                 <a href="{% url 'register' %}" class="font-medium text-primary-400 hover:text-primary-500">Create one</a>
             </p>
+
+            <!-- SSO Login -->
+            <div class="mt-6 pt-6 border-t border-gray-700">
+                <p class="text-center text-sm text-gray-500 mb-3">Sign in with your organization&apos;s SSO</p>
+                <form method="GET" action="" id="sso-form" class="flex gap-2" x-data="{ slug: '' }">
+                    <input type="text" x-model="slug" placeholder="Organization slug" class="catalyst-input flex-1 text-sm">
+                    <button type="button"
+                            @click="if (slug) window.location.href = '/sso/' + slug + '/login/'"
+                            class="btn-catalyst btn-catalyst-secondary text-sm whitespace-nowrap">
+                        SSO Login
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 {% endblock %} 

@@ -95,6 +95,9 @@ urlpatterns = [
 
     # Docs URLs
     path('docs/', include('docs.urls')),  # Removed namespace temporarily to fix loading issues
+
+    # SSO / SAML
+    path('sso/', include('sso.urls')),
 ]
 
 # Serve media files in development

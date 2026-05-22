@@ -1,0 +1,129 @@
+{% extends "base/base.html" %}
+
+{% block title %}SSO Configuration - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}SSO Configuration{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+    <!-- Header -->
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">SSO / SAML Configuration</h1>
+            <p class="ui-page-subtitle">Configure SAML 2.0 Single Sign-On for {{ organization.name }}.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-catalyst btn-catalyst-secondary text-sm">
+                Back to Organization
+            </a>
+        </div>
+    </div>
+
+    <!-- SSO Status -->
+    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-light-100">SSO Status</h2>
+                <p class="text-sm text-gray-400 mt-1">
+                    {% if sso_config.is_enabled %}
+                        SSO is <span class="text-green-400 font-medium">enabled</span>.
+                        {% if sso_config.enforce_sso %}
+                            Password login is <span class="text-yellow-400 font-medium">disabled</span> for this organization.
+                        {% endif %}
+                    {% else %}
+                        SSO is <span class="text-gray-500 font-medium">disabled</span>. Configure your IdP settings below, then enable.
+                    {% endif %}
+                </p>
+            </div>
+            <form method="POST" action="{% url 'sso:toggle' organization.slug %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn-catalyst {% if sso_config.is_enabled %}btn-catalyst-danger{% else %}btn-catalyst-gradient{% endif %} text-sm">
+                    {% if sso_config.is_enabled %}Disable SSO{% else %}Enable SSO{% endif %}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Service Provider Info (for IdP configuration) -->
+    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
+        <h2 class="text-lg font-semibold text-light-100 mb-4">Service Provider Details</h2>
+        <p class="text-sm text-gray-400 mb-4">Use these values when configuring your Identity Provider (Okta, Azure AD, Google Workspace, etc.).</p>
+
+        <div class="space-y-3">
+            <div>
+                <label class="catalyst-label">SP Entity ID / Audience URI</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" readonly value="{{ sp_metadata_url }}" class="catalyst-input font-mono text-sm flex-1">
+                    <button type="button" onclick="navigator.clipboard.writeText('{{ sp_metadata_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
+                </div>
+            </div>
+            <div>
+                <label class="catalyst-label">ACS URL (Reply URL)</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" readonly value="{{ sp_acs_url }}" class="catalyst-input font-mono text-sm flex-1">
+                    <button type="button" onclick="navigator.clipboard.writeText('{{ sp_acs_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
+                </div>
+            </div>
+            <div>
+                <label class="catalyst-label">SP Metadata XML</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" readonly value="{{ sp_metadata_url }}" class="catalyst-input font-mono text-sm flex-1">
+                    <a href="{% url 'sso:metadata' organization.slug %}" target="_blank" class="btn-catalyst btn-catalyst-secondary text-sm">View XML</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IdP Configuration Form -->
+    <form method="POST" action="{% url 'sso:configure' organization.slug %}">
+        {% csrf_token %}
+
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6">
+            <h2 class="text-lg font-semibold text-light-100">Identity Provider Settings</h2>
+
+            {% include "components/enhanced_form_field.html" with field=form.idp_entity_id label="IdP Entity ID (Issuer)" help_text="The unique identifier for your Identity Provider. Usually a URL." %}
+            {% include "components/enhanced_form_field.html" with field=form.idp_sso_url label="IdP SSO URL" help_text="The URL where SAML authentication requests are sent." %}
+            {% include "components/enhanced_form_field.html" with field=form.idp_slo_url label="IdP SLO URL (Optional)" help_text="Single Logout URL. Leave blank if your IdP doesn't support it." %}
+            {% include "components/enhanced_form_field.html" with field=form.idp_x509_cert label="IdP X.509 Certificate" field_type="textarea" help_text="Paste the certificate contents only (without BEGIN/END CERTIFICATE lines)." %}
+        </div>
+
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6 mt-6">
+            <h2 class="text-lg font-semibold text-light-100">Attribute Mapping</h2>
+            <p class="text-sm text-gray-400">Map SAML attributes from your IdP to user fields. The defaults work with most providers (Azure AD, Okta, Google).</p>
+
+            {% include "components/enhanced_form_field.html" with field=form.attribute_email label="Email Attribute" %}
+            {% include "components/enhanced_form_field.html" with field=form.attribute_first_name label="First Name Attribute" %}
+            {% include "components/enhanced_form_field.html" with field=form.attribute_last_name label="Last Name Attribute" %}
+        </div>
+
+        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6 mt-6">
+            <h2 class="text-lg font-semibold text-light-100">Provisioning & Access</h2>
+
+            {% include "components/enhanced_form_field.html" with field=form.auto_create_users label="Auto-create users on first SSO login" field_type="checkbox" help_text="When enabled, users who authenticate via SSO will automatically get an account and membership in this organization." %}
+            {% include "components/enhanced_form_field.html" with field=form.default_role label="Default Role for New Users" field_type="select" help_text="Role assigned to auto-provisioned users." %}
+            {% include "components/enhanced_form_field.html" with field=form.enforce_sso label="Enforce SSO (disable password login)" field_type="checkbox" help_text="When enabled, organization members must use SSO. Password login will be blocked for users who belong to this organization." %}
+        </div>
+
+        <div class="mt-6 flex items-center gap-4">
+            <button type="submit" class="btn-catalyst btn-catalyst-gradient">
+                Save Configuration
+            </button>
+            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-catalyst btn-catalyst-secondary">
+                Cancel
+            </a>
+        </div>
+    </form>
+
+    <!-- SSO Login URL -->
+    {% if sso_config.is_enabled %}
+    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
+        <h2 class="text-lg font-semibold text-light-100 mb-2">SSO Login URL</h2>
+        <p class="text-sm text-gray-400 mb-3">Share this URL with your team members to sign in via SSO.</p>
+        <div class="flex items-center gap-2">
+            <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}/sso/{{ organization.slug }}/login/" class="catalyst-input font-mono text-sm flex-1">
+            <button type="button" onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}/sso/{{ organization.slug }}/login/')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
