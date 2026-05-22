@@ -152,18 +152,21 @@ if os.getenv('AWS_STORAGE_BUCKET_NAME'):
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
-    
+
     # S3 settings
-    AWS_DEFAULT_ACL = None
-    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    _s3_default_acl = None
+    _s3_object_parameters = {'CacheControl': 'max-age=86400'}
+    AWS_DEFAULT_ACL = _s3_default_acl
+    AWS_S3_OBJECT_PARAMETERS = _s3_object_parameters
 
     # Construct the domain for media files
     if AWS_S3_ENDPOINT_URL:  # For MinIO or other S3-compatible services
         domain = AWS_S3_ENDPOINT_URL.split('//')[-1]
-        AWS_S3_CUSTOM_DOMAIN = f'{domain}/{AWS_STORAGE_BUCKET_NAME}'
+        _s3_custom_domain = f'{domain}/{AWS_STORAGE_BUCKET_NAME}'
     else:  # For AWS S3
-        AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-    
+        _s3_custom_domain = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_S3_CUSTOM_DOMAIN = _s3_custom_domain
+
     # Update media URL only (STATIC_URL stays as '/static/' for WhiteNoise)
     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
 
@@ -262,4 +265,3 @@ CACHES = {
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
-

@@ -58,7 +58,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party apps
     'rest_framework',
     'rest_framework_simplejwt',
@@ -139,7 +139,7 @@ else:
             "POSTGRES_HOST not set! Database operations will fail.\n"
             "Set POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD environment variables."
         )
-    
+
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -227,6 +227,19 @@ PROJECT_METADATA = {
     "KEYWORDS": "vpn management, nebula vpn, network security, node management",
     "CONTACT_EMAIL": DEFAULT_FROM_EMAIL,
 }
+
+
+def _read_project_version():
+    try:
+        import tomllib
+
+        with open(BASE_DIR / "pyproject.toml", "rb") as pyproject_file:
+            return tomllib.load(pyproject_file)["project"]["version"]
+    except (FileNotFoundError, KeyError, OSError, tomllib.TOMLDecodeError):
+        return "dev"
+
+
+STATIC_ASSET_VERSION = os.getenv("STATIC_ASSET_VERSION") or _read_project_version()
 
 # Update email subject prefix with branding
 EMAIL_SUBJECT_PREFIX = "[catalyst_network] "
