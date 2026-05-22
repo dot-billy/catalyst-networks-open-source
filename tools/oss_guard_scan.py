@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -57,6 +58,14 @@ ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
     "docs/superpowers/plans/2026-05-22-oss-customer-app-migration.md",
     "tools/oss_guard_scan.py",
+}
+
+EXPECTED_BINARY_HASHES = {
+    "static/fonts/inter/Inter-Bold.woff2": "98c66e49c299c5675426bf5562b1876c2b6b9bd8dc90a8922a49703ed4848813",
+    "static/fonts/inter/Inter-Light.woff2": "6ee2d73d12b1510a6927dbe48ded74323a562197b60bc391ccf918d17e4d0074",
+    "static/fonts/inter/Inter-Medium.woff2": "7e80d9f65861ee6836a0081d4e75d88fb8789e5651d05edbc49640442a9610ee",
+    "static/fonts/inter/Inter-Regular.woff2": "338239f6b590b8ced3bf857654d32da3fd3663294cd3003651ed57aa3abd7aa1",
+    "static/fonts/inter/Inter-SemiBold.woff2": "5013f48d77ab627b1db7c2415914284ef09abc3f60a8e0d0d8f3cd1bfebefb5e",
 }
 
 
@@ -173,6 +182,12 @@ def scan_file(path: Path) -> list[str]:
     try:
         text = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
+        expected_hash = EXPECTED_BINARY_HASHES.get(relative)
+        if expected_hash:
+            actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            if actual_hash != expected_hash:
+                findings.append(f"{relative}: binary asset hash mismatch")
+            return findings
         findings.append(f"{relative}: non-text file needs manual review")
         return findings
     for lineno, line in enumerate(text.splitlines(), 1):
