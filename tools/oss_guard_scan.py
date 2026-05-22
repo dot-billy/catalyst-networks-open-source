@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 BLOCKED_PATHS = re.compile(
-    r"(^|/)(licensing|plans|support|analytics|certs_data|media|staticfiles|"
+    r"(^|/)(\.git|licensing|plans|support|analytics|certs_data|media|staticfiles|"
     r"\.superpowers|\.claude|\.cursor|\.codex|\.agents|venv|__pycache__)(/|$)|"
     r"(^|/)(\.env(\..*)?|cookies\.txt|debug\.log|build_deploy_logs\.json|celerybeat-schedule)$"
 )
@@ -64,8 +64,40 @@ def changed_files() -> list[Path]:
     return [ROOT / name for name in names]
 
 
+def relative_name(path: Path) -> str | None:
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return None
+
+
+def expand_path(path: Path) -> tuple[list[Path], list[str]]:
+    relative = relative_name(path)
+    if relative is None:
+        return [], [f"{path}: outside repository"]
+    if BLOCKED_PATHS.search(relative):
+        return [path], []
+    if not path.is_dir():
+        return [path], []
+
+    paths: list[Path] = []
+    for child in path.iterdir():
+        child_relative = relative_name(child)
+        if child_relative is None:
+            continue
+        if child.is_dir() and BLOCKED_PATHS.search(child_relative):
+            continue
+        child_paths, child_findings = expand_path(child)
+        paths.extend(child_paths)
+        if child_findings:
+            return paths, child_findings
+    return paths, []
+
+
 def scan_file(path: Path) -> list[str]:
-    relative = path.relative_to(ROOT).as_posix()
+    relative = relative_name(path)
+    if relative is None:
+        return [f"{path}: outside repository"]
     findings: list[str] = []
     if relative in ALLOWLIST:
         return findings
@@ -91,10 +123,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*", help="Optional paths to scan. Defaults to changed files.")
     args = parser.parse_args()
-    paths = [ROOT / p for p in args.paths] if args.paths else changed_files()
+    paths = [Path(p).resolve() for p in args.paths] if args.paths else changed_files()
     findings: list[str] = []
     for path in paths:
-        findings.extend(scan_file(path.resolve()))
+        expanded_paths, path_findings = expand_path(path.resolve())
+        findings.extend(path_findings)
+        for expanded_path in expanded_paths:
+            findings.extend(scan_file(expanded_path.resolve()))
     if findings:
         print("OSS guard scan failed:")
         for finding in findings:
