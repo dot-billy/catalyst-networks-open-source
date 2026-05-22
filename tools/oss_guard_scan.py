@@ -51,6 +51,8 @@ SAFE_PLUMBING_PATTERNS = re.compile(
     r")\s*(#.*)?$"
 )
 
+ENV_ASSIGNMENT_PATTERN = re.compile(r"\b[A-Z0-9_]+\s*=\s*([^\s`,;]+)")
+
 ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
     "docs/superpowers/plans/2026-05-22-oss-customer-app-migration.md",
@@ -112,16 +114,8 @@ def expand_path(path: Path) -> tuple[list[Path], list[str]]:
     return paths, []
 
 
-def is_safe_placeholder_secret(line: str) -> bool:
-    stripped = line.strip()
-    if not stripped or stripped.startswith("#"):
-        return True
-    if SAFE_PLUMBING_PATTERNS.search(stripped):
-        return True
-    if "=" not in stripped:
-        return False
-    _, value = stripped.split("=", 1)
-    value = value.split("#", 1)[0].strip().strip("\"'")
+def is_safe_placeholder_value(value: str) -> bool:
+    value = value.strip().strip("\"'")
     lowered = value.lower()
     compact = re.sub(r"[^A-Za-z0-9]", "", value)
     character_classes = sum(
@@ -137,6 +131,22 @@ def is_safe_placeholder_secret(line: str) -> bool:
         token in lowered for token in SAFE_PLACEHOLDER_VALUES
     )
     return lowered in SAFE_EXACT_VALUES or placeholderish
+
+
+def is_safe_placeholder_secret(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return True
+    if SAFE_PLUMBING_PATTERNS.search(stripped):
+        return True
+    if "=" not in stripped:
+        return False
+    if not re.match(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
+        values = ENV_ASSIGNMENT_PATTERN.findall(stripped)
+        return bool(values) and all(is_safe_placeholder_value(value) for value in values)
+    _, value = stripped.split("=", 1)
+    value = value.split("#", 1)[0].strip().strip("\"'")
+    return is_safe_placeholder_value(value)
 
 
 def scan_file(path: Path) -> list[str]:
