@@ -120,8 +120,8 @@
         <h2 class="text-lg font-semibold text-light-100 mb-2">SSO Login URL</h2>
         <p class="text-sm text-gray-400 mb-3">Share this URL with your team members to sign in via SSO.</p>
         <div class="flex items-center gap-2">
-            <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}/sso/{{ organization.slug }}/login/" class="catalyst-input font-mono text-sm flex-1">
-            <button type="button" onclick="navigator.clipboard.writeText('{{ request.scheme }}://{{ request.get_host }}/sso/{{ organization.slug }}/login/')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
+            <input type="text" readonly value="{{ sp_login_url }}" class="catalyst-input font-mono text-sm flex-1">
+            <button type="button" onclick="navigator.clipboard.writeText('{{ sp_login_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
         </div>
     </div>
     {% endif %}

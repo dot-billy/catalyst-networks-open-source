@@ -17,6 +17,7 @@ from .serializers import (
 )
 from .forms import UserLoginForm, UserRegistrationForm
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
+from sso.policies import get_enforced_sso_config, get_password_login_block_message
 
 User = get_user_model()
 
@@ -106,20 +107,9 @@ def login_view(request):
             user = authenticate(request, email=email, password=password)
             
             if user is not None:
-                # Check if user belongs to an org with enforced SSO
-                from sso.models import SSOConfiguration
-                enforced_orgs = SSOConfiguration.objects.filter(
-                    is_enabled=True,
-                    enforce_sso=True,
-                    organization__memberships__user=user,
-                ).select_related('organization')
-                if enforced_orgs.exists():
-                    org = enforced_orgs.first().organization
-                    messages.error(
-                        request,
-                        f'Your organization "{org.name}" requires SSO login. '
-                        f'Use the SSO login with organization slug "{org.slug}".'
-                    )
+                enforced_sso_config = get_enforced_sso_config(user)
+                if enforced_sso_config:
+                    messages.error(request, get_password_login_block_message(enforced_sso_config))
                 else:
                     login(request, user)
                     next_url = request.GET.get('next', '')

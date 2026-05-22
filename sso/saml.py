@@ -1,6 +1,7 @@
 """SAML2 helper functions using python3-saml."""
 
 from django.conf import settings
+from django.urls import reverse
 from onelogin.saml2.auth import OneLogin_Saml2_Auth
 
 
@@ -16,10 +17,20 @@ def prepare_django_request(request):
     }
 
 
+def get_sp_urls(sso_config):
+    """Return canonical Service Provider URLs for an organization's SAML routes."""
+    base_url = settings.BASE_URL.rstrip('/')
+    slug = sso_config.organization.slug
+    return {
+        'metadata': f'{base_url}{reverse("sso:metadata", kwargs={"slug": slug})}',
+        'acs': f'{base_url}{reverse("sso:acs", kwargs={"slug": slug})}',
+        'login': f'{base_url}{reverse("sso:login", kwargs={"slug": slug})}',
+    }
+
+
 def get_saml_settings(sso_config, request):
     """Build python3-saml settings dict from an SSOConfiguration model instance."""
-    base_url = settings.BASE_URL.rstrip('/')
-    org_slug = sso_config.organization.slug
+    sp_urls = get_sp_urls(sso_config)
     idp_settings = {
         'entityId': sso_config.idp_entity_id,
         'singleSignOnService': {
@@ -38,9 +49,9 @@ def get_saml_settings(sso_config, request):
         'strict': True,
         'debug': settings.DEBUG,
         'sp': {
-            'entityId': f'{base_url}/sso/{org_slug}/metadata/',
+            'entityId': sp_urls['metadata'],
             'assertionConsumerService': {
-                'url': f'{base_url}/sso/{org_slug}/acs/',
+                'url': sp_urls['acs'],
                 'binding': 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
             },
             'NameIDFormat': 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',

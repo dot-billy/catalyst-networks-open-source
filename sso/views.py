@@ -12,7 +12,7 @@ from organizations.models import Membership, Organization
 
 from .forms import SSOConfigurationForm
 from .models import SSOConfiguration
-from .saml import init_saml_auth
+from .saml import get_sp_urls, init_saml_auth
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -73,6 +73,7 @@ def sso_acs(request, slug):
 
     # Find or create the user
     user = User.objects.filter(email=email).first()
+    created_user = False
 
     if user is None:
         if not sso_config.auto_create_users:
@@ -84,7 +85,12 @@ def sso_acs(request, slug):
             first_name=first_name or '',
             last_name=last_name or '',
         )
+        created_user = True
         logger.info('Auto-provisioned user %s via SSO for org %s', email, org.slug)
+    elif not Membership.objects.filter(user=user, organization=org).exists():
+        logger.info('Rejected SSO login for existing non-member %s via org %s', email, org.slug)
+        messages.error(request, 'SSO authentication failed. Contact your administrator.')
+        return redirect('login')
 
     # Update name if provided and user doesn't have one
     if first_name and not user.first_name:
@@ -96,12 +102,12 @@ def sso_acs(request, slug):
         return redirect('login')
     user.save()
 
-    # Ensure user is a member of the organization
-    Membership.objects.get_or_create(
-        user=user,
-        organization=org,
-        defaults={'role': sso_config.default_role},
-    )
+    if created_user:
+        Membership.objects.create(
+            user=user,
+            organization=org,
+            role=sso_config.default_role,
+        )
 
     # Log the user in (specify backend to avoid ambiguity with axes)
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
@@ -160,16 +166,15 @@ def sso_configure(request, slug):
     else:
         form = SSOConfigurationForm(instance=sso_config)
 
-    # Build SP metadata URL for display
-    sp_metadata_url = f'{request.scheme}://{request.get_host()}/sso/{slug}/metadata/'
-    sp_acs_url = f'{request.scheme}://{request.get_host()}/sso/{slug}/acs/'
+    sp_urls = get_sp_urls(sso_config)
 
     return render(request, 'sso/configure.html', {
         'organization': org,
         'form': form,
         'sso_config': sso_config,
-        'sp_metadata_url': sp_metadata_url,
-        'sp_acs_url': sp_acs_url,
+        'sp_metadata_url': sp_urls['metadata'],
+        'sp_acs_url': sp_urls['acs'],
+        'sp_login_url': sp_urls['login'],
         'membership': membership,
     })
 
