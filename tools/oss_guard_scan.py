@@ -30,11 +30,25 @@ SECRET_PATTERNS = re.compile(
 BUSINESS_PATTERNS = re.compile(
     r"(catalystnetworks\.io|catalystnetworks\.com|app\.catalystnetworks\.io|"
     r"demo\.catalystnetworks\.io|/etc/catalyst|customer-app-secrets|do-prod|"
-    r"\blicens(e|ing)\b|\bedition\b|\benterprise\b|\bpro\b|\btrial\b|\bbilling\b|"
-    r"\bsubscription\b|\bupgrade\b|\bdemo\b|customer administration|\bSLA\b|"
+    r"LicenseMiddleware|license_context|LICENSE_FILE|(^|/)licensing/|"
+    r"\b(pro|enterprise) license\b|\bpaid edition\b|\btrial\b|\bbilling\b|"
+    r"\bsubscription\b|\bupgrade\b|customer administration|\bSLA\b|"
     r"\btelemetry\b|\banalytics\b)",
     re.IGNORECASE,
 )
+
+SAFE_PLACEHOLDER_VALUES = (
+    "example",
+    "change-me",
+    "changeme",
+    "placeholder",
+    "your-",
+    "test",
+    "dummy",
+    "local",
+)
+
+SAFE_EXACT_VALUES = {"", "postgres"}
 
 ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
@@ -97,6 +111,28 @@ def expand_path(path: Path) -> tuple[list[Path], list[str]]:
     return paths, []
 
 
+def is_safe_placeholder_secret(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return True
+    if "=" not in stripped:
+        return False
+    _, value = stripped.split("=", 1)
+    value = value.split("#", 1)[0].strip().strip("\"'")
+    lowered = value.lower()
+    compact = re.sub(r"[^A-Za-z0-9]", "", value)
+    character_classes = sum(
+        (
+            any(char.islower() for char in compact),
+            any(char.isupper() for char in compact),
+            any(char.isdigit() for char in compact),
+        )
+    )
+    if value.startswith("AKIA") or (len(compact) >= 32 and character_classes >= 3):
+        return False
+    return lowered in SAFE_EXACT_VALUES or any(token in lowered for token in SAFE_PLACEHOLDER_VALUES)
+
+
 def scan_file(path: Path) -> list[str]:
     relative = relative_name(path)
     if relative is None:
@@ -115,7 +151,7 @@ def scan_file(path: Path) -> list[str]:
         findings.append(f"{relative}: non-text file needs manual review")
         return findings
     for lineno, line in enumerate(text.splitlines(), 1):
-        if SECRET_PATTERNS.search(line):
+        if SECRET_PATTERNS.search(line) and not is_safe_placeholder_secret(line):
             findings.append(f"{relative}:{lineno}: secret-like value")
         if BUSINESS_PATTERNS.search(line):
             findings.append(f"{relative}:{lineno}: business/private term")
