@@ -29,6 +29,7 @@ from organizations.models import NetworkRange, Organization
 
 from .models import Node, NodeRegistrationToken
 from .serializers import AuthenticatedNodeRegistrationSerializer
+from .tasks import parse_nebula_cert_expiration
 
 logger = logging.getLogger(__name__)
 AUTH_SCHEME = 'Bearer'
@@ -668,28 +669,11 @@ class NodeRegistrationView(APIView):
             '-path', cert_path
         ], capture_output=True, text=True, check=True)
         
-        # Parse expiration from output and convert to Django-compatible format
-        for line in result.stdout.split('\n'):
-            if 'Not After' in line:
-                exp_str = line.split(': ')[1].strip()
-                # Convert the date format to Django-compatible format
-                try:
-                    # Parse the date format: "2025-05-03 11:54:04 +0000 UTC"
-                    # Convert to YYYY-MM-DD HH:MM:SS format
-                    exp_parts = exp_str.split()
-                    if len(exp_parts) >= 3:
-                        # Extract date and time, ignore timezone for now
-                        date_part = exp_parts[0]
-                        time_part = exp_parts[1]
-                        node.cert_expiration = f"{date_part}T{time_part}Z"
-                    else:
-                        # Fallback: use current time + 1 year
-                        node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                except Exception as e:
-                    logger.warning("Error parsing certificate expiration for node %s: %s", node.id, e)
-                    # Fallback: use current time + 1 year
-                    node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
-                break
+        try:
+            node.cert_expiration = parse_nebula_cert_expiration(result.stdout)
+        except ValueError as e:
+            logger.warning("Error parsing certificate expiration for node %s: %s", node.id, e)
+            node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
         
         node.save()
 

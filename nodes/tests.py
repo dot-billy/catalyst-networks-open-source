@@ -1,7 +1,9 @@
 import io
 import json
+import os
 import subprocess
 import zipfile
+from datetime import timezone as datetime_timezone
 from types import SimpleNamespace
 from unittest import mock
 
@@ -255,6 +257,19 @@ class NodeCertificateReliabilityTests(TestCase):
         self.node.save(update_fields=['cert_path', 'key_path', 'cert_expiration'])
         self.node.refresh_from_db()
 
+    def _mark_node_checked_in_before_retention(self, days=60):
+        old_time = timezone.now() - timezone.timedelta(days=days)
+        Node.objects.filter(pk=self.node.pk).update(
+            created_at=old_time,
+            last_checkin=timezone.now(),
+        )
+        self.node.refresh_from_db()
+
+    def _set_certificate_file_mtime(self, modified_at):
+        timestamp = modified_at.timestamp()
+        os.utime(self.node.cert_path.path, (timestamp, timestamp))
+        os.utime(self.node.key_path.path, (timestamp, timestamp))
+
     def test_config_download_regenerates_missing_certificate_files(self):
         self.node.cert_path = 'certs/missing.crt'
         self.node.key_path = 'certs/missing.key'
@@ -358,3 +373,73 @@ class NodeCertificateReliabilityTests(TestCase):
         sign_command = sign_commands[0]
         self.assertIn('-groups', sign_command)
         self.assertEqual(sign_command[sign_command.index('-groups') + 1], 'web')
+
+    def test_cleanup_stale_cert_files_keeps_fresh_files_for_old_checked_in_node(self):
+        self._save_node_certificate_files()
+        self._mark_node_checked_in_before_retention()
+        self._set_certificate_file_mtime(timezone.now())
+        original_cert_name = self.node.cert_path.name
+        original_key_name = self.node.key_path.name
+        cert_path = self.node.cert_path.path
+        key_path = self.node.key_path.path
+
+        from nodes.tasks import cleanup_stale_cert_files
+
+        result = cleanup_stale_cert_files()
+
+        self.assertEqual(result['cleaned_nodes'], 0)
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.cert_path.name, original_cert_name)
+        self.assertEqual(self.node.key_path.name, original_key_name)
+        self.assertTrue(os.path.exists(cert_path))
+        self.assertTrue(os.path.exists(key_path))
+
+    def test_cleanup_stale_cert_files_clears_fields_after_old_files_are_deleted(self):
+        self._save_node_certificate_files()
+        self._mark_node_checked_in_before_retention()
+        old_file_time = timezone.now() - timezone.timedelta(days=60)
+        self._set_certificate_file_mtime(old_file_time)
+        cert_path = self.node.cert_path.path
+        key_path = self.node.key_path.path
+
+        from nodes.tasks import cleanup_stale_cert_files
+
+        result = cleanup_stale_cert_files()
+
+        self.assertEqual(result['cleaned_nodes'], 1)
+        self.node.refresh_from_db()
+        self.assertFalse(self.node.cert_path)
+        self.assertFalse(self.node.key_path)
+        self.assertFalse(os.path.exists(cert_path))
+        self.assertFalse(os.path.exists(key_path))
+
+    def test_certificate_renewal_parses_json_expiration(self):
+        json_expiration = '2030-01-01T00:00:00Z'
+
+        def run_nebula_cert(command, *args, **kwargs):
+            if command[:2] == ['nebula-cert', 'sign']:
+                cert_path = command[command.index('-out-crt') + 1]
+                key_path = command[command.index('-out-key') + 1]
+                with open(cert_path, 'wb') as cert_file:
+                    cert_file.write(b'renewed-cert')
+                with open(key_path, 'wb') as key_file:
+                    key_file.write(b'renewed-key')
+                return subprocess.CompletedProcess(command, 0, '', '')
+            if command[:2] == ['nebula-cert', 'print']:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    json.dumps({'details': {'notAfter': json_expiration}}),
+                    '',
+                )
+            raise AssertionError(f'Unexpected command: {command}')
+
+        with mock.patch('nodes.tasks.subprocess.run', side_effect=run_nebula_cert):
+            from nodes.tasks import renew_node_certificate
+
+            result = renew_node_certificate(self.node.id)
+
+        self.assertTrue(result['success'])
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.cert_expiration, timezone.datetime(2030, 1, 1, tzinfo=datetime_timezone.utc))
+        self.assertEqual(result['new_expiration'], self.node.cert_expiration.isoformat())
