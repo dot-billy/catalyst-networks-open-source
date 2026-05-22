@@ -51,10 +51,6 @@ SAFE_PLUMBING_PATTERNS = re.compile(
     r")\s*(#.*)?$"
 )
 
-SAFE_SERIALIZER_FIELD_PATTERN = re.compile(
-    r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*serializers\.[A-Za-z0-9_]+Field\("
-)
-
 ENV_ASSIGNMENT_PATTERN = re.compile(r"\b[A-Z0-9_]+\s*=\s*([^\s`,;]+)")
 
 ALLOWLIST = {
@@ -137,13 +133,20 @@ def is_safe_placeholder_value(value: str) -> bool:
     return lowered in SAFE_EXACT_VALUES or placeholderish
 
 
-def is_safe_placeholder_secret(line: str) -> bool:
+def is_known_safe_secret_like_line(relative: str, stripped: str) -> bool:
+    return (
+        relative == "nodes/api_registration.py"
+        and stripped == "registration_token = serializers.CharField(max_length=255)"
+    )
+
+
+def is_safe_placeholder_secret(line: str, relative: str) -> bool:
     stripped = line.strip()
     if not stripped or stripped.startswith("#"):
         return True
-    if SAFE_PLUMBING_PATTERNS.search(stripped):
+    if is_known_safe_secret_like_line(relative, stripped):
         return True
-    if SAFE_SERIALIZER_FIELD_PATTERN.search(stripped):
+    if SAFE_PLUMBING_PATTERNS.search(stripped):
         return True
     if "=" not in stripped:
         return False
@@ -173,7 +176,7 @@ def scan_file(path: Path) -> list[str]:
         findings.append(f"{relative}: non-text file needs manual review")
         return findings
     for lineno, line in enumerate(text.splitlines(), 1):
-        if SECRET_PATTERNS.search(line) and not is_safe_placeholder_secret(line):
+        if SECRET_PATTERNS.search(line) and not is_safe_placeholder_secret(line, relative):
             findings.append(f"{relative}:{lineno}: secret-like value")
         if BUSINESS_PATTERNS.search(line):
             findings.append(f"{relative}:{lineno}: business/private term")
