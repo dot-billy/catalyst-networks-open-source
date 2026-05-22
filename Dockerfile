@@ -21,6 +21,10 @@ RUN wget -q https://github.com/slackhq/nebula/releases/download/v1.7.2/nebula-li
     chmod +x /usr/local/bin/nebula-cert && \
     rm nebula-linux-amd64.tar.gz nebula
 
+# Install Tailwind CSS standalone CLI
+RUN wget -q https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64 \
+    -O /usr/local/bin/tailwindcss && chmod +x /usr/local/bin/tailwindcss
+
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -41,6 +45,10 @@ COPY users/ users/
 COPY webhooks/ webhooks/
 COPY sso/ sso/
 COPY static/ static/
+
+# Build Tailwind CSS from templates
+COPY tailwind.config.js .
+RUN tailwindcss -i static/css/tailwind-input.css -o static/css/tailwind-output.css --minify
 
 # Create necessary directories
 RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles /data/certs
