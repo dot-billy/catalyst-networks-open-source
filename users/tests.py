@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 
 
@@ -26,7 +26,6 @@ class PublicAuthPageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assert_auth_shell_with_versioned_assets(response)
 
-    @override_settings(AUTHENTICATION_BACKENDS=["axes.backends.AxesBackend"])
     def test_registration_post_with_valid_data_does_not_return_500(self):
         response = self.client.post(
             reverse("register"),
@@ -38,3 +37,4 @@ class PublicAuthPageTests(TestCase):
         )
 
         self.assertNotEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 302)
