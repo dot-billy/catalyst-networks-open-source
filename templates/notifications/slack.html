@@ -1,0 +1,105 @@
+{% extends "base/base.html" %}
+
+{% block title %}Slack Notifications - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}{% if integration.has_webhook_url %}Edit Slack Configuration{% else %}Slack Notifications{% endif %}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">{% if integration.has_webhook_url %}Edit Slack Configuration{% else %}Slack Notifications{% endif %}</h1>
+            <p class="ui-page-subtitle">Manage the Slack delivery channel for {{ organization.name }}.</p>
+        </div>
+    </div>
+
+    <div class="ui-form-section" style="max-width: 760px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <h3 style="margin-bottom: 0;">Slack Integration</h3>
+            <span class="ui-badge {% if integration.active %}ui-badge-success{% elif integration.has_webhook_url %}ui-badge-muted{% else %}ui-badge-warning{% endif %}">
+                {% if integration.active %}Enabled{% elif integration.has_webhook_url %}Disabled{% else %}Not configured{% endif %}
+            </span>
+        </div>
+        <p>
+            {% if integration.has_webhook_url %}
+            A Slack webhook is saved and encrypted. It is not displayed again; paste a new URL only when you want to replace it.
+            {% else %}
+            Add an incoming webhook URL to send selected organization events to Slack.
+            {% endif %}
+        </p>
+
+        <form method="post">
+            {% csrf_token %}
+            {% if integration.has_webhook_url %}
+            <div class="form-group-enhanced">
+                <label class="form-label-enhanced">Saved Webhook</label>
+                <div class="form-input-enhanced" style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--ui-surface-muted, rgba(148, 163, 184, 0.08));">
+                    <span>Encrypted webhook saved</span>
+                    <span class="ui-badge ui-badge-success">Stored</span>
+                </div>
+            </div>
+            {% endif %}
+            <div class="form-group-enhanced">
+                <label class="form-label-enhanced" for="webhook_url">Webhook URL</label>
+                <input
+                    id="webhook_url"
+                    name="webhook_url"
+                    type="url"
+                    class="form-input-enhanced"
+                    placeholder="{% if integration.has_webhook_url %}Paste a new webhook URL to replace the saved one{% else %}https://hooks.slack.com/services/...{% endif %}"
+                    autocomplete="off"
+                >
+                {% if integration.has_webhook_url %}
+                <p style="font-size: 0.85rem; color: var(--ui-text-muted); margin-top: 0.35rem;">Leave this blank to keep the current webhook.</p>
+                {% endif %}
+            </div>
+
+            <label class="ui-selection-row" style="cursor: pointer; margin-top: 1rem;">
+                <input type="checkbox" name="active" {% if integration.active %}checked{% endif %} class="form-checkbox-enhanced" style="margin-top: 2px;">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--ui-text);">Enable Slack notifications</div>
+                    <div style="font-size: 0.85rem; color: var(--ui-text-muted); margin-top: 0.15rem;">Events selected below will post to Slack.</div>
+                </div>
+            </label>
+
+            <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                <div>
+                    <h3 style="margin-bottom: 0.25rem;">Slack Events</h3>
+                    <p style="margin-bottom: 0;">Choose which events post to this Slack channel.</p>
+                </div>
+            </div>
+            <div class="slack-event-groups" style="max-height: 26rem; overflow-y: auto; border: 1px solid var(--ui-border, rgba(148, 163, 184, 0.2)); border-radius: 0.5rem; margin-top: 1rem;">
+                {% for category in event_categories %}
+                <section style="{% if not forloop.first %}border-top: 1px solid var(--ui-border, rgba(148, 163, 184, 0.2));{% endif %}">
+                    <div style="position: sticky; top: 0; z-index: 1; padding: 0.75rem 1rem; background: var(--ui-surface, #0f172a); border-bottom: 1px solid var(--ui-border, rgba(148, 163, 184, 0.2));">
+                        <div style="font-size: 0.85rem; font-weight: 700; color: var(--ui-text); text-transform: uppercase; letter-spacing: 0;">{{ category.name }}</div>
+                    </div>
+                    <div>
+                        {% for event_type in category.events %}
+                        <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; {% if not forloop.last %}border-bottom: 1px solid var(--ui-border-subtle, rgba(148, 163, 184, 0.12));{% endif %}">
+                            <input type="checkbox" name="events" value="{{ event_type.value }}" {% if event_type.value in integration.events %}checked{% endif %} class="form-checkbox-enhanced" style="margin-top: 2px;">
+                            <span style="flex: 1;">
+                                <span style="display: block; font-weight: 600; color: var(--ui-text);">{{ event_type.label }}</span>
+                                <span style="display: block; font-size: 0.85rem; color: var(--ui-text-muted); margin-top: 0.15rem;">{{ event_type.value }}</span>
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endfor %}
+            </div>
+
+            {% if integration.last_delivery_at %}
+            <p style="font-size: 0.85rem; color: var(--ui-text-muted); margin-top: 1rem;">
+                Last Slack delivery: {{ integration.last_delivery_at }}{% if integration.last_delivery_status %} (HTTP {{ integration.last_delivery_status }}){% endif %}
+            </p>
+            {% endif %}
+
+            <div class="ui-action-bar" style="margin-top: 1.5rem;">
+                <button type="submit" name="action" value="save" class="btn-enhanced ui-button-primary">Save Settings</button>
+                <button type="submit" name="action" value="test" class="btn-enhanced ui-button-secondary">Send Test</button>
+                <a href="{% url 'notifications_org:preferences' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">Back to Notifications</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

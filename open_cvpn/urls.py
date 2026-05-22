@@ -89,6 +89,7 @@ urlpatterns = [
     path('organizations/<slug:slug>/certificates/', include(('certificates.urls_org', 'certificates_org'), namespace='certificates_org')),
     path('organizations/<slug:slug>/security-groups/', include(('security_groups.urls_org', 'security_groups_org'), namespace='security_groups_org')),
     path('organizations/<slug:slug>/webhooks/', include(('webhooks.urls_org', 'webhooks_org'), namespace='webhooks_org')),
+    path('organizations/<slug:slug>/notifications/', include(('notifications.urls_org', 'notifications_org'), namespace='notifications_org')),
 
     # Users URLs
     path('api/users/', include('users.urls')),

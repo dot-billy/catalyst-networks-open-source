@@ -1,0 +1,42 @@
+{% extends "base/base.html" %}
+
+{% block title %}Notification Integrations - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Notification Integrations{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Notification Integrations</h1>
+            <p class="ui-page-subtitle">Manage organization delivery channels for {{ organization.name }}.</p>
+        </div>
+    </div>
+
+    <div class="ui-form-section" style="max-width: 760px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <div>
+                <h3 style="margin-bottom: 0.35rem;">Slack</h3>
+                {% if slack_integration and slack_integration.has_webhook_url %}
+                <p style="margin-bottom: 0;">Slack is configured for this organization. Manage webhook, enabled state, and subscribed events.</p>
+                {% else %}
+                <p style="margin-bottom: 0;">Send selected organization events to a Slack channel with an encrypted incoming webhook.</p>
+                {% endif %}
+            </div>
+            {% if slack_integration and slack_integration.has_webhook_url %}
+            <span class="ui-badge {% if slack_integration.active %}ui-badge-success{% else %}ui-badge-muted{% endif %}">
+                {% if slack_integration.active %}Enabled{% else %}Disabled{% endif %}
+            </span>
+            {% else %}
+            <span class="ui-badge ui-badge-warning">Not configured</span>
+            {% endif %}
+        </div>
+
+        <div class="ui-action-bar" style="margin-top: 1.25rem;">
+            <a href="{% url 'notifications_org:slack' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">
+                {% if slack_integration and slack_integration.has_webhook_url %}Edit Slack Configuration{% else %}Configure Slack{% endif %}
+            </a>
+            <a href="{% url 'organizations:detail' slug=organization.slug %}" class="btn-enhanced ui-button-secondary">Back to Organization</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

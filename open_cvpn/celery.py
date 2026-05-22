@@ -16,6 +16,7 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Load task modules from all registered Django app configs.
 app.autodiscover_tasks()
+# Notification delivery tasks are loaded through Django app autodiscovery.
 
 # Configure periodic tasks
 app.conf.beat_schedule = {

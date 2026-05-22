@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'nodes',
     'security_groups',
     'webhooks',
+    'notifications',
     'dashboard',
     'health',
     'docs.apps.DocsConfig',
@@ -213,6 +214,9 @@ if MAILGUN_API_KEY and MAILGUN_DOMAIN:
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 if BASE_URL.endswith('/'):
     BASE_URL = BASE_URL[:-1]
+
+# Fernet key used to encrypt notification integration secrets.
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY')
 
 # Project Metadata - catalyst_network branding
 PROJECT_METADATA = {

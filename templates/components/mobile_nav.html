@@ -111,6 +111,14 @@
                         </svg>
                         <span class="mobile-text-base">Certificates</span>
                     </a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'notifications_org:preferences' slug=organization.slug %}" class="mobile-menu-link touch-target {% if '/notifications/' in request.path %}active{% endif %}">
+                        <svg class="mobile-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                        </svg>
+                        <span class="mobile-text-base">Notifications</span>
+                    </a>
+                    {% endif %}
                 </div>
                 {% endif %}
 
