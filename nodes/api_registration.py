@@ -907,14 +907,22 @@ class NodeRegistrationView(APIView):
                 # 4. Skip rule if no source is specified (avoid empty host field)
                 
                 # Check if rule has source groups
-                group_names = list(rule.source_groups.values_list('name', flat=True))
+                group_names = list(
+                    rule.source_groups.filter(
+                        organization=node.organization,
+                    ).values_list('name', flat=True)
+                )
                 if group_names:
                     # Use the 'groups' field when source groups are specified
                     firewall_rule['groups'] = group_names
                     # Do NOT add an empty 'host' field when groups are specified
                 else:
                     # Only handle host field if no source groups were specified
-                    node_ips = list(rule.source_nodes.values_list('nebula_ip', flat=True))
+                    node_ips = list(
+                        rule.source_nodes.filter(
+                            organization=node.organization,
+                        ).values_list('nebula_ip', flat=True)
+                    )
                     if node_ips:
                         firewall_rule['host'] = node_ips if len(node_ips) > 1 else node_ips[0]
                     # Source CIDR

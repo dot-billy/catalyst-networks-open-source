@@ -21,7 +21,7 @@ from nodes.api_registration import NodeRegistrationView
 from nodes.models import Node
 from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
-from security_groups.models import SecurityGroup
+from security_groups.models import FirewallRule, SecurityGroup
 
 User = get_user_model()
 
@@ -366,6 +366,99 @@ class NodeCertificateReliabilityTests(TestCase):
 
         self.assertIn('node.crt', names)
         self.assertIn('node.key', names)
+
+    def _create_foreign_source_node(self):
+        foreign_owner = User.objects.create_user(email='foreign-cert-owner@example.com', password='testpass')
+        foreign_org = Organization.objects.create(name='Foreign Cert Org', created_by=foreign_owner)
+        Membership.objects.create(user=foreign_owner, organization=foreign_org, role='owner')
+        NetworkRange.objects.create(
+            organization=foreign_org,
+            cidr='10.45.0.0/24',
+            description='foreign range',
+        )
+        foreign_ca = CertificateAuthority.objects.create(
+            name='Foreign Certificate Test CA',
+            organization=foreign_org,
+            created_by=foreign_owner,
+            ca_cert=SimpleUploadedFile('foreign-cert-ca.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile('foreign-cert-ca.key', b'key-bytes'),
+        )
+        foreign_group = SecurityGroup.objects.create(
+            name='foreign-web',
+            organization=foreign_org,
+            description='foreign source group',
+        )
+        foreign_node = Node.objects.create(
+            name='foreign-source-node',
+            organization=foreign_org,
+            certificate_authority=foreign_ca,
+            nebula_ip='10.45.0.10',
+            created_by=foreign_owner,
+        )
+        return foreign_group, foreign_node
+
+    def test_config_filters_foreign_legacy_source_groups(self):
+        self._save_node_certificate_files()
+        destination_group = SecurityGroup.objects.create(
+            name='app',
+            organization=self.organization,
+            description='app nodes',
+        )
+        local_source_group = SecurityGroup.objects.create(
+            name='local-web',
+            organization=self.organization,
+            description='local source group',
+        )
+        foreign_group, _foreign_node = self._create_foreign_source_node()
+        self.node.security_groups.add(destination_group)
+        rule = FirewallRule.objects.create(
+            security_group=destination_group,
+            protocol='tcp',
+            port_min=443,
+            port_max=443,
+            description='mixed source groups',
+        )
+        rule.source_groups.set([local_source_group, foreign_group])
+
+        with mock.patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False, create=True):
+            response = NodeRegistrationView()._prepare_node_package(self.node, 'json')
+
+        config_yaml = response.data['config_yaml']
+        self.assertIn('local-web', config_yaml)
+        self.assertNotIn('foreign-web', config_yaml)
+
+    def test_config_filters_foreign_legacy_source_nodes(self):
+        self._save_node_certificate_files()
+        destination_group = SecurityGroup.objects.create(
+            name='db',
+            organization=self.organization,
+            description='db nodes',
+        )
+        local_source_node = Node.objects.create(
+            name='local-source-node',
+            organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip='10.44.0.11',
+            created_by=self.owner,
+        )
+        _foreign_group, foreign_node = self._create_foreign_source_node()
+        self.node.security_groups.add(destination_group)
+        rule = FirewallRule.objects.create(
+            security_group=destination_group,
+            protocol='tcp',
+            port_min=5432,
+            port_max=5432,
+            description='mixed source nodes',
+        )
+        rule.source_nodes.set([local_source_node, foreign_node])
+
+        with mock.patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False, create=True):
+            response = NodeRegistrationView()._prepare_node_package(self.node, 'json')
+
+        config_yaml = response.data['config_yaml']
+        self.assertIn(local_source_node.nebula_ip, config_yaml)
+        self.assertNotIn(foreign_node.name, config_yaml)
+        self.assertNotIn(foreign_node.nebula_ip, config_yaml)
 
     def test_certificate_regenerates_when_security_group_claims_are_stale(self):
         self._save_node_certificate_files()
