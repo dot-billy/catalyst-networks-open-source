@@ -16,11 +16,13 @@ BLOCKED_PATHS = re.compile(
 )
 
 SECRET_PATTERNS = re.compile(
-    r"(SECRET_KEY\s*=|JWT_SECRET_KEY\s*=|FIELD_ENCRYPTION_KEY\s*=|AWS_ACCESS_KEY_ID\s*=|"
-    r"AWS_SECRET_ACCESS_KEY\s*=|POSTGRES_PASSWORD\s*=|REDIS_PASSWORD\s*=|MAILGUN_API_KEY\s*=|"
+    r"(SECRET_KEY\s*=|JWT_SECRET_KEY\s*=|FIELD_ENCRYPTION_KEY\s*=|AWS_[A-Z0-9_]*\s*=|"
+    r"POSTGRES_PASSWORD\s*=|REDIS_PASSWORD\s*=|MAILGUN_API_KEY\s*=|"
     r"SUPPORT_GATEWAY_SECRET\s*=|DATABASE_URL\s*=|BEGIN [A-Z ]*PRIVATE KEY|"
-    r"Authorization:\s*Bearer|x-api-key\s*[:=]|sessionid\s*=|csrftoken\s*=|"
-    r"NEBULA_(API_PASSWORD|REGISTRATION_TOKEN|REFRESH_TOKEN)\s*=)",
+    r"[A-Z0-9_]*PRIVATE_KEY\s*=|Authorization:\s*Bearer|\bBearer\s+|x-api-key\s*[:=]|"
+    r"sessionid\s*=|csrftoken\s*=|"
+    r"NEBULA_(API_PASSWORD|REGISTRATION_TOKEN|REFRESH_TOKEN)\s*=|"
+    r"[A-Z0-9_]*REGISTRATION[A-Z0-9_]*TOKEN\s*=)",
     re.IGNORECASE,
 )
 
@@ -41,31 +43,24 @@ ALLOWLIST = {
 
 
 def changed_files() -> list[Path]:
-    proc = subprocess.run(
+    names: dict[str, None] = {}
+    commands = (
         ["git", "diff", "--name-only", "--cached", "HEAD"],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        capture_output=True,
+        ["git", "diff", "--name-only"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
     )
-    names = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    if not names:
+    for command in commands:
         proc = subprocess.run(
-            ["git", "diff", "--name-only", "HEAD"],
+            command,
             cwd=ROOT,
             check=True,
             text=True,
             capture_output=True,
         )
-        names = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-        proc = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            cwd=ROOT,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-        names.extend(line.strip() for line in proc.stdout.splitlines() if line.strip())
+        for line in proc.stdout.splitlines():
+            name = line.strip()
+            if name:
+                names[name] = None
     return [ROOT / name for name in names]
 
 
