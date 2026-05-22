@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from rest_framework.test import APIRequestFactory
 
@@ -12,6 +12,20 @@ from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
 
 User = get_user_model()
+
+
+class NodeOrgUrlExportTests(SimpleTestCase):
+    def test_bulk_org_views_are_reexported_for_urlconf(self):
+        from nodes import views
+
+        for view_name in (
+            'org_node_export_csv',
+            'org_node_import_csv',
+            'org_node_bulk_delete',
+            'org_node_bulk_renew',
+        ):
+            with self.subTest(view_name=view_name):
+                self.assertTrue(callable(getattr(views, view_name, None)))
 
 
 class NodeAccessPermissionTests(TestCase):

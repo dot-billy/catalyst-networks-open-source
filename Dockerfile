@@ -37,14 +37,14 @@ COPY webhooks/ webhooks/
 COPY static/ static/
 
 # Create necessary directories
-RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles
+RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles /data/certs
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=open_cvpn.settings
 
 # Create a non-root user
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN useradd -m appuser && chown -R appuser:appuser /app /data/certs
 USER appuser
 
 # Default command (can be overridden)
