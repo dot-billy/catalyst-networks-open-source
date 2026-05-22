@@ -11,7 +11,9 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory
 
 from certificates.models import CertificateAuthority
@@ -221,6 +223,64 @@ class NodeAPIMasterTokenRegressionTests(TestCase):
         self.assertIsNone(self.node.last_checkin)
 
 
+class NodeRegistrationNotificationTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(email='registration-owner@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='Registration Notify Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        NetworkRange.objects.create(
+            organization=self.organization,
+            cidr='10.54.0.0/24',
+            description='registration range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='Registration Test CA',
+            organization=self.organization,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('registration-ca.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile('registration-ca.key', b'key-bytes'),
+        )
+
+    @mock.patch('notifications.dispatch.queue_notification_event')
+    def test_api_registration_queues_non_secret_lifecycle_notifications(self, queue_notification_event):
+        view = NodeRegistrationView()
+
+        with (
+            mock.patch.object(NodeRegistrationView, '_generate_certificate', return_value=None),
+            mock.patch.object(
+                NodeRegistrationView,
+                '_prepare_node_package',
+                return_value=Response({'certificate': 'cert-secret', 'key': 'key-secret'}),
+            ),
+        ):
+            response = view._create_node(
+                organization=self.organization,
+                node_name='api-registered-node',
+                is_lighthouse=True,
+                public_ip='203.0.113.10',
+                fqdn=None,
+                external_port=4242,
+                created_by=self.owner,
+                token=None,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('api_token', response.data)
+        queued = [(call.args[0], call.args[1], call.args[2]) for call in queue_notification_event.call_args_list]
+        self.assertEqual(
+            [event_type for event_type, _, _ in queued],
+            ['node.registered', 'node.created', 'cert.issued', 'ip.allocated'],
+        )
+        for event_type, organization_id, payload in queued:
+            with self.subTest(event_type=event_type):
+                self.assertEqual(organization_id, self.organization.id)
+                self.assertEqual(payload['node_name'], 'api-registered-node')
+                serialized_payload = json.dumps(payload)
+                self.assertNotIn(response.data['api_token'], serialized_payload)
+                self.assertNotIn('cert-secret', serialized_payload)
+                self.assertNotIn('key-secret', serialized_payload)
+
+
 class NodeCertificateReliabilityTests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -334,6 +394,54 @@ class NodeCertificateReliabilityTests(TestCase):
 
         self.assertTrue(needs_regeneration)
 
+    @mock.patch('notifications.dispatch.queue_notification_event')
+    def test_mobile_node_creation_queues_lifecycle_notifications(self, queue_notification_event):
+        self.client.force_login(self.owner)
+
+        with mock.patch('nodes.web_views.regenerate_certificate', return_value=True):
+            response = self.client.post(
+                reverse('nodes_org:create_mobile', kwargs={'slug': self.organization.slug}),
+                {
+                    'name': 'mobile-node-1',
+                    'assigned_user': str(self.owner.id),
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        node = Node.objects.get(name='mobile-node-1')
+        self.assertEqual(response.url, reverse('nodes_org:detail', kwargs={'slug': self.organization.slug, 'pk': node.id}))
+        queued = [(call.args[0], call.args[1], call.args[2]) for call in queue_notification_event.call_args_list]
+        self.assertEqual(
+            [event_type for event_type, _, _ in queued],
+            ['node.created', 'cert.issued', 'ip.allocated'],
+        )
+        for event_type, organization_id, payload in queued:
+            with self.subTest(event_type=event_type):
+                self.assertEqual(organization_id, self.organization.id)
+                self.assertEqual(payload['node_name'], 'mobile-node-1')
+                self.assertEqual(payload['nebula_ip'], node.nebula_ip)
+
+    @mock.patch('notifications.dispatch.queue_notification_event')
+    def test_node_delete_queues_revoked_notification(self, queue_notification_event):
+        self.client.force_login(self.owner)
+        node_id = self.node.id
+        node_name = self.node.name
+        node_ip = self.node.nebula_ip
+
+        response = self.client.post(reverse('nodes_org:delete', kwargs={'slug': self.organization.slug, 'pk': node_id}))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Node.objects.filter(id=node_id).exists())
+        queue_notification_event.assert_called_once_with(
+            'node.revoked',
+            self.organization.id,
+            mock.ANY,
+        )
+        payload = queue_notification_event.call_args.args[2]
+        self.assertEqual(payload['node_id'], node_id)
+        self.assertEqual(payload['node_name'], node_name)
+        self.assertEqual(payload['nebula_ip'], node_ip)
+
     def test_certificate_renewal_includes_security_group_claims(self):
         security_group = SecurityGroup.objects.create(
             name='web',
@@ -374,7 +482,7 @@ class NodeCertificateReliabilityTests(TestCase):
         self.assertIn('-groups', sign_command)
         self.assertEqual(sign_command[sign_command.index('-groups') + 1], 'web')
 
-    @mock.patch('notifications.dispatch.dispatch_event')
+    @mock.patch('notifications.dispatch.queue_notification_event')
     def test_certificate_renewal_queues_slack_notification(self, dispatch_event):
         def run_nebula_cert(command, *args, **kwargs):
             if command[:2] == ['nebula-cert', 'sign']:

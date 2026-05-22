@@ -222,12 +222,9 @@ def renew_node_certificate(node_id):
         }
 
         # Send notifications about certificate renewal.
-        try:
-            from notifications.dispatch import dispatch_event
+        from notifications.dispatch import queue_notification_event
 
-            dispatch_event('cert.renewed', node.organization.id, renewal_notification_data)
-        except Exception as e:
-            logger.error("Failed to queue certificate renewal notification for node %s: %s", node.id, e)
+        queue_notification_event('cert.renewed', node.organization.id, renewal_notification_data)
 
         # Send webhook notification about certificate renewal
         try:

@@ -52,12 +52,9 @@ def check_expiring_certificates():
             'expiring_certificates': expiring_certs,
             'count': len(expiring_certs)
         }
-        try:
-            from notifications.dispatch import dispatch_event
+        from notifications.dispatch import queue_notification_event
 
-            dispatch_event('cert.expiring', org_id, notification_data)
-        except Exception as e:
-            logger.error("Failed to queue certificate expiration notification for organization %s: %s", org_id, e)
+        queue_notification_event('cert.expiring', org_id, notification_data)
 
         # Get webhooks for this organization that subscribe to cert.expiring events
         webhooks = Webhook.objects.filter(

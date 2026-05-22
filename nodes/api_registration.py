@@ -27,6 +27,8 @@ from certificates.models import CertificateAuthority
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
 from organizations.models import NetworkRange, Organization
 
+from notifications import dispatch as notification_dispatch
+
 from .models import Node, NodeRegistrationToken
 from .serializers import AuthenticatedNodeRegistrationSerializer
 from .tasks import parse_nebula_cert_expiration
@@ -553,6 +555,11 @@ class NodeRegistrationView(APIView):
             # Create response with certificate, key, and config
             # Note: request is not available in this method, so we'll use default format
             response_data = self._prepare_node_package(node, 'json')
+
+            notification_dispatch.queue_node_lifecycle_events(
+                node,
+                ['node.registered', 'node.created', 'cert.issued', 'ip.allocated'],
+            )
             
             # Add the api_token to the response
             if isinstance(response_data, Response):

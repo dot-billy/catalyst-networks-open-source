@@ -10,7 +10,7 @@ import requests
 from organizations.models import Membership, Organization
 
 from .dispatch import dispatch_notification
-from .models import NotificationIntegration
+from .models import EventType, NotificationIntegration, default_notification_events
 
 
 User = get_user_model()
@@ -138,3 +138,9 @@ class NotificationIntegrationTests(TestCase):
         response = self.client.get(reverse("notifications_org:slack", kwargs={"slug": self.organization.slug}))
 
         self.assertEqual(response.status_code, 403)
+
+    def test_default_events_do_not_include_unwired_certificate_revocation(self):
+        event_values = [event.value for event in EventType]
+
+        self.assertNotIn("cert.revoked", event_values)
+        self.assertNotIn("cert.revoked", default_notification_events())

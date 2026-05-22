@@ -33,7 +33,7 @@ class CertificateNotificationTaskTests(TestCase):
             ca_key=SimpleUploadedFile("notify-ca.key", b"key-bytes"),
         )
 
-    @mock.patch("notifications.dispatch.dispatch_event")
+    @mock.patch("notifications.dispatch.queue_notification_event")
     def test_expiring_certificate_notification_queues_slack_even_without_webhooks(self, dispatch_event):
         Node.objects.create(
             name="expiring-node",

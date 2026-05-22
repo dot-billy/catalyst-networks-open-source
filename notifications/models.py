@@ -10,7 +10,6 @@ class EventType(models.TextChoices):
     NODE_REVOKED = "node.revoked", "Node Revoked"
     CERT_ISSUED = "cert.issued", "Certificate Issued"
     CERT_RENEWED = "cert.renewed", "Certificate Renewed"
-    CERT_REVOKED = "cert.revoked", "Certificate Revoked"
     CERT_EXPIRING = "cert.expiring", "Certificate Expiring Soon"
     IP_ALLOCATED = "ip.allocated", "IP Allocated"
 

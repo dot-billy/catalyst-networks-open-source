@@ -14,7 +14,7 @@ SLACK_WEBHOOK_PREFIX = "https://hooks.slack.com/services/"
 
 EVENT_CATEGORY_DEFINITIONS = [
     ("Nodes", ["node.registered", "node.created", "node.revoked"]),
-    ("Certificates", ["cert.issued", "cert.renewed", "cert.revoked", "cert.expiring"]),
+    ("Certificates", ["cert.issued", "cert.renewed", "cert.expiring"]),
     ("Network", ["ip.allocated"]),
 ]
 

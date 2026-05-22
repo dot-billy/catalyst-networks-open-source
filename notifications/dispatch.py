@@ -68,6 +68,20 @@ def format_slack_message(event_type, organization, payload):
     return text
 
 
+def node_lifecycle_payload(node, **extra):
+    """Build a non-secret payload for node lifecycle notification events."""
+    payload = {
+        "node_id": node.id,
+        "node_name": node.name,
+        "nebula_ip": node.nebula_ip,
+        "is_lighthouse": node.is_lighthouse,
+    }
+    if getattr(node, "cert_expiration", None):
+        payload["cert_expiration"] = node.cert_expiration.isoformat()
+    payload.update({key: value for key, value in extra.items() if value not in (None, "")})
+    return payload
+
+
 def dispatch_notification(organization, event_type, payload=None):
     """Synchronously deliver a notification to matching active organization integrations."""
     integrations = NotificationIntegration.objects.filter(
@@ -116,3 +130,21 @@ def dispatch_event(event_type, organization_id, data):
     from .tasks import deliver_slack_for_event
 
     deliver_slack_for_event.delay(event_type, organization_id, data)
+
+
+def queue_notification_event(event_type, organization_id, data):
+    """Queue a notification event without letting producer workflows fail."""
+    try:
+        dispatch_event(event_type, organization_id, data)
+    except Exception:
+        logger.error(
+            "Failed to queue notification event %s for organization %s",
+            event_type,
+            organization_id,
+        )
+
+
+def queue_node_lifecycle_events(node, event_types, **extra):
+    payload = node_lifecycle_payload(node, **extra)
+    for event_type in event_types:
+        queue_notification_event(event_type, node.organization_id, payload)
