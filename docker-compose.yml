@@ -6,7 +6,7 @@ services:
       - .:/app
       - certs_data:/data/certs
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     env_file:
       - .env
     environment:

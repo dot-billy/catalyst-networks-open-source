@@ -71,6 +71,7 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_SECRET_KEY` | **Required.** Django secret key | — |
 | `DJANGO_DEBUG` | Enable debug mode | `False` in settings; `.env.example` enables it for local use |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hostnames | `localhost,127.0.0.1` |
+| `WEB_PORT` | Host port used by Docker Compose for the web service | `8000` |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
 | `POSTGRES_PASSWORD` | Database password | `postgres` |
@@ -85,6 +86,8 @@ All configuration is done via environment variables. See `.env.example` for the 
 
 The default Docker Compose stack publishes only the Django web service on `8000`.
 PostgreSQL and Redis stay on the internal Compose network.
+If another local project already uses port `8000`, set `WEB_PORT=18000` before
+running Compose and visit `http://localhost:18000`.
 
 ### DigitalOcean Smoke Test
 
