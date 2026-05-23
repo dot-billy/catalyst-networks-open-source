@@ -1,7 +1,6 @@
 services:
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
       - certs_data:/data/certs
@@ -14,6 +13,7 @@ services:
       - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - CERT_STORAGE_ROOT=/data/certs
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
 
   celery:
     build: .
-    command: celery -A open_cvpn worker -l INFO
+    command: ["celery", "-A", "open_cvpn", "worker", "-l", "INFO"]
     volumes:
       - .:/app
       - certs_data:/data/certs
@@ -61,7 +61,7 @@ services:
 
   celery-beat:
     build: .
-    command: celery -A open_cvpn beat -l INFO --schedule /tmp/celerybeat-schedule
+    command: ["celery", "-A", "open_cvpn", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
     volumes:
       - .:/app
       - certs_data:/data/certs

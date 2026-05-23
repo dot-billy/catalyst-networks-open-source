@@ -31,6 +31,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy only necessary application files
 COPY manage.py .
+COPY healthcheck.py .
+COPY docker-entrypoint.sh .
+COPY gunicorn.conf.py .
 COPY open_cvpn/ open_cvpn/
 COPY certificates/ certificates/
 COPY dashboard/ dashboard/
@@ -53,6 +56,9 @@ RUN tailwindcss -i static/css/tailwind-input.css -o static/css/tailwind-output.c
 # Create necessary directories
 RUN mkdir -p /app/media/ca /app/media/certs /app/staticfiles /data/certs
 
+# Make startup wrapper executable
+RUN chmod +x docker-entrypoint.sh
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=open_cvpn.settings
@@ -61,5 +67,6 @@ ENV DJANGO_SETTINGS_MODULE=open_cvpn.settings
 RUN useradd -m appuser && chown -R appuser:appuser /app /data/certs
 USER appuser
 
-# Default command (can be overridden)
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Default production startup; Compose can override this for development commands.
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "open_cvpn.wsgi:application"]
