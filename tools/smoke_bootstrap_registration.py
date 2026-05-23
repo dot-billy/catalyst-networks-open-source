@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import html.parser
 import http.cookiejar
+import json
 import os
 import secrets
 import sys
@@ -111,7 +112,11 @@ def run_smoke(
     response = _get(opener, health_url, timeout)
     body = _read_response(response).strip()
     _require(response.status == 200, f"health returned {response.status}")
-    _require(body == '{"status":"ok"}', f"health body mismatch: {body!r}")
+    try:
+        health_data = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise SmokeFailure(f"health body was not JSON: {body!r}") from exc
+    _require(health_data == {"status": "ok"}, f"health body mismatch: {body!r}")
     print("health: 200 ok", file=output)
 
     login_url = _url(base_url, "/login/")
