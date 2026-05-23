@@ -79,7 +79,7 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hostnames | `localhost,127.0.0.1` |
 | `WEB_PORT` | Host port used by Docker Compose for the web service | `8000` |
 | `DJANGO_LOG_FILE` | Optional writable file path for Django logs | Empty; logs go to console |
-| `ALLOW_BOOTSTRAP_REGISTRATION` | Allow `/register/` to create the first human admin account when no users exist | `True` in examples |
+| `ALLOW_BOOTSTRAP_REGISTRATION` | Allow `/register/` to create the first human admin account when no users exist | `True` in `.env.example`; `False` in `.env.prod.example` |
 | `ALLOW_PUBLIC_REGISTRATION` | Allow public human account registration after users exist | `False` |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
