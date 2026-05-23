@@ -44,8 +44,10 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"</pre>
 
       <section>
         <h2 class="text-lg font-semibold mb-3">3. Initialize the Database</h2>
-        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser</pre>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python manage.py migrate</pre>
+        <p class="text-sm text-gray-700 mt-2">On a fresh database, visit <code>/register/</code> to create the first admin account. After any user exists, human registration is invitation-only by default.</p>
+        <p class="text-sm text-gray-700 mt-2">If bootstrap registration is disabled, create the first admin account from the command line:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mt-3">docker compose exec web python manage.py createsuperuser</pre>
       </section>
 
       <section>

@@ -42,18 +42,18 @@ Edit `.env` and set the required values:
 # Generate a Django secret key
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 
-# Generate a registration token
+# Generate a node registration token
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Set `DJANGO_SECRET_KEY` and `REGISTRATION_MASTER_TOKEN` in your `.env` file with the generated values.
+Set `DJANGO_SECRET_KEY` and `REGISTRATION_MASTER_TOKEN` in your `.env` file with the generated values. `REGISTRATION_MASTER_TOKEN` is for node registration API access, not human account registration.
 
 ```bash
 # Start all services
 docker compose up --build -d
 
-# Create an admin user
-docker compose exec web python manage.py createsuperuser
+# Create the first admin account on a fresh database
+open http://localhost:8000/register/
 
 # Visit the app
 open http://localhost:8000
@@ -62,6 +62,11 @@ open http://localhost:8000
 The Docker Compose web service runs database migrations on startup by default,
 then starts the Django app with Gunicorn. Set `RUN_MIGRATIONS=false` in the
 shell before running Compose if you need to manage migrations manually.
+
+On a fresh database, the first human account can be created from `/register/`.
+After any user exists, human registration is invitation-only by default. If
+`ALLOW_BOOTSTRAP_REGISTRATION` is disabled, create the first admin account with
+`docker compose exec web python manage.py createsuperuser`.
 
 ## Configuration
 
@@ -74,12 +79,14 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated allowed hostnames | `localhost,127.0.0.1` |
 | `WEB_PORT` | Host port used by Docker Compose for the web service | `8000` |
 | `DJANGO_LOG_FILE` | Optional writable file path for Django logs | Empty; logs go to console |
+| `ALLOW_BOOTSTRAP_REGISTRATION` | Allow `/register/` to create the first human admin account when no users exist | `True` in examples |
+| `ALLOW_PUBLIC_REGISTRATION` | Allow public human account registration after users exist | `False` |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
 | `POSTGRES_PASSWORD` | Database password | `postgres` |
 | `REDIS_HOST` | Redis hostname | `redis` |
 | `JWT_SECRET_KEY` | JWT signing key | Falls back to `DJANGO_SECRET_KEY` |
-| `REGISTRATION_MASTER_TOKEN` | **Required.** Token for node registration API | — |
+| `REGISTRATION_MASTER_TOKEN` | **Required.** Token for node registration API; unrelated to human account registration | — |
 | `FIELD_ENCRYPTION_KEY` | Fernet key for Slack webhook storage | Empty; required before saving Slack webhooks |
 | `DEFAULT_FROM_EMAIL` | Sender email address | `noreply@example.com` |
 | `BASE_URL` | Public URL of the application | `http://localhost:8000` |
