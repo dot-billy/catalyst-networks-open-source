@@ -148,7 +148,7 @@ stack:
 
 ```bash
 RUN_MIGRATIONS=false docker compose up --build -d db redis
-RUN_MIGRATIONS=false docker compose run --rm -T web python manage.py migrate --noinput
+RUN_MIGRATIONS=false docker compose run --rm -T web python manage.py migrate --noinput </dev/null
 RUN_MIGRATIONS=false docker compose up -d
 ```
 
