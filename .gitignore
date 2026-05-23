@@ -115,6 +115,8 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+.worktrees
+.worktrees/
 *.swp
 *.swo
 *~
