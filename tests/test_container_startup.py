@@ -48,6 +48,11 @@ class ContainerStartupConfigTests(unittest.TestCase):
             compose,
         )
 
+    def test_jwt_signing_key_falls_back_when_env_is_empty(self):
+        settings = self.read_file("open_cvpn/settings.py")
+
+        self.assertIn("'SIGNING_KEY': os.getenv('JWT_SECRET_KEY') or SECRET_KEY", settings)
+
 
     def test_gunicorn_config_keeps_entrypoint_defaults(self):
         config = self.read_file("gunicorn.conf.py")
