@@ -151,7 +151,7 @@ class NodeViewSet(viewsets.ModelViewSet):
         pass
         
     @action(detail=True, methods=['post'], authentication_classes=[NodeAPITokenAuthentication], permission_classes=[NodeAccessPermission])
-    def checkin(self, request, pk=None):
+    def checkin(self, request, pk=None, **kwargs):
         """
         Node check-in endpoint. Requires node API token authentication.
         Updates the node's last_checkin timestamp.
@@ -390,12 +390,12 @@ class OrgNodeViewSet(OrganizationFilterMixin, NodeViewSet):
         }
     )
     @action(detail=True, methods=['post'], authentication_classes=[NodeAPITokenAuthentication], permission_classes=[NodeAccessPermission])
-    def checkin(self, request, pk=None):
+    def checkin(self, request, pk=None, **kwargs):
         """
         Node check-in endpoint. Requires node API token authentication.
         Updates the node's last_checkin timestamp.
         """
-        return super().checkin(request, pk)
+        return super().checkin(request, pk=pk, **kwargs)
         
     def get_organization(self):
         """

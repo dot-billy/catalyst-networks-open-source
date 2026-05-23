@@ -16,6 +16,7 @@ from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.test import APIClient, APIRequestFactory
 
+from nodes.api_views import NodeViewSet, OrgNodeViewSet
 from certificates.models import CertificateAuthority
 from nodes.api_registration import NodeRegistrationView
 from nodes.models import Node
@@ -69,6 +70,7 @@ class NodeAccessPermissionTests(TestCase):
             organization=self.organization,
             certificate_authority=self.ca,
             nebula_ip='10.42.0.10',
+            api_token='node-token-1',
             created_by=self.owner,
         )
         self.other_node = Node.objects.create(
@@ -179,6 +181,33 @@ class NodeAccessPermissionTests(TestCase):
         )
 
         self.assertTrue(allowed)
+
+    def test_checkin_action_accepts_nested_org_url_kwargs(self):
+        request = self.factory.post('/api/org/node-org/nodes/1/checkin/')
+        request.node = self.node
+
+        view = NodeViewSet()
+        view.request = request
+        view.kwargs = {'slug': self.organization.slug, 'pk': self.node.pk}
+
+        response = view.checkin(request, pk=self.node.pk, slug=self.organization.slug)
+
+        self.assertEqual(response.status_code, 200)
+        self.node.refresh_from_db()
+        self.assertIsNotNone(self.node.last_checkin)
+
+    def test_org_node_checkin_route_updates_last_checkin(self):
+        view = OrgNodeViewSet.as_view({'post': 'checkin'})
+        request = self.factory.post(
+            f'/api/org/{self.organization.slug}/nodes/{self.node.pk}/checkin/',
+            HTTP_AUTHORIZATION='Bearer node-token-1',
+        )
+
+        response = view(request, slug=self.organization.slug, pk=self.node.pk)
+
+        self.assertEqual(response.status_code, 200)
+        self.node.refresh_from_db()
+        self.assertIsNotNone(self.node.last_checkin)
 
 
 class NodeAPIMasterTokenRegressionTests(TestCase):
