@@ -29,6 +29,14 @@ class ContainerStartupConfigTests(unittest.TestCase):
         self.assertIn('exec "$@"', entrypoint)
         self.assertNotIn('exec gunicorn --bind 0.0.0.0:8000', entrypoint)
 
+    def test_entrypoint_superuser_creation_uses_email_user_contract(self):
+        entrypoint = self.read_file("docker-entrypoint.sh")
+
+        self.assertIn('if [ "$CREATE_SUPERUSER" = "true" ]', entrypoint)
+        self.assertIn('[ -n "$DJANGO_SUPERUSER_EMAIL" ]', entrypoint)
+        self.assertIn('[ -n "$DJANGO_SUPERUSER_PASSWORD" ]', entrypoint)
+        self.assertNotIn("DJANGO_SUPERUSER_USERNAME", entrypoint)
+
     def test_compose_uses_image_startup_for_web_and_list_commands_for_workers(self):
         compose = self.read_file("docker-compose.yml")
 
@@ -39,6 +47,11 @@ class ContainerStartupConfigTests(unittest.TestCase):
             'command: ["celery", "-A", "open_cvpn", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]',
             compose,
         )
+
+    def test_jwt_signing_key_falls_back_when_env_is_empty(self):
+        settings = self.read_file("open_cvpn/settings.py")
+
+        self.assertIn("'SIGNING_KEY': os.getenv('JWT_SECRET_KEY') or SECRET_KEY", settings)
 
 
     def test_gunicorn_config_keeps_entrypoint_defaults(self):

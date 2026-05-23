@@ -32,8 +32,9 @@ cp .env.example .env</pre>
         <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm"># Generate a Django secret key
 python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 
-# Generate a registration token
+# Generate a node registration token
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"</pre>
+        <p class="text-sm text-gray-700 mt-2">REGISTRATION_MASTER_TOKEN is for node registration API access, not human account registration.</p>
       </section>
 
       <section>
@@ -43,9 +44,13 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"</pre>
       </section>
 
       <section>
-        <h2 class="text-lg font-semibold mb-3">3. Initialize the Database</h2>
-        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python manage.py migrate
-docker compose exec web python manage.py createsuperuser</pre>
+        <h2 class="text-lg font-semibold mb-3">3. Create the First Account</h2>
+        <p class="text-sm text-gray-700 mb-2">By default, the Compose web service runs database migrations automatically on startup.</p>
+        <p class="text-sm text-gray-700 mb-2">If you set <code>RUN_MIGRATIONS=false</code> or manage migrations manually, run:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">docker compose exec web python manage.py migrate</pre>
+        <p class="text-sm text-gray-700 mt-2">On a fresh database, visit <code>/register/</code> to create the first admin account. After any user exists, human registration is invitation-only by default.</p>
+        <p class="text-sm text-gray-700 mt-2">If bootstrap registration is disabled, create the first admin account from the command line:</p>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mt-3">docker compose exec web python manage.py createsuperuser</pre>
       </section>
 
       <section>

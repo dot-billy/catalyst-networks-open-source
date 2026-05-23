@@ -313,7 +313,7 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME', 1))),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
-    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
+    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY') or SECRET_KEY,
 }
 
 # Login/Logout URLs
@@ -336,6 +336,18 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
+
+
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+# User registration policy settings
+ALLOW_BOOTSTRAP_REGISTRATION = _env_bool('ALLOW_BOOTSTRAP_REGISTRATION', True)
+ALLOW_PUBLIC_REGISTRATION = _env_bool('ALLOW_PUBLIC_REGISTRATION', False)
 
 # Node Registration Settings
 _registration_token = os.getenv('REGISTRATION_MASTER_TOKEN')

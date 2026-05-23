@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -449,10 +451,26 @@ def invitation_create(request, slug):
     
     return redirect('organizations:members', slug=slug)
 
-@login_required
 def invitation_accept(request, token):
     """Handle invitation acceptance."""
     invitation = get_object_or_404(Invitation, token=token)
+
+    if not request.user.is_authenticated:
+        if not invitation.is_valid:
+            messages.error(request, 'This invitation is no longer valid.')
+            return redirect('login')
+
+        invited_user_exists = get_user_model().objects.filter(
+            email__iexact=invitation.email
+        ).exists()
+        if invited_user_exists:
+            accept_path = reverse(
+                'organizations:invitation_accept',
+                kwargs={'token': invitation.token},
+            )
+            return redirect(f"{reverse('login')}?{urlencode({'next': accept_path})}")
+
+        return redirect(f"{reverse('register')}?{urlencode({'invitation': invitation.token})}")
 
     if request.user.email.lower() != invitation.email.lower():
         messages.error(request, 'This invitation was sent to a different email address.')

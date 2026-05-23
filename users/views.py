@@ -1,9 +1,12 @@
+from urllib.parse import urlencode
+
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.db import connection, transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -16,10 +19,121 @@ from .serializers import (
     UserCreateSerializer
 )
 from .forms import UserLoginForm, UserRegistrationForm
+from .registration_policy import (
+    RegistrationState,
+    get_registration_state,
+    public_signup_link_available,
+)
+from organizations.models import Invitation
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
 from sso.policies import get_enforced_sso_config, get_password_login_block_message
 
 User = get_user_model()
+
+
+class InvitationAcceptanceFailed(Exception):
+    pass
+
+
+def _get_invitation_token(request):
+    return (
+        request.POST.get('invitation')
+        or request.GET.get('invitation')
+        or request.POST.get('token')
+        or request.GET.get('token')
+    )
+
+
+def _registration_context(registration_state, form=None):
+    return {
+        'form': form,
+        'registration_state': registration_state,
+    }
+
+
+def _render_registration(request, registration_state, form=None):
+    return render(
+        request,
+        'base/register.html',
+        _registration_context(registration_state, form),
+    )
+
+
+def _lock_user_table_for_bootstrap():
+    if connection.vendor != 'postgresql':
+        return
+
+    table_name = connection.ops.quote_name(User._meta.db_table)
+    with connection.cursor() as cursor:
+        cursor.execute(f'LOCK TABLE {table_name} IN EXCLUSIVE MODE')
+
+
+def _closed_registration_state(subtitle):
+    return RegistrationState(
+        mode='closed',
+        can_register=False,
+        title='Registration is closed',
+        subtitle=subtitle,
+    )
+
+
+def _redirect_existing_invited_user(invitation):
+    accept_path = reverse(
+        'organizations:invitation_accept',
+        kwargs={'token': invitation.token},
+    )
+    return redirect(f"{reverse('login')}?{urlencode({'next': accept_path})}")
+
+
+def _locked_invitation_for_state(registration_state):
+    if not registration_state.invitation:
+        return None
+
+    return Invitation.objects.select_for_update().filter(
+        pk=registration_state.invitation.pk,
+    ).first()
+
+
+def _handle_invitation_registration_post(request, registration_state):
+    try:
+        with transaction.atomic():
+            invitation = _locked_invitation_for_state(registration_state)
+            if not invitation or not invitation.is_valid:
+                return _render_registration(
+                    request,
+                    _closed_registration_state(
+                        'This invitation is no longer available. Ask an organization owner for a new invitation.'
+                    ),
+                )
+
+            if User.objects.filter(email__iexact=invitation.email).first():
+                return _redirect_existing_invited_user(invitation)
+
+            form = UserRegistrationForm(
+                request.POST,
+                registration_mode='invitation',
+                invitation=invitation,
+            )
+            if not form.is_valid():
+                return _render_registration(request, registration_state, form)
+
+            user = form.save()
+            membership = invitation.accept(user)
+            if membership is None:
+                raise InvitationAcceptanceFailed
+
+    except InvitationAcceptanceFailed:
+        messages.error(request, 'This invitation could not be accepted.')
+        return _render_registration(
+            request,
+            _closed_registration_state(
+                'This invitation could not be accepted. Ask an organization owner for a new invitation.'
+            ),
+        )
+
+    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    messages.success(request, 'Account created successfully!')
+    return redirect('dashboard:dashboard')
 
 # API views
 class UserRegistrationView(generics.GenericAPIView):
@@ -98,7 +212,9 @@ def login_view(request):
     """Handle user login via web UI"""
     if request.user.is_authenticated:
         return redirect('dashboard:dashboard')
-    
+
+    next_url = request.POST.get('next') or request.GET.get('next', '')
+
     if request.method == 'POST':
         form = UserLoginForm(request.POST)
         if form.is_valid():
@@ -112,7 +228,6 @@ def login_view(request):
                     messages.error(request, get_password_login_block_message(enforced_sso_config))
                 else:
                     login(request, user)
-                    next_url = request.GET.get('next', '')
                     if not next_url or not url_has_allowed_host_and_scheme(
                         next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
                     ):
@@ -123,24 +238,71 @@ def login_view(request):
     else:
         form = UserLoginForm()
     
-    return render(request, 'base/login.html', {'form': form})
+    return render(
+        request,
+        'base/login.html',
+        {
+            'form': form,
+            'next_url': next_url,
+            'public_signup_link_available': public_signup_link_available(),
+        },
+    )
 
 def register_view(request):
     """Handle user registration via web UI"""
     if request.user.is_authenticated:
         return redirect('dashboard:dashboard')
-    
+
+    invitation_token = _get_invitation_token(request)
+    registration_state = get_registration_state(invitation_token)
+
+    if not registration_state.can_register:
+        return _render_registration(request, registration_state)
+
     if request.method == 'POST':
-        form = UserRegistrationForm(request.POST)
+        if registration_state.mode == 'bootstrap':
+            with transaction.atomic():
+                _lock_user_table_for_bootstrap()
+                registration_state = get_registration_state(invitation_token)
+                if registration_state.mode != 'bootstrap' or not registration_state.can_register:
+                    return _render_registration(request, registration_state)
+
+                form = UserRegistrationForm(
+                    request.POST,
+                    registration_mode='bootstrap',
+                )
+                if form.is_valid():
+                    user = form.save()
+                else:
+                    user = None
+
+            if user is not None:
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                messages.success(request, 'Account created successfully!')
+                return redirect('dashboard:dashboard')
+
+            return _render_registration(request, registration_state, form)
+
+        if registration_state.mode == 'invitation':
+            return _handle_invitation_registration_post(request, registration_state)
+
+        form = UserRegistrationForm(
+            request.POST,
+            registration_mode=registration_state.mode,
+            invitation=registration_state.invitation,
+        )
         if form.is_valid():
             user = form.save()
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, 'Account created successfully!')
             return redirect('dashboard:dashboard')
     else:
-        form = UserRegistrationForm()
-    
-    return render(request, 'base/register.html', {'form': form})
+        form = UserRegistrationForm(
+            registration_mode=registration_state.mode,
+            invitation=registration_state.invitation,
+        )
+
+    return _render_registration(request, registration_state, form)
 
 @login_required
 def logout_view(request):
