@@ -132,6 +132,16 @@ the default interactive bootstrap path, verifies `/register/` closes afterward,
 and never prints the password. To use a known password for the smoke, set
 `SMOKE_BOOTSTRAP_PASSWORD` in the shell before running it.
 
+There are two supported first-user deployment choices:
+
+- Interactive bootstrap, the OSS default: keep `ALLOW_BOOTSTRAP_REGISTRATION=True`
+  and `ALLOW_PUBLIC_REGISTRATION=False`, then create the first admin at
+  `/register/`. After that account exists, public registration closes.
+- Non-interactive seeding: set `ALLOW_BOOTSTRAP_REGISTRATION=False`,
+  `CREATE_SUPERUSER=true`, `DJANGO_SUPERUSER_EMAIL`, and
+  `DJANGO_SUPERUSER_PASSWORD` for the first startup. Inject the password as a
+  secret and remove or disable the seeding variables after the account exists.
+
 For an explicit migration smoke on a fresh database, disable entrypoint
 migrations first and run exactly one migration command before starting the full
 stack:

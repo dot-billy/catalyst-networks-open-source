@@ -29,6 +29,14 @@ class ContainerStartupConfigTests(unittest.TestCase):
         self.assertIn('exec "$@"', entrypoint)
         self.assertNotIn('exec gunicorn --bind 0.0.0.0:8000', entrypoint)
 
+    def test_entrypoint_superuser_creation_uses_email_user_contract(self):
+        entrypoint = self.read_file("docker-entrypoint.sh")
+
+        self.assertIn('if [ "$CREATE_SUPERUSER" = "true" ]', entrypoint)
+        self.assertIn('[ -n "$DJANGO_SUPERUSER_EMAIL" ]', entrypoint)
+        self.assertIn('[ -n "$DJANGO_SUPERUSER_PASSWORD" ]', entrypoint)
+        self.assertNotIn("DJANGO_SUPERUSER_USERNAME", entrypoint)
+
     def test_compose_uses_image_startup_for_web_and_list_commands_for_workers(self):
         compose = self.read_file("docker-compose.yml")
 
