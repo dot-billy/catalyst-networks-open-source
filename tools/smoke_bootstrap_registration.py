@@ -111,7 +111,7 @@ def run_smoke(
     response = _get(opener, health_url, timeout)
     body = _read_response(response).strip()
     _require(response.status == 200, f"health returned {response.status}")
-    _require(body == '{"status": "ok"}', f"health body mismatch: {body!r}")
+    _require(body == '{"status":"ok"}', f"health body mismatch: {body!r}")
     print("health: 200 ok", file=output)
 
     login_url = _url(base_url, "/login/")

@@ -65,7 +65,7 @@ class BootstrapSmokeScriptTests(unittest.TestCase):
         base_url = "http://smoke.example:8000"
         first = FakeOpener(
             [
-                FakeResponse(200, f"{base_url}/health/", '{"status": "ok"}'),
+                FakeResponse(200, f"{base_url}/health/", '{"status":"ok"}'),
                 FakeResponse(200, f"{base_url}/login/", "Create one"),
                 FakeResponse(
                     200,
