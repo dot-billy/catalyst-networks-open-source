@@ -52,15 +52,16 @@ Set `DJANGO_SECRET_KEY` and `REGISTRATION_MASTER_TOKEN` in your `.env` file with
 # Start all services
 docker compose up --build -d
 
-# Run database migrations
-docker compose exec web python manage.py migrate
-
 # Create an admin user
 docker compose exec web python manage.py createsuperuser
 
 # Visit the app
 open http://localhost:8000
 ```
+
+The Docker Compose web service runs database migrations on startup by default,
+then starts the Django app with Gunicorn. Set `RUN_MIGRATIONS=false` in the
+shell before running Compose if you need to manage migrations manually.
 
 ## Configuration
 
@@ -84,6 +85,7 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `BASE_URL` | Public URL of the application | `http://localhost:8000` |
 | `STATIC_ASSET_VERSION` | Optional cache-busting version for static URLs | Project version |
 | `CERT_STORAGE_ROOT` | Path for certificate storage | `/data/certs` |
+| `RUN_MIGRATIONS` | Run migrations when the Compose web service starts | `true` |
 
 The default Docker Compose stack publishes only the Django web service on `8000`.
 PostgreSQL and Redis stay on the internal Compose network.
@@ -97,7 +99,6 @@ repository to it, generate a fresh `.env`, and run:
 
 ```bash
 docker compose up --build -d
-docker compose exec web python manage.py migrate
 curl -fsS http://DROPLET_IP:8000/health/
 curl -fsSI http://DROPLET_IP:8000/login/
 ```

@@ -32,15 +32,10 @@ if [ "$CREATE_SUPERUSER" = "true" ] && [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ 
     python manage.py createsuperuser --noinput || echo "Superuser creation failed (may already exist)"
 fi
 
-# If healthcheck passes, start Gunicorn
-echo -e "\nStarting Gunicorn..."
-exec gunicorn --bind 0.0.0.0:8000 \
-    --workers ${GUNICORN_WORKERS:-1} \
-    --threads ${GUNICORN_THREADS:-4} \
-    --worker-class ${GUNICORN_WORKER_CLASS:-gthread} \
-    --timeout ${GUNICORN_TIMEOUT:-120} \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level ${GUNICORN_LOG_LEVEL:-info} \
-    --preload \
-    open_cvpn.wsgi:application 
+# If no command is supplied, fall back to the production WSGI server.
+if [ "$#" -eq 0 ]; then
+    set -- gunicorn -c gunicorn.conf.py open_cvpn.wsgi:application
+fi
+
+echo -e "\nStarting command: $*"
+exec "$@"

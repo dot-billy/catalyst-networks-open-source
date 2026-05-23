@@ -5,14 +5,15 @@ This file can be used with: gunicorn -c gunicorn.conf.py open_cvpn.wsgi:applicat
 """
 
 import os
-import multiprocessing
 
 # Server socket
 bind = os.environ.get('GUNICORN_BIND', '0.0.0.0:8000')
 backlog = int(os.environ.get('GUNICORN_BACKLOG', 2048))
 
 # Worker processes
-workers = int(os.environ.get('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
+# Default to the same conservative worker count used by docker-entrypoint.sh
+# before the image started delegating Gunicorn startup to this config file.
+workers = int(os.environ.get('GUNICORN_WORKERS', 1))
 worker_class = os.environ.get('GUNICORN_WORKER_CLASS', 'gthread')
 threads = int(os.environ.get('GUNICORN_THREADS', 4))
 worker_connections = int(os.environ.get('GUNICORN_WORKER_CONNECTIONS', 1000))
@@ -25,7 +26,7 @@ keepalive = int(os.environ.get('GUNICORN_KEEPALIVE', 5))
 # Logging
 accesslog = os.environ.get('GUNICORN_ACCESSLOG', '-')
 errorlog = os.environ.get('GUNICORN_ERRORLOG', '-')
-loglevel = os.environ.get('GUNICORN_LOGLEVEL', 'info')
+loglevel = os.environ.get('GUNICORN_LOGLEVEL', os.environ.get('GUNICORN_LOG_LEVEL', 'info'))
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
 # Process naming
@@ -67,4 +68,4 @@ def worker_int(worker):
 
 def on_exit(server):
     """Called just before exiting."""
-    server.log.info("Shutting down: Master") 
+    server.log.info("Shutting down: Master")
