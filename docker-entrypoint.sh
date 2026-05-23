@@ -27,7 +27,7 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
 fi
 
 # Create superuser if requested
-if [ "$CREATE_SUPERUSER" = "true" ] && [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ] && [ -n "$DJANGO_SUPERUSER_EMAIL" ]; then
+if [ "$CREATE_SUPERUSER" = "true" ] && [ -n "$DJANGO_SUPERUSER_EMAIL" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
     echo -e "\nCreating superuser..."
     python manage.py createsuperuser --noinput || echo "Superuser creation failed (may already exist)"
 fi

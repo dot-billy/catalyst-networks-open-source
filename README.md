@@ -61,12 +61,21 @@ open http://localhost:8000
 
 The Docker Compose web service runs database migrations on startup by default,
 then starts the Django app with Gunicorn. Set `RUN_MIGRATIONS=false` in the
-shell before running Compose if you need to manage migrations manually.
+shell before running Compose if you need to manage migrations manually. Do not
+run the entrypoint migrations and a separate `docker compose exec web python
+manage.py migrate` at the same time against a fresh database.
 
 On a fresh database, the first human account can be created from `/register/`.
-After any user exists, human registration is invitation-only by default. If
-`ALLOW_BOOTSTRAP_REGISTRATION` is disabled, create the first admin account with
-`docker compose exec web python manage.py createsuperuser`.
+After any user exists, human registration is invitation-only by default.
+
+There are two supported first-admin deployment paths:
+
+- Default interactive bootstrap: set `ALLOW_BOOTSTRAP_REGISTRATION=True` and
+  `ALLOW_PUBLIC_REGISTRATION=False`, start the stack, then create the first
+  admin at `/register/`.
+- Non-interactive seeded superuser: set `CREATE_SUPERUSER=true`,
+  `DJANGO_SUPERUSER_EMAIL`, and `DJANGO_SUPERUSER_PASSWORD`. This is usually
+  paired with `ALLOW_BOOTSTRAP_REGISTRATION=False`.
 
 ## Configuration
 
@@ -81,6 +90,9 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_LOG_FILE` | Optional writable file path for Django logs | Empty; logs go to console |
 | `ALLOW_BOOTSTRAP_REGISTRATION` | Allow `/register/` to create the first human admin account when no users exist | `True` in `.env.example`; `False` in `.env.prod.example` |
 | `ALLOW_PUBLIC_REGISTRATION` | Allow public human account registration after users exist | `False` |
+| `CREATE_SUPERUSER` | Optionally seed the first superuser during container startup when email and password are also set | Empty |
+| `DJANGO_SUPERUSER_EMAIL` | Email address for optional non-interactive superuser creation | Empty |
+| `DJANGO_SUPERUSER_PASSWORD` | Password for optional non-interactive superuser creation; inject as a secret | Empty |
 | `POSTGRES_DB` | Database name | `open_cvpn` |
 | `POSTGRES_USER` | Database user | `postgres` |
 | `POSTGRES_PASSWORD` | Database password | `postgres` |
@@ -105,13 +117,30 @@ For a temporary remote smoke test, create a small Ubuntu droplet, copy this
 repository to it, generate a fresh `.env`, and run:
 
 ```bash
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2
+
 docker compose up --build -d
 curl -fsS http://DROPLET_IP:8000/health/
 curl -fsSI http://DROPLET_IP:8000/login/
+python3 tools/smoke_bootstrap_registration.py --base-url http://DROPLET_IP:8000
 ```
 
 Set `DJANGO_ALLOWED_HOSTS` to include the droplet IP and delete the droplet when
-the smoke test is complete.
+the smoke test is complete. The smoke script creates the first account through
+the default interactive bootstrap path, verifies `/register/` closes afterward,
+and never prints the password. To use a known password for the smoke, set
+`SMOKE_BOOTSTRAP_PASSWORD` in the shell before running it.
+
+For an explicit migration smoke on a fresh database, disable entrypoint
+migrations first and run exactly one migration command before starting the full
+stack:
+
+```bash
+RUN_MIGRATIONS=false docker compose up --build -d db redis
+RUN_MIGRATIONS=false docker compose run --rm web python manage.py migrate --noinput
+RUN_MIGRATIONS=false docker compose up -d
+```
 
 ## Architecture
 
