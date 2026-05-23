@@ -1,3 +1,6 @@
+from unittest.mock import patch
+from urllib.parse import urlencode
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -28,7 +31,7 @@ class RegistrationFlowTestMixin:
             **extra_fields,
         )
 
-    def create_invitation(self, email='invitee@example.test'):
+    def create_invitation(self, email='invitee@example.test', **overrides):
         inviter = self.create_user(email='owner@example.test')
         organization = Organization.objects.create(
             name='Invitation Org',
@@ -39,13 +42,15 @@ class RegistrationFlowTestMixin:
             organization=organization,
             role='owner',
         )
-        invitation = Invitation.objects.create(
-            organization=organization,
-            email=email,
-            inviter=inviter,
-            role='admin',
-            expires_at=timezone.now() + timezone.timedelta(days=1),
-        )
+        invitation_attrs = {
+            'organization': organization,
+            'email': email,
+            'inviter': inviter,
+            'role': 'admin',
+            'expires_at': timezone.now() + timezone.timedelta(days=1),
+        }
+        invitation_attrs.update(overrides)
+        invitation = Invitation.objects.create(**invitation_attrs)
         return invitation
 
 
@@ -222,6 +227,110 @@ class RegisterViewTests(RegistrationFlowTestMixin, TestCase):
             ).exists()
         )
 
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_expired_invitation_post_does_not_create_user(self):
+        invitation = self.create_invitation(
+            email='expired@example.test',
+            expires_at=timezone.now() - timezone.timedelta(days=1),
+        )
+
+        response = self.client.post(
+            reverse('register'),
+            self.registration_data(email='posted@example.test', invitation=invitation.token),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email='expired@example.test').exists())
+        self.assertFalse(User.objects.filter(email='posted@example.test').exists())
+        self.assertContains(response, 'Registration is closed')
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_revoked_invitation_post_does_not_create_user(self):
+        invitation = self.create_invitation(
+            email='revoked@example.test',
+            status='revoked',
+        )
+
+        response = self.client.post(
+            reverse('register'),
+            self.registration_data(email='posted@example.test', invitation=invitation.token),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email='revoked@example.test').exists())
+        self.assertFalse(User.objects.filter(email='posted@example.test').exists())
+        self.assertContains(response, 'Registration is closed')
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_exact_duplicate_invited_account_redirects_to_login(self):
+        invitation = self.create_invitation(email='invited@example.test')
+        self.create_user(email='invited@example.test')
+        accept_path = reverse(
+            'organizations:invitation_accept',
+            kwargs={'token': invitation.token},
+        )
+        expected_redirect = f"{reverse('login')}?{urlencode({'next': accept_path})}"
+
+        response = self.client.post(
+            reverse('register'),
+            self.registration_data(email='posted@example.test', invitation=invitation.token),
+        )
+
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'pending')
+        self.assertEqual(User.objects.filter(email__iexact='invited@example.test').count(), 1)
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_case_only_duplicate_invited_account_redirects_to_login(self):
+        invitation = self.create_invitation(email='invited@example.test')
+        self.create_user(email='INVITED@example.test')
+        accept_path = reverse(
+            'organizations:invitation_accept',
+            kwargs={'token': invitation.token},
+        )
+        expected_redirect = f"{reverse('login')}?{urlencode({'next': accept_path})}"
+
+        response = self.client.post(
+            reverse('register'),
+            self.registration_data(email='posted@example.test', invitation=invitation.token),
+        )
+
+        self.assertRedirects(response, expected_redirect, fetch_redirect_response=False)
+        invitation.refresh_from_db()
+        self.assertEqual(invitation.status, 'pending')
+        self.assertEqual(User.objects.filter(email__iexact='invited@example.test').count(), 1)
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_invitation_accept_returning_none_rolls_back_user_creation(self):
+        invitation = self.create_invitation(email='invited@example.test')
+
+        with patch.object(Invitation, 'accept', return_value=None):
+            response = self.client.post(
+                reverse('register'),
+                self.registration_data(email='posted@example.test', invitation=invitation.token),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['registration_state'].mode, 'closed')
+        self.assertFalse(User.objects.filter(email='invited@example.test').exists())
+        self.assertNotIn('_auth_user_id', self.client.session)
+
 
 class LoginPromptTests(RegistrationFlowTestMixin, TestCase):
     @override_settings(
@@ -247,3 +356,37 @@ class LoginPromptTests(RegistrationFlowTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, 'Create one')
         self.assertContains(response, 'Need access? Ask an organization owner for an invitation.')
+
+
+class LoginNextTests(RegistrationFlowTestMixin, TestCase):
+    def test_internal_next_survives_post_and_redirects_after_login(self):
+        self.create_user(email='user@example.test')
+
+        get_response = self.client.get(reverse('login'), {'next': reverse('profile')})
+
+        self.assertContains(get_response, f'name="next" value="{reverse("profile")}"')
+
+        post_response = self.client.post(
+            reverse('login'),
+            {
+                'email': 'user@example.test',
+                'password': self.password,
+                'next': reverse('profile'),
+            },
+        )
+
+        self.assertRedirects(post_response, reverse('profile'))
+
+    def test_external_next_falls_back_to_dashboard_after_login(self):
+        self.create_user(email='user@example.test')
+
+        response = self.client.post(
+            reverse('login'),
+            {
+                'email': 'user@example.test',
+                'password': self.password,
+                'next': 'https://evil.example/phish',
+            },
+        )
+
+        self.assertRedirects(response, reverse('dashboard:dashboard'))
