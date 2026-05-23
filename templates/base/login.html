@@ -59,10 +59,16 @@
             </button>
         </form>
 
-        <p class="mt-6 text-center text-sm text-gray-500">
-            Don&apos;t have an account?
-            <a href="{% url 'register' %}" class="font-medium text-primary-400 hover:text-primary-500">Create one</a>
-        </p>
+        {% if public_signup_link_available %}
+            <p class="mt-6 text-center text-sm text-gray-500">
+                Don&apos;t have an account?
+                <a href="{% url 'register' %}" class="font-medium text-primary-400 hover:text-primary-500">Create one</a>
+            </p>
+        {% else %}
+            <p class="mt-6 text-center text-sm text-gray-500">
+                Need access? Ask an organization owner for an invitation.
+            </p>
+        {% endif %}
 
         <div class="mt-6 pt-6 border-t border-gray-200">
             <p class="text-center text-sm text-gray-500 mb-3">Sign in with your organization&apos;s SSO</p>

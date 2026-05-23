@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
@@ -11,6 +11,7 @@ class PublicAuthPageTests(TestCase):
             f"css/fonts.css?v={settings.STATIC_ASSET_VERSION}",
         )
 
+    @override_settings(ALLOW_PUBLIC_REGISTRATION=True)
     def test_login_page_renders_registration_sso_and_versioned_auth_shell(self):
         response = self.client.get(reverse("login"))
 

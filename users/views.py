@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.db import connection, transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -16,10 +17,44 @@ from .serializers import (
     UserCreateSerializer
 )
 from .forms import UserLoginForm, UserRegistrationForm
+from .registration_policy import get_registration_state, public_signup_link_available
 from open_cvpn.response_schemas import ERROR_RESPONSES, SUCCESS_EXAMPLES
 from sso.policies import get_enforced_sso_config, get_password_login_block_message
 
 User = get_user_model()
+
+
+def _get_invitation_token(request):
+    return (
+        request.POST.get('invitation')
+        or request.GET.get('invitation')
+        or request.POST.get('token')
+        or request.GET.get('token')
+    )
+
+
+def _registration_context(registration_state, form=None):
+    return {
+        'form': form,
+        'registration_state': registration_state,
+    }
+
+
+def _render_registration(request, registration_state, form=None):
+    return render(
+        request,
+        'base/register.html',
+        _registration_context(registration_state, form),
+    )
+
+
+def _lock_user_table_for_bootstrap():
+    if connection.vendor != 'postgresql':
+        return
+
+    table_name = connection.ops.quote_name(User._meta.db_table)
+    with connection.cursor() as cursor:
+        cursor.execute(f'LOCK TABLE {table_name} IN EXCLUSIVE MODE')
 
 # API views
 class UserRegistrationView(generics.GenericAPIView):
@@ -123,24 +158,84 @@ def login_view(request):
     else:
         form = UserLoginForm()
     
-    return render(request, 'base/login.html', {'form': form})
+    return render(
+        request,
+        'base/login.html',
+        {
+            'form': form,
+            'public_signup_link_available': public_signup_link_available(),
+        },
+    )
 
 def register_view(request):
     """Handle user registration via web UI"""
     if request.user.is_authenticated:
         return redirect('dashboard:dashboard')
-    
+
+    invitation_token = _get_invitation_token(request)
+    registration_state = get_registration_state(invitation_token)
+
+    if not registration_state.can_register:
+        return _render_registration(request, registration_state)
+
     if request.method == 'POST':
-        form = UserRegistrationForm(request.POST)
+        if registration_state.mode == 'bootstrap':
+            with transaction.atomic():
+                _lock_user_table_for_bootstrap()
+                registration_state = get_registration_state(invitation_token)
+                if registration_state.mode != 'bootstrap' or not registration_state.can_register:
+                    return _render_registration(request, registration_state)
+
+                form = UserRegistrationForm(
+                    request.POST,
+                    registration_mode='bootstrap',
+                )
+                if form.is_valid():
+                    user = form.save()
+                else:
+                    user = None
+
+            if user is not None:
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                messages.success(request, 'Account created successfully!')
+                return redirect('dashboard:dashboard')
+
+            return _render_registration(request, registration_state, form)
+
+        form = UserRegistrationForm(
+            request.POST,
+            registration_mode=registration_state.mode,
+            invitation=registration_state.invitation,
+        )
         if form.is_valid():
-            user = form.save()
+            with transaction.atomic():
+                if registration_state.mode == 'invitation':
+                    registration_state = get_registration_state(invitation_token)
+                    if registration_state.mode != 'invitation' or not registration_state.can_register:
+                        return _render_registration(request, registration_state)
+
+                    form = UserRegistrationForm(
+                        request.POST,
+                        registration_mode='invitation',
+                        invitation=registration_state.invitation,
+                    )
+                    if not form.is_valid():
+                        return _render_registration(request, registration_state, form)
+
+                user = form.save()
+                if registration_state.mode == 'invitation' and registration_state.invitation:
+                    registration_state.invitation.accept(user)
+
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             messages.success(request, 'Account created successfully!')
             return redirect('dashboard:dashboard')
     else:
-        form = UserRegistrationForm()
-    
-    return render(request, 'base/register.html', {'form': form})
+        form = UserRegistrationForm(
+            registration_mode=registration_state.mode,
+            invitation=registration_state.invitation,
+        )
+
+    return _render_registration(request, registration_state, form)
 
 @login_required
 def logout_view(request):
