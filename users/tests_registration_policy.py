@@ -1,3 +1,5 @@
+from unittest.mock import PropertyMock, patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -16,7 +18,7 @@ class RegistrationPolicyTests(TestCase):
     def create_existing_user(self, email='existing@example.test'):
         return User.objects.create_user(email=email, password='testpass123')
 
-    def create_invitation(self, *, expires_at=None):
+    def create_invitation(self, *, expires_at=None, status='pending'):
         inviter = self.create_existing_user(email='inviter@example.test')
         organization = Organization.objects.create(
             name='Invitation Org',
@@ -31,6 +33,7 @@ class RegistrationPolicyTests(TestCase):
             organization=organization,
             email='invitee@example.test',
             inviter=inviter,
+            status=status,
             expires_at=expires_at or timezone.now() + timezone.timedelta(days=1),
         )
 
@@ -128,3 +131,41 @@ class RegistrationPolicyTests(TestCase):
         self.assertIsNone(valid_invitation)
         self.assertEqual(state.mode, 'closed')
         self.assertFalse(state.can_register)
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_accepted_invitation_does_not_allow_registration(self):
+        invitation = self.create_invitation(status='accepted')
+
+        valid_invitation = get_valid_registration_invitation(invitation.token)
+        state = get_registration_state(invitation.token)
+
+        self.assertIsNone(valid_invitation)
+        self.assertEqual(state.mode, 'closed')
+        self.assertFalse(state.can_register)
+
+    @override_settings(
+        ALLOW_BOOTSTRAP_REGISTRATION=True,
+        ALLOW_PUBLIC_REGISTRATION=False,
+    )
+    def test_revoked_invitation_does_not_allow_registration(self):
+        invitation = self.create_invitation(status='revoked')
+
+        valid_invitation = get_valid_registration_invitation(invitation.token)
+        state = get_registration_state(invitation.token)
+
+        self.assertIsNone(valid_invitation)
+        self.assertEqual(state.mode, 'closed')
+        self.assertFalse(state.can_register)
+
+    def test_valid_invitation_lookup_uses_model_validity_contract(self):
+        invitation = self.create_invitation(status='accepted')
+
+        with patch.object(Invitation, 'is_valid', new_callable=PropertyMock) as is_valid:
+            is_valid.return_value = True
+
+            valid_invitation = get_valid_registration_invitation(invitation.token)
+
+        self.assertEqual(valid_invitation, invitation)

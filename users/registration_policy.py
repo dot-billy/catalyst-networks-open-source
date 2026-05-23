@@ -2,7 +2,6 @@ from dataclasses import dataclass
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 
 from organizations.models import Invitation
 
@@ -21,15 +20,12 @@ def get_valid_registration_invitation(invitation_token):
     if not invitation_token:
         return None
 
-    return (
-        Invitation.objects.select_related('organization', 'inviter')
-        .filter(
-            token=invitation_token,
-            status='pending',
-            expires_at__gt=timezone.now(),
-        )
-        .first()
-    )
+    invitation = Invitation.objects.select_related('organization', 'inviter').filter(
+        token=invitation_token,
+    ).first()
+    if not invitation or not invitation.is_valid:
+        return None
+    return invitation
 
 
 def get_registration_state(invitation_token=None):
