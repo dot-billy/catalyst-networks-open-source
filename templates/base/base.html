@@ -34,100 +34,127 @@
     <div class="catalyst-app-shell">
         {% if user.is_authenticated %}
         {% include 'components/mobile_nav.html' %}
-        <aside class="catalyst-sidebar hidden lg:flex">
-            <div class="catalyst-sidebar-header">
-                <a href="{% url 'dashboard:dashboard' %}" class="catalyst-logo-link">
-                    <div class="catalyst-logo">
+        <div class="catalyst-shell-nav hidden lg:flex">
+            <aside class="catalyst-global-rail" aria-label="Global navigation">
+                <a href="{% url 'dashboard:dashboard' %}" class="catalyst-rail-brand" aria-label="{{ project_meta.NAME }} dashboard">
+                    <span class="catalyst-rail-logo">
                         {% include 'components/catalyst_logo.svg' %}
-                    </div>
-                    <div>
-                        <div class="catalyst-logo-text">{{ project_meta.NAME }}</div>
-                        <div class="catalyst-logo-subtitle">Workspace</div>
-                    </div>
+                    </span>
                 </a>
-            </div>
-
-            <div class="catalyst-sidebar-content">
-                <nav class="catalyst-nav">
-                    <div class="catalyst-menu-section">
-                        <p class="catalyst-menu-title">Overview</p>
-                        <a href="{% url 'dashboard:dashboard' %}" class="catalyst-menu-link {% if request.path == '/dashboard/' %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                            </svg>
-                            Dashboard
-                        </a>
-                        <a href="{% url 'organizations:list' %}" class="catalyst-menu-link {% if '/organizations/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                            </svg>
-                            Organizations
-                        </a>
-                        <a href="/docs/getting-started/" class="catalyst-menu-link {% if '/docs/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 11h10M7 15h6" />
-                            </svg>
-                            Documentation
-                        </a>
-                    </div>
-
-                    {% if organization %}
-                    <div class="catalyst-menu-section">
-                        <p class="catalyst-menu-title">Current Organization</p>
-                        <div class="catalyst-org-chip">{{ organization.name }}</div>
-                        <a href="{% url 'organizations:detail' slug=organization.slug %}" class="catalyst-menu-link {% if request.path == organization.get_absolute_url %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 8h2v-2H7v2zm0-4h2v-2H7v2zm0-4h2V7H7v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z" />
-                            </svg>
-                            Summary
-                        </a>
-                        <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/nodes/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                            </svg>
-                            Nodes
-                        </a>
-                        <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/security-groups/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                            Security Policies
-                        </a>
-                        <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/certificates/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                            </svg>
-                            Certificates
-                        </a>
-                        <a href="{% url 'organizations:members' organization.slug %}" class="catalyst-menu-link {% if '/members/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87M16 3.13a4 4 0 010 7.75M8 3.13a4 4 0 000 7.75" />
-                            </svg>
-                            Members
-                        </a>
-                        <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/webhooks/' in request.path %}active{% endif %}">
-                            <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            Webhooks
-                        </a>
-                    </div>
-                    {% endif %}
+                <nav class="catalyst-rail-nav">
+                    <a href="{% url 'dashboard:dashboard' %}" class="catalyst-rail-link {% if request.path == '/dashboard/' %}active{% endif %}" aria-label="Dashboard">
+                        <svg class="catalyst-rail-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                        <span class="catalyst-rail-label">Home</span>
+                    </a>
+                    <a href="{% url 'organizations:list' %}" class="catalyst-rail-link {% if '/organizations/' in request.path %}active{% endif %}" aria-label="Organizations">
+                        <svg class="catalyst-rail-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span class="catalyst-rail-label">Orgs</span>
+                    </a>
+                    <a href="/docs/getting-started/" class="catalyst-rail-link {% if '/docs/' in request.path %}active{% endif %}" aria-label="Documentation">
+                        <svg class="catalyst-rail-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h10M7 11h10M7 15h6" />
+                        </svg>
+                        <span class="catalyst-rail-label">Docs</span>
+                    </a>
                 </nav>
-            </div>
+                <div class="catalyst-rail-account">
+                    <a href="{% url 'profile' %}" class="catalyst-user-avatar catalyst-rail-avatar" aria-label="Profile">{{ user.email|slice:":2"|upper }}</a>
+                    <a href="{% url 'logout' %}" class="catalyst-rail-link catalyst-rail-link-compact" aria-label="Logout">
+                        <svg class="catalyst-rail-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span class="catalyst-rail-label">Exit</span>
+                    </a>
+                </div>
+            </aside>
 
-            <div class="catalyst-sidebar-footer">
-                <div class="catalyst-user-avatar">{{ user.email|slice:":2"|upper }}</div>
-                <div class="catalyst-user-meta">
-                    <div class="catalyst-user-email">{{ user.email }}</div>
-                    <div class="catalyst-user-actions">
-                        <a href="{% url 'profile' %}">Profile</a>
-                        <span>•</span>
-                        <a href="{% url 'logout' %}">Logout</a>
+            <aside class="catalyst-workspace-rail" aria-label="Organization navigation">
+                <div class="catalyst-workspace-header">
+                    <a href="{% url 'dashboard:dashboard' %}" class="catalyst-logo-link">
+                        <div>
+                            <div class="catalyst-logo-text">{{ project_meta.NAME }}</div>
+                            <div class="catalyst-logo-subtitle">Workspace</div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="catalyst-sidebar-content">
+                    <nav class="catalyst-nav">
+                        {% if organization %}
+                        <div class="catalyst-menu-section">
+                            <p class="catalyst-menu-title">Current Organization</p>
+                            <div class="catalyst-org-chip">{{ organization.name }}</div>
+                            <a href="{% url 'organizations:detail' slug=organization.slug %}" class="catalyst-menu-link {% if request.path == organization.get_absolute_url %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 8h2v-2H7v2zm0-4h2v-2H7v2zm0-4h2V7H7v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z" />
+                                </svg>
+                                Summary
+                            </a>
+                            <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/nodes/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                                </svg>
+                                Nodes
+                            </a>
+                            <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/security-groups/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                Security Policies
+                            </a>
+                            <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/certificates/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                                Certificates
+                            </a>
+                            <a href="{% url 'organizations:members' organization.slug %}" class="catalyst-menu-link {% if '/members/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87M16 3.13a4 4 0 010 7.75M8 3.13a4 4 0 000 7.75" />
+                                </svg>
+                                Members
+                            </a>
+                            <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/webhooks/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Webhooks
+                            </a>
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'notifications_org:preferences' slug=organization.slug %}" class="catalyst-menu-link {% if '/notifications/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                                </svg>
+                                Notifications
+                            </a>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="catalyst-workspace-empty">
+                            <p class="catalyst-menu-title">Workspace</p>
+                            <p>Select an organization to manage nodes, certificates, members, and policies.</p>
+                            <a href="{% url 'organizations:list' %}" class="catalyst-menu-link">View Organizations</a>
+                        </div>
+                        {% endif %}
+                    </nav>
+                </div>
+
+                <div class="catalyst-sidebar-footer catalyst-workspace-footer">
+                    <div class="catalyst-user-meta">
+                        <div class="catalyst-user-email">{{ user.email }}</div>
+                        <div class="catalyst-user-actions">
+                            <a href="{% url 'profile' %}">Profile</a>
+                            <span>•</span>
+                            <a href="{% url 'logout' %}">Logout</a>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </aside>
+            </aside>
+        </div>
         {% endif %}
 
         <div class="catalyst-content-wrapper">

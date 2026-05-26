@@ -1,10 +1,23 @@
 /* Sidebar and shell navigation */
 
+:root {
+  --catalyst-global-rail-width: 76px;
+  --catalyst-workspace-rail-width: 272px;
+  --catalyst-shell-offset: calc(var(--catalyst-global-rail-width) + var(--catalyst-workspace-rail-width));
+}
+
+.catalyst-shell-nav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  display: none;
+}
+
 .catalyst-sidebar {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 30;
-  display: flex;
+  display: none;
   flex-direction: column;
   width: 272px;
   background: var(--ui-surface-muted);
@@ -12,7 +25,128 @@
   backdrop-filter: none;
 }
 
-.catalyst-sidebar-header {
+@media (min-width: 1024px) {
+  .catalyst-sidebar,
+  .catalyst-shell-nav {
+    display: flex;
+  }
+}
+
+.catalyst-global-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--catalyst-global-rail-width);
+  min-height: 100vh;
+  padding: 0.85rem 0.55rem;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.catalyst-workspace-rail {
+  display: flex;
+  flex-direction: column;
+  width: var(--catalyst-workspace-rail-width);
+  min-height: 100vh;
+  background: var(--ui-surface-muted);
+  border-right: 1px solid var(--ui-border);
+}
+
+.catalyst-rail-brand,
+.catalyst-rail-link,
+.catalyst-rail-avatar {
+  color: inherit;
+}
+
+.catalyst-rail-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.catalyst-rail-logo,
+.catalyst-rail-logo svg {
+  display: block;
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.catalyst-rail-nav,
+.catalyst-rail-account {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.catalyst-rail-nav {
+  flex: 1;
+}
+
+.catalyst-rail-account {
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.catalyst-rail-link {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  width: 100%;
+  min-height: 3.25rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #cbd5e1;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.catalyst-rail-link:hover,
+.catalyst-rail-link.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.catalyst-rail-link:focus-visible,
+.catalyst-rail-brand:focus-visible,
+.catalyst-rail-avatar:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.catalyst-rail-icon {
+  width: 1.12rem;
+  height: 1.12rem;
+  flex-shrink: 0;
+}
+
+.catalyst-rail-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.catalyst-rail-avatar {
+  width: 2.35rem;
+  height: 2.35rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.catalyst-sidebar-header,
+.catalyst-workspace-header {
   padding: 1rem 1rem 0.95rem;
   border-bottom: 1px solid var(--ui-border);
 }
@@ -112,6 +246,17 @@
   flex-shrink: 0;
 }
 
+.catalyst-workspace-empty {
+  padding: 0.8rem;
+  color: var(--ui-text-muted);
+  font-size: 0.9rem;
+}
+
+.catalyst-workspace-empty p {
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
 .catalyst-sidebar-footer {
   display: flex;
   align-items: center;
@@ -119,6 +264,10 @@
   padding: 0.9rem 1rem 1rem;
   border-top: 1px solid var(--ui-border);
   background: var(--ui-surface-muted);
+}
+
+.catalyst-workspace-footer {
+  flex-wrap: wrap;
 }
 
 .catalyst-user-avatar {
@@ -162,12 +311,23 @@
   color: var(--ui-primary);
 }
 
+.mobile-org-chip {
+  margin: 0 0 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
 .catalyst-content-wrapper {
   min-height: 100vh;
 }
 
 @media (min-width: 1024px) {
   .catalyst-content-wrapper {
-    margin-left: 272px;
+    margin-left: var(--catalyst-shell-offset);
   }
 }
