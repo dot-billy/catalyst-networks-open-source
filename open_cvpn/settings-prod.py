@@ -217,8 +217,9 @@ STATIC_URL = '/static/'
 
 # Insert WhiteNoise middleware after SecurityMiddleware
 MIDDLEWARE = MIDDLEWARE.copy()
-security_index = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
-MIDDLEWARE.insert(security_index + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+    security_index = MIDDLEWARE.index('django.middleware.security.SecurityMiddleware')
+    MIDDLEWARE.insert(security_index + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 # Configure WhiteNoise
 STORAGES = {

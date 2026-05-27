@@ -65,6 +65,13 @@ shell before running Compose if you need to manage migrations manually. Do not
 run the entrypoint migrations and a separate `docker compose exec web python
 manage.py migrate` at the same time against a fresh database.
 
+For Gunicorn startup, the web service also builds the generated Tailwind output
+and runs `collectstatic` into `DJANGO_STATIC_ROOT` so `DJANGO_DEBUG=False`
+deployments serve CSS and JavaScript through WhiteNoise. The generated source
+directory defaults to `/tmp/catalyst-generated-static` and the collected static
+root defaults to `/tmp/catalyst-staticfiles`, which keeps the default bind mount
+from hiding or blocking generated static files.
+
 On a fresh database, the first human account can be created from `/register/`.
 After any user exists, human registration is invitation-only by default.
 
@@ -103,6 +110,10 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DEFAULT_FROM_EMAIL` | Sender email address | `noreply@example.com` |
 | `BASE_URL` | Public URL of the application | `http://localhost:8000` |
 | `STATIC_ASSET_VERSION` | Optional cache-busting version for static URLs | Project version |
+| `DJANGO_STATIC_ROOT` | Writable collected static directory for WhiteNoise | `/tmp/catalyst-staticfiles` in Compose |
+| `DJANGO_GENERATED_STATIC_DIR` | Writable generated static source directory | `/tmp/catalyst-generated-static` in Compose |
+| `RUN_BUILD_STATIC` | Build generated Tailwind assets before Gunicorn startup | `true` in Compose |
+| `RUN_COLLECTSTATIC` | Collect static assets before Gunicorn startup | `true` in Compose |
 | `CERT_STORAGE_ROOT` | Path for certificate storage | `/data/certs` |
 | `RUN_MIGRATIONS` | Run migrations when the Compose web service starts | `true` |
 

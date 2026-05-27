@@ -13,6 +13,10 @@ services:
       - POSTGRES_HOST=db
       - REDIS_HOST=redis
       - CERT_STORAGE_ROOT=/data/certs
+      - DJANGO_STATIC_ROOT=${DJANGO_STATIC_ROOT:-/tmp/catalyst-staticfiles}
+      - DJANGO_GENERATED_STATIC_DIR=${DJANGO_GENERATED_STATIC_DIR:-/tmp/catalyst-generated-static}
+      - RUN_BUILD_STATIC=${RUN_BUILD_STATIC:-true}
+      - RUN_COLLECTSTATIC=${RUN_COLLECTSTATIC:-true}
       - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
     depends_on:
       db:

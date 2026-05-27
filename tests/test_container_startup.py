@@ -29,6 +29,17 @@ class ContainerStartupConfigTests(unittest.TestCase):
         self.assertIn('exec "$@"', entrypoint)
         self.assertNotIn('exec gunicorn --bind 0.0.0.0:8000', entrypoint)
 
+    def test_entrypoint_prepares_static_assets_for_gunicorn_startup(self):
+        entrypoint = self.read_file("docker-entrypoint.sh")
+
+        self.assertIn('mkdir -p "$DJANGO_STATIC_ROOT"', entrypoint)
+        self.assertIn('mkdir -p "$DJANGO_GENERATED_STATIC_DIR"', entrypoint)
+        self.assertIn('if [ "$1" = "gunicorn" ]; then', entrypoint)
+        self.assertIn('if [ "$RUN_BUILD_STATIC" = "true" ]; then', entrypoint)
+        self.assertIn('tailwindcss -i static/css/tailwind-input.css -o "$tailwind_output" --minify', entrypoint)
+        self.assertIn('if [ "$RUN_COLLECTSTATIC" = "true" ]; then', entrypoint)
+        self.assertIn('python manage.py collectstatic --noinput --clear', entrypoint)
+
     def test_entrypoint_superuser_creation_uses_email_user_contract(self):
         entrypoint = self.read_file("docker-entrypoint.sh")
 
@@ -42,11 +53,31 @@ class ContainerStartupConfigTests(unittest.TestCase):
 
         self.assertNotIn("command: python manage.py runserver", compose)
         self.assertIn("RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}", compose)
+        self.assertIn("RUN_BUILD_STATIC=${RUN_BUILD_STATIC:-true}", compose)
+        self.assertIn("RUN_COLLECTSTATIC=${RUN_COLLECTSTATIC:-true}", compose)
+        self.assertIn("DJANGO_STATIC_ROOT=${DJANGO_STATIC_ROOT:-/tmp/catalyst-staticfiles}", compose)
+        self.assertIn("DJANGO_GENERATED_STATIC_DIR=${DJANGO_GENERATED_STATIC_DIR:-/tmp/catalyst-generated-static}", compose)
         self.assertIn('command: ["celery", "-A", "open_cvpn", "worker", "-l", "INFO"]', compose)
         self.assertIn(
             'command: ["celery", "-A", "open_cvpn", "beat", "-l", "INFO", "--schedule", "/tmp/celerybeat-schedule"]',
             compose,
         )
+
+    def test_base_settings_serve_collected_static_with_whitenoise(self):
+        settings = self.read_file("open_cvpn/settings.py")
+
+        self.assertIn("'whitenoise.middleware.WhiteNoiseMiddleware'", settings)
+        self.assertIn("DJANGO_STATIC_ROOT", settings)
+        self.assertIn("DJANGO_GENERATED_STATIC_DIR", settings)
+        self.assertIn('"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"', settings)
+
+    def test_base_settings_skip_unreadable_dotenv_file(self):
+        settings = self.read_file("open_cvpn/settings.py")
+
+        self.assertIn("_dotenv_path = BASE_DIR / '.env'", settings)
+        self.assertIn("os.access(_dotenv_path, os.R_OK)", settings)
+        self.assertIn("load_dotenv(_dotenv_path)", settings)
+        self.assertNotIn("load_dotenv()", settings)
 
     def test_jwt_signing_key_falls_back_when_env_is_empty(self):
         settings = self.read_file("open_cvpn/settings.py")
