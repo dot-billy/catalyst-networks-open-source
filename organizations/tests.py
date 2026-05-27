@@ -40,6 +40,34 @@ class OrganizationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test Organization')
 
+    def test_authenticated_shell_uses_two_rail_console(self):
+        response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'catalyst-shell-nav')
+        self.assertContains(response, 'catalyst-global-rail')
+        self.assertContains(response, 'catalyst-workspace-rail')
+        self.assertContains(response, 'aria-label="Global navigation"')
+        self.assertContains(response, 'aria-label="Organization navigation"')
+        self.assertContains(response, 'Current Organization')
+        self.assertContains(response, 'Summary')
+        self.assertContains(response, 'Nodes')
+        self.assertContains(response, 'Security Policies')
+        self.assertContains(response, 'Certificates')
+        self.assertContains(response, 'Members')
+        self.assertContains(response, 'Webhooks')
+
+    def test_oss_shell_keeps_oss_navigation_product_specific(self):
+        response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/docs/getting-started/')
+        self.assertContains(response, 'Documentation')
+        self.assertNotContains(response, 'https://docs.catalystnetworks.io/')
+        self.assertNotContains(response, 'Licensing')
+        self.assertNotContains(response, 'Get Help')
+        self.assertNotContains(response, '/support/')
+
     def test_network_range_add(self):
         response = self.client.post(
             reverse('organizations:network_range', kwargs={'slug': self.organization.slug}),
