@@ -4,6 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from django.core.mail import get_connection
 from django.test import SimpleTestCase
 
 from open_cvpn.email_settings import (
@@ -95,6 +96,7 @@ from open_cvpn import settings
 print(json.dumps({
     "EMAIL_BACKEND": settings.EMAIL_BACKEND,
     "DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL,
+    "INSTALLED_APPS": list(settings.INSTALLED_APPS),
     "RESEND_API_KEY": getattr(settings, "RESEND_API_KEY", ""),
     "ANYMAIL": getattr(settings, "ANYMAIL", {}),
     "MAILGUN_ACCESS_KEY": getattr(settings, "MAILGUN_ACCESS_KEY", ""),
@@ -114,6 +116,19 @@ print(json.dumps({
 
 
 class ProjectEmailSettingsTests(SimpleTestCase):
+    def test_project_settings_register_anymail_app(self):
+        config = load_project_settings({})
+
+        self.assertIn("anymail", config["INSTALLED_APPS"])
+
+    def test_resend_backend_connection_is_importable(self):
+        connection = get_connection(
+            backend=RESEND_EMAIL_BACKEND,
+            api_key="re_project_test",
+        )
+
+        self.assertEqual(connection.__class__.__module__, "anymail.backends.resend")
+
     def test_project_settings_select_resend_when_api_key_is_configured(self):
         config = load_project_settings(
             {
