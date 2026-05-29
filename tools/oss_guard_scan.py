@@ -19,7 +19,8 @@ BLOCKED_PATHS = re.compile(
 
 SECRET_PATTERNS = re.compile(
     r"(SECRET_KEY\s*=|JWT_SECRET_KEY\s*=|FIELD_ENCRYPTION_KEY\s*=|AWS_[A-Z0-9_]*\s*=|"
-    r"POSTGRES_PASSWORD\s*=|REDIS_PASSWORD\s*=|MAILGUN_API_KEY\s*=|RESEND_API_KEY\s*[:=]|"
+    r"POSTGRES_PASSWORD\s*=|REDIS_PASSWORD\s*=|MAILGUN_API_KEY\s*=|"
+    r"[\"']?RESEND_API_KEY[\"']?\s*[:=]|"
     r"SUPPORT_GATEWAY_SECRET\s*=|DATABASE_URL\s*=|BEGIN [A-Z ]*PRIVATE KEY|"
     r"[A-Z0-9_]*PRIVATE_KEY\s*=|Authorization:\s*Bearer|\bBearer\s+|x-api-key\s*[:=]|"
     r"sessionid\s*=|csrftoken\s*=|"
@@ -54,7 +55,8 @@ SAFE_PLUMBING_PATTERNS = re.compile(
     r")\s*(#.*)?$"
 )
 
-ENV_ASSIGNMENT_PATTERN = re.compile(r"\b[A-Z0-9_]+\s*=\s*([^\s`,;]+)")
+ENV_ASSIGNMENT_PATTERN = re.compile(r"\b[A-Z0-9_]+\s*=\s*([^\s`,;#]+)")
+MAPPING_ASSIGNMENT_PATTERN = re.compile(r"[\"']?[A-Z0-9_]+[\"']?\s*:\s*([^\s`,;#}]+)")
 
 ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
@@ -144,6 +146,13 @@ def is_safe_placeholder_value(value: str) -> bool:
     return lowered in SAFE_EXACT_VALUES or placeholderish
 
 
+def is_safe_secret_value(value: str, relative: str) -> bool:
+    stripped = value.strip().rstrip(",")
+    if relative.endswith(".py") and stripped == stripped.strip("\"'"):
+        return True
+    return is_safe_placeholder_value(stripped)
+
+
 def is_known_safe_secret_like_line(relative: str, stripped: str) -> bool:
     if (
         relative == "nodes/api_registration.py"
@@ -155,20 +164,25 @@ def is_known_safe_secret_like_line(relative: str, stripped: str) -> bool:
 
 def is_safe_placeholder_secret(line: str, relative: str) -> bool:
     stripped = line.strip()
-    if not stripped or stripped.startswith("#"):
+    if not stripped:
         return True
+    if stripped.startswith("#"):
+        uncommented = stripped.lstrip("#").strip()
+        return not SECRET_PATTERNS.search(uncommented) or is_safe_placeholder_secret(
+            uncommented,
+            relative,
+        )
     if is_known_safe_secret_like_line(relative, stripped):
         return True
     if SAFE_PLUMBING_PATTERNS.search(stripped):
         return True
-    if "=" not in stripped:
-        return False
-    if not re.match(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
-        values = ENV_ASSIGNMENT_PATTERN.findall(stripped)
-        return bool(values) and all(is_safe_placeholder_value(value) for value in values)
-    _, value = stripped.split("=", 1)
-    value = value.split("#", 1)[0].strip().strip("\"'")
-    return is_safe_placeholder_value(value)
+    if re.match(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=", stripped):
+        _, value = stripped.split("=", 1)
+        value = value.split("#", 1)[0].strip()
+        return is_safe_secret_value(value, relative)
+    values = ENV_ASSIGNMENT_PATTERN.findall(stripped)
+    values.extend(MAPPING_ASSIGNMENT_PATTERN.findall(stripped))
+    return bool(values) and all(is_safe_secret_value(value, relative) for value in values)
 
 
 def scan_file(path: Path) -> list[str]:

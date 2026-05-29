@@ -19,7 +19,7 @@ class EmailSettingsHelperTests(SimpleTestCase):
     def test_resend_backend_selected_when_api_key_present_without_explicit_backend(self):
         config = build_email_settings(
             {
-                "RESEND_API_KEY": "re_test_key",
+                "RESEND_API_KEY": "your-resend-api-key",
                 "DEFAULT_FROM_EMAIL": "Catalyst <noreply@example.test>",
             },
             default_from_email="fallback@example.test",
@@ -27,21 +27,21 @@ class EmailSettingsHelperTests(SimpleTestCase):
 
         self.assertEqual(config["EMAIL_BACKEND"], RESEND_EMAIL_BACKEND)
         self.assertEqual(config["DEFAULT_FROM_EMAIL"], "Catalyst <noreply@example.test>")
-        self.assertEqual(config["RESEND_API_KEY"], "re_test_key")
-        self.assertEqual(config["ANYMAIL"], {"RESEND_API_KEY": "re_test_key"})
+        self.assertEqual(config["RESEND_API_KEY"], "your-resend-api-key")
+        self.assertEqual(config["ANYMAIL"], {"RESEND_API_KEY": "your-resend-api-key"})
 
     def test_explicit_email_backend_wins_over_resend(self):
         config = build_email_settings(
             {
                 "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
-                "RESEND_API_KEY": "re_test_key",
+                "RESEND_API_KEY": "your-resend-api-key",
             },
             default_from_email="fallback@example.test",
         )
 
         self.assertEqual(config["EMAIL_BACKEND"], "django.core.mail.backends.locmem.EmailBackend")
         self.assertEqual(config["DEFAULT_FROM_EMAIL"], "fallback@example.test")
-        self.assertEqual(config["RESEND_API_KEY"], "re_test_key")
+        self.assertEqual(config["RESEND_API_KEY"], "your-resend-api-key")
         self.assertNotIn("ANYMAIL", config)
 
     def test_mailgun_backend_remains_available_when_resend_is_not_configured(self):
@@ -132,21 +132,21 @@ class ProjectEmailSettingsTests(SimpleTestCase):
     def test_project_settings_select_resend_when_api_key_is_configured(self):
         config = load_project_settings(
             {
-                "RESEND_API_KEY": "re_project_test",
+                "RESEND_API_KEY": "your-resend-api-key",
                 "DEFAULT_FROM_EMAIL": "noreply@resend.example.test",
             }
         )
 
         self.assertEqual(config["EMAIL_BACKEND"], RESEND_EMAIL_BACKEND)
         self.assertEqual(config["DEFAULT_FROM_EMAIL"], "noreply@resend.example.test")
-        self.assertEqual(config["RESEND_API_KEY"], "re_project_test")
-        self.assertEqual(config["ANYMAIL"], {"RESEND_API_KEY": "re_project_test"})
+        self.assertEqual(config["RESEND_API_KEY"], "your-resend-api-key")
+        self.assertEqual(config["ANYMAIL"], {"RESEND_API_KEY": "your-resend-api-key"})
 
     def test_project_settings_keep_explicit_backend_override(self):
         config = load_project_settings(
             {
                 "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
-                "RESEND_API_KEY": "re_project_test",
+                "RESEND_API_KEY": "your-resend-api-key",
             }
         )
 
