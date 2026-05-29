@@ -58,3 +58,99 @@ class EmailSettingsHelperTests(SimpleTestCase):
         self.assertEqual(config["RESEND_API_KEY"], "")
         self.assertEqual(config["MAILGUN_API_KEY"], "")
         self.assertEqual(config["MAILGUN_DOMAIN"], "")
+
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def load_project_settings(extra_env):
+    env = os.environ.copy()
+    for key in [
+        "EMAIL_BACKEND",
+        "RESEND_API_KEY",
+        "MAILGUN_API_KEY",
+        "MAILGUN_DOMAIN",
+        "DEFAULT_FROM_EMAIL",
+        "ANYMAIL_RESEND_API_KEY",
+    ]:
+        env.pop(key, None)
+    env.update(
+        {
+            "DJANGO_SECRET_KEY": "test-secret",
+            "REGISTRATION_MASTER_TOKEN": "test-token",
+            "POSTGRES_DB": "open_cvpn",
+            "POSTGRES_USER": "postgres",
+            "POSTGRES_PASSWORD": "postgres",
+            "POSTGRES_HOST": "db",
+        }
+    )
+    env.update(extra_env)
+
+    script = """
+import json
+from open_cvpn import settings
+
+print(json.dumps({
+    "EMAIL_BACKEND": settings.EMAIL_BACKEND,
+    "DEFAULT_FROM_EMAIL": settings.DEFAULT_FROM_EMAIL,
+    "RESEND_API_KEY": getattr(settings, "RESEND_API_KEY", ""),
+    "ANYMAIL": getattr(settings, "ANYMAIL", {}),
+    "MAILGUN_ACCESS_KEY": getattr(settings, "MAILGUN_ACCESS_KEY", ""),
+    "MAILGUN_SERVER_NAME": getattr(settings, "MAILGUN_SERVER_NAME", ""),
+}))
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=BASE_DIR,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
+class ProjectEmailSettingsTests(SimpleTestCase):
+    def test_project_settings_select_resend_when_api_key_is_configured(self):
+        config = load_project_settings(
+            {
+                "RESEND_API_KEY": "re_project_test",
+                "DEFAULT_FROM_EMAIL": "noreply@resend.example.test",
+            }
+        )
+
+        self.assertEqual(config["EMAIL_BACKEND"], RESEND_EMAIL_BACKEND)
+        self.assertEqual(config["DEFAULT_FROM_EMAIL"], "noreply@resend.example.test")
+        self.assertEqual(config["RESEND_API_KEY"], "re_project_test")
+        self.assertEqual(config["ANYMAIL"], {"RESEND_API_KEY": "re_project_test"})
+
+    def test_project_settings_keep_explicit_backend_override(self):
+        config = load_project_settings(
+            {
+                "EMAIL_BACKEND": "django.core.mail.backends.locmem.EmailBackend",
+                "RESEND_API_KEY": "re_project_test",
+            }
+        )
+
+        self.assertEqual(config["EMAIL_BACKEND"], "django.core.mail.backends.locmem.EmailBackend")
+        self.assertEqual(config["ANYMAIL"], {})
+
+    def test_project_settings_keep_mailgun_fallback_without_resend(self):
+        config = load_project_settings(
+            {
+                "MAILGUN_API_KEY": "mailgun-key",
+                "MAILGUN_DOMAIN": "mg.example.test",
+            }
+        )
+
+        self.assertEqual(config["EMAIL_BACKEND"], MAILGUN_EMAIL_BACKEND)
+        self.assertEqual(config["MAILGUN_ACCESS_KEY"], "mailgun-key")
+        self.assertEqual(config["MAILGUN_SERVER_NAME"], "mg.example.test")
