@@ -1,3 +1,9 @@
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from django.test import SimpleTestCase
 
 from open_cvpn.email_settings import (
@@ -59,30 +65,19 @@ class EmailSettingsHelperTests(SimpleTestCase):
         self.assertEqual(config["MAILGUN_API_KEY"], "")
         self.assertEqual(config["MAILGUN_DOMAIN"], "")
 
-
-import json
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def load_project_settings(extra_env):
     env = os.environ.copy()
-    for key in [
-        "EMAIL_BACKEND",
-        "RESEND_API_KEY",
-        "MAILGUN_API_KEY",
-        "MAILGUN_DOMAIN",
-        "DEFAULT_FROM_EMAIL",
-        "ANYMAIL_RESEND_API_KEY",
-    ]:
-        env.pop(key, None)
     env.update(
         {
+            "EMAIL_BACKEND": "",
+            "RESEND_API_KEY": "",
+            "MAILGUN_API_KEY": "",
+            "MAILGUN_DOMAIN": "",
+            "DEFAULT_FROM_EMAIL": "",
+            "ANYMAIL_RESEND_API_KEY": "",
             "DJANGO_SECRET_KEY": "test-secret",
             "REGISTRATION_MASTER_TOKEN": "test-token",
             "POSTGRES_DB": "open_cvpn",
@@ -141,6 +136,7 @@ class ProjectEmailSettingsTests(SimpleTestCase):
         )
 
         self.assertEqual(config["EMAIL_BACKEND"], "django.core.mail.backends.locmem.EmailBackend")
+        self.assertEqual(config["DEFAULT_FROM_EMAIL"], "noreply@example.com")
         self.assertEqual(config["ANYMAIL"], {})
 
     def test_project_settings_keep_mailgun_fallback_without_resend(self):
