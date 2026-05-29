@@ -18,6 +18,7 @@ django-storages>=1.14.2
 drf-spectacular>=0.28.0
 boto3>=1.35.0
 django-mailgun-mime==0.1.1
+django-anymail[resend]>=15.0
 gunicorn>=25.0.0
 whitenoise>=6.8.0
 # Pillow >=12.1.1 fixes CVE-2026-25990 (OOB write in PSD handler)

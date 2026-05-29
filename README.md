@@ -107,7 +107,9 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `JWT_SECRET_KEY` | JWT signing key | Falls back to `DJANGO_SECRET_KEY` |
 | `REGISTRATION_MASTER_TOKEN` | **Required.** Token for node registration API; unrelated to human account registration | — |
 | `FIELD_ENCRYPTION_KEY` | Fernet key for Slack webhook storage | Empty; required before saving Slack webhooks |
-| `DEFAULT_FROM_EMAIL` | Sender email address | `noreply@example.com` |
+| `EMAIL_BACKEND` | Optional explicit Django email backend override; leave unset to allow Resend or Mailgun auto-selection | Empty |
+| `RESEND_API_KEY` | Optional Resend API key with sending access for transactional email | Empty |
+| `DEFAULT_FROM_EMAIL` | Sender email address; use a Resend-verified domain when `RESEND_API_KEY` is set | `noreply@example.com` |
 | `BASE_URL` | Public URL of the application | `http://localhost:8000` |
 | `STATIC_ASSET_VERSION` | Optional cache-busting version for static URLs | Project version |
 | `DJANGO_STATIC_ROOT` | Writable collected static directory for WhiteNoise | `/tmp/catalyst-staticfiles` in Compose |
@@ -116,6 +118,11 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `RUN_COLLECTSTATIC` | Collect static assets before Gunicorn startup | `true` in Compose |
 | `CERT_STORAGE_ROOT` | Path for certificate storage | `/data/certs` |
 | `RUN_MIGRATIONS` | Run migrations when the Compose web service starts | `true` |
+
+For Resend delivery, verify the sender domain in Resend, set `DEFAULT_FROM_EMAIL`
+to that domain, set `RESEND_API_KEY`, and leave `EMAIL_BACKEND` unset. If
+`RESEND_API_KEY` is not set, Mailgun remains available when `MAILGUN_API_KEY`
+and `MAILGUN_DOMAIN` are both present. Otherwise Django uses SMTP settings.
 
 The default Docker Compose stack publishes only the Django web service on `8000`.
 PostgreSQL and Redis stay on the internal Compose network.
