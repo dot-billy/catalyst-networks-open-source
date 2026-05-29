@@ -49,6 +49,8 @@ SAFE_EXACT_VALUES = {"", "postgres", "localhost", "local", "test", "dummy", "exa
 SAFE_PLUMBING_PATTERNS = re.compile(
     r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*("
     r"_[A-Za-z0-9_]*|os\.(getenv|environ\.get)\([\"'][A-Z0-9_]+[\"']\)"
+    r"|_env_value\(env,\s*[\"'][A-Z0-9_]+[\"']\)"
+    r"|_[A-Za-z0-9_]+\[[\"'][A-Z0-9_]+[\"']\]"
     r")\s*(#.*)?$"
 )
 
@@ -143,10 +145,12 @@ def is_safe_placeholder_value(value: str) -> bool:
 
 
 def is_known_safe_secret_like_line(relative: str, stripped: str) -> bool:
-    return (
+    if (
         relative == "nodes/api_registration.py"
         and stripped == "registration_token = serializers.CharField(max_length=255)"
-    )
+    ):
+        return True
+    return bool(re.match(r"^(if|elif)\s+[A-Za-z_][A-Za-z0-9_]*:\s*$", stripped))
 
 
 def is_safe_placeholder_secret(line: str, relative: str) -> bool:
