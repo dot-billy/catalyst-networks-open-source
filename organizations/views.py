@@ -10,12 +10,25 @@ import ipaddress
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from nodes.models import Node
 from security_groups.models import SecurityGroup
 from certificates.models import CertificateAuthority
-from .emails import send_invitation_email
+from .emails import resend_invitation_email, send_invitation_email
 from django.http import JsonResponse, HttpResponse
 from .decorators import organization_member_required
+
+
+def _safe_next_url(request, fallback_url):
+    next_url = request.POST.get('next') or request.GET.get('next')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return next_url
+    return fallback_url
+
 
 # Web views
 @login_required
@@ -577,6 +590,10 @@ def resend_invitation(request, slug, invitation_id):
         return redirect('organizations:members', slug=slug)
     
     organization = get_object_or_404(Organization, slug=slug)
+    redirect_url = _safe_next_url(
+        request,
+        reverse('organizations:members', kwargs={'slug': slug}),
+    )
     user_membership = organization.memberships.get(user=request.user)
     
     # Only admins can resend invitations
@@ -585,7 +602,7 @@ def resend_invitation(request, slug, invitation_id):
         if request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "1":
             context = get_members_table_context(organization, request.user)
             return render(request, 'organizations/_members_table.html', context)
-        return redirect('organizations:members', slug=slug)
+        return redirect(redirect_url)
     
     invitation = get_object_or_404(
         Invitation,
@@ -596,16 +613,14 @@ def resend_invitation(request, slug, invitation_id):
     
     # Update expiration and resend
     try:
-        invitation.expires_at = timezone.now() + timezone.timedelta(days=7)
-        invitation.save()
-        send_invitation_email(invitation)
+        resend_invitation_email(invitation)
         messages.success(request, f"Invitation resent to {invitation.email}.")
     except Exception as e:
         messages.error(request, f"Error resending invitation: {str(e)}")
     if request.headers.get("HX-Request") == "true" or request.GET.get("partial") == "1":
         context = get_members_table_context(organization, request.user)
         return render(request, 'organizations/_members_table.html', context)
-    return redirect('organizations:members', slug=slug)
+    return redirect(redirect_url)
 
 @login_required
 @organization_member_required

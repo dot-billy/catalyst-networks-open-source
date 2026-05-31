@@ -116,10 +116,18 @@
                     {% if organization.role == 'owner' or organization.role == 'admin' %}
                     <td>
                         <div class="ui-inline-actions justify-end">
-                            <button onclick="resendInvitation('{{ invitation.id }}')"
-                                    class="btn-enhanced ui-button-secondary ui-button-sm">
-                                Resend
-                            </button>
+                            <form method="post"
+                                  action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}"
+                                  hx-post="{% url 'organizations:resend_invitation' organization.slug invitation.id %}"
+                                  hx-target="#members-table"
+                                  hx-swap="innerHTML"
+                                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                                  class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-enhanced ui-button-secondary ui-button-sm">
+                                    Resend
+                                </button>
+                            </form>
                             <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')"
                                     class="btn-enhanced ui-button-danger ui-button-sm">
                                 Revoke
@@ -240,4 +248,4 @@
     </div>
 </div>
 {% endif %}
-{% endfor %} 
+{% endfor %}

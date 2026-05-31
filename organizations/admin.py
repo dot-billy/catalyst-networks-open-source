@@ -1,7 +1,9 @@
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.translation import ngettext
 import secrets
+from .emails import resend_invitation_email
 from .models import Organization, Membership, Invitation
 
 class MembershipInline(admin.TabularInline):
@@ -36,6 +38,44 @@ class InvitationAdmin(admin.ModelAdmin):
     list_filter = ['status', 'role', 'organization', 'created_at', 'expires_at']
     search_fields = ['email', 'organization__name', 'inviter__email', 'token']
     readonly_fields = ['token', 'created_at', 'accepted_at', 'revoked_at']
+    actions = ['resend_selected_invitations']
+
+    @admin.action(description="Resend selected pending invitations")
+    def resend_selected_invitations(self, request, queryset):
+        pending_invitations = queryset.filter(status='pending').select_related('organization', 'inviter')
+        sent_count = 0
+        for invitation in pending_invitations:
+            try:
+                resend_invitation_email(invitation)
+                sent_count += 1
+            except Exception as exc:
+                self.message_user(
+                    request,
+                    f"Could not resend invitation to {invitation.email}: {exc}",
+                    level=messages.ERROR,
+                )
+
+        skipped_count = queryset.exclude(status='pending').count()
+        if sent_count:
+            self.message_user(
+                request,
+                ngettext(
+                    "Resent %(count)d invitation email.",
+                    "Resent %(count)d invitation emails.",
+                    sent_count,
+                ) % {'count': sent_count},
+                level=messages.SUCCESS,
+            )
+        if skipped_count:
+            self.message_user(
+                request,
+                ngettext(
+                    "Skipped %(count)d non-pending invitation.",
+                    "Skipped %(count)d non-pending invitations.",
+                    skipped_count,
+                ) % {'count': skipped_count},
+                level=messages.WARNING,
+            )
 
     def save_model(self, request, obj, form, change):
         User = get_user_model()

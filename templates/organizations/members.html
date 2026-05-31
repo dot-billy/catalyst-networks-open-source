@@ -108,36 +108,7 @@
 
 {% block extra_js %}
 <script>
-    function resendInvitation(invitationId) {
-        // Get the CSRF token
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        
-        // Create a form element
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.style.display = 'none';
-        
-        // Add HTMX attributes
-        form.setAttribute('hx-post', `/organizations/{{ organization.slug }}/invitations/${invitationId}/resend/`);
-        form.setAttribute('hx-target', '#members-table');
-        form.setAttribute('hx-swap', 'innerHTML');
-        
-        // Add CSRF token
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrfmiddlewaretoken';
-        csrfInput.value = csrfToken;
-        form.appendChild(csrfInput);
-        
-        // Add to document, submit, and remove
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-    }
-
-    // Log HTMX events for debugging
     document.addEventListener('htmx:afterRequest', function(evt) {
-        // Close modals after successful requests
         if (evt.detail.successful) {
             document.getElementById('invite-member-modal').classList.add('hidden');
             document.getElementById('add-member-modal').classList.add('hidden');
@@ -145,4 +116,4 @@
     });
 </script>
 {% endblock %}
-{% endblock %} 
+{% endblock %}

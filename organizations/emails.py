@@ -2,6 +2,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.conf import settings
+from django.utils import timezone
 
 def send_invitation_email(invitation):
     """
@@ -29,6 +30,16 @@ def send_invitation_email(invitation):
         html_message=html_message
     )
 
+
+def resend_invitation_email(invitation, expiry_days=7):
+    """
+    Extend a pending invitation and send the invitation email again.
+    """
+    invitation.expires_at = timezone.now() + timezone.timedelta(days=expiry_days)
+    invitation.save(update_fields=['expires_at'])
+    send_invitation_email(invitation)
+
+
 def send_invitation_accepted_email(invitation):
     """
     Send a notification email to the inviter when the invitation is accepted.
@@ -48,4 +59,4 @@ def send_invitation_accepted_email(invitation):
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[invitation.inviter.email],
         html_message=html_message
-    ) 
+    )
