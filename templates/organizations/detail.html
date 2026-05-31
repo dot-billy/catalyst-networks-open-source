@@ -137,10 +137,13 @@
                                 {% if organization.role == 'owner' or organization.role == 'admin' %}
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex justify-end space-x-2">
-                                        <button onclick="resendInvitation('{{ invitation.id }}')"
-                                                class="text-primary-400 hover:text-primary-300">
-                                            Resend
-                                        </button>
+                                        <form method="post" action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}" class="inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="text-primary-400 hover:text-primary-300">
+                                                Resend
+                                            </button>
+                                        </form>
                                         <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')"
                                                 class="text-red-400 hover:text-red-300">
                                             Revoke
@@ -665,28 +668,4 @@ sudo mv catalyst-networks-darwin-amd64 /usr/local/bin/catalyst-networks</pre>
         </div>
     </div>
 
-    {% block extra_js %}
-    <script>
-        function resendInvitation(invitationId) {
-            fetch(`/organizations/{{ organization.slug }}/invitations/${invitationId}/resend/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Invitation resent successfully');
-                } else {
-                    alert('Failed to resend invitation');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while resending the invitation');
-            });
-        }
-    </script>
-    {% endblock %}
-{% endblock %} 
+{% endblock %}

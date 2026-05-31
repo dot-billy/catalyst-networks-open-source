@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from django.core.files.storage import FileSystemStorage
+from open_cvpn.email_settings import build_email_settings
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,6 +67,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
 
+    'anymail',
     'simple_history',
     'storages',
     'drf_spectacular',
@@ -215,16 +217,15 @@ CERT_STORAGE_ROOT = os.getenv('CERT_STORAGE_ROOT', MEDIA_ROOT)
 CERT_STORAGE = FileSystemStorage(location=CERT_STORAGE_ROOT)
 
 # Email settings
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@example.com')
-
-# Mailgun settings
-MAILGUN_API_KEY = os.getenv('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.getenv('MAILGUN_DOMAIN')
-if MAILGUN_API_KEY and MAILGUN_DOMAIN:
-    EMAIL_BACKEND = 'django_mailgun.MailgunBackend'
-    MAILGUN_ACCESS_KEY = MAILGUN_API_KEY
-    MAILGUN_SERVER_NAME = MAILGUN_DOMAIN
+_email_settings = build_email_settings(default_from_email='noreply@example.com')
+EMAIL_BACKEND = _email_settings['EMAIL_BACKEND']
+DEFAULT_FROM_EMAIL = _email_settings['DEFAULT_FROM_EMAIL']
+RESEND_API_KEY = _email_settings['RESEND_API_KEY']
+ANYMAIL = _email_settings.get('ANYMAIL', {})
+MAILGUN_API_KEY = _email_settings['MAILGUN_API_KEY']
+MAILGUN_DOMAIN = _email_settings['MAILGUN_DOMAIN']
+MAILGUN_ACCESS_KEY = _email_settings.get('MAILGUN_ACCESS_KEY')
+MAILGUN_SERVER_NAME = _email_settings.get('MAILGUN_SERVER_NAME')
 
 # Site URL settings
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')

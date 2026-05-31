@@ -1,8 +1,10 @@
-Organization Invitation
+Catalyst Networks workspace invitation
 
 Hello,
 
 You have been invited by {{ inviter_email }} to join {{ organization.name }} as a {{ role }}.
+
+Catalyst Networks helps teams securely manage private network access, devices, certificates, and team access from one hosted workspace.
 
 To accept this invitation, please visit the following URL:
 {{ accept_url }}
@@ -12,7 +14,7 @@ If you did not expect this invitation, you can safely ignore this email.
 This invitation will expire in {{ expiry_days }} days.
 
 Best regards,
-The {{ organization.name }} Team
+The Catalyst Networks Team
 
 ---
-This is an automated message, please do not reply to this email. 
+This is an automated message, please do not reply to this email.

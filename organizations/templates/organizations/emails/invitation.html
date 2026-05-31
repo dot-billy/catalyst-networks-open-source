@@ -3,69 +3,110 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organization Invitation</title>
+    <title>Catalyst Networks workspace invitation</title>
     <style>
-        /* Responsive styles */
         @media screen and (max-width: 600px) {
             .container {
                 width: 100% !important;
             }
             .content {
-                padding: 10px !important;
+                padding: 24px 18px !important;
+            }
+            .header {
+                padding: 24px 18px !important;
             }
         }
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
+            font-family: Inter, Arial, sans-serif;
+            line-height: 1.5;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f4;
+            background-color: #f8fafc;
+            color: #0f172a;
         }
         .container {
             max-width: 600px;
             margin: 0 auto;
             background-color: #ffffff;
+            border: 1px solid #dbeafe;
+            border-radius: 12px;
+            overflow: hidden;
         }
         .header {
-            background-color: #2c3e50;
-            padding: 20px;
-            text-align: center;
+            background-color: #eff6ff;
+            border-bottom: 1px solid #dbeafe;
+            padding: 28px 32px;
         }
         .header h1 {
-            color: #ffffff;
-            margin: 0;
+            color: #0f172a;
+            margin: 12px 0 0;
             font-size: 24px;
+            line-height: 1.25;
+        }
+        .brand {
+            color: #0369a1;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0;
+            text-transform: uppercase;
+        }
+        .eyebrow {
+            color: #0369a1;
+            font-size: 13px;
+            font-weight: 700;
+            margin: 0 0 12px;
         }
         .content {
-            padding: 20px;
+            padding: 32px;
+        }
+        .intro {
+            color: #334155;
+            font-size: 15px;
+            margin: 16px 0 0;
+        }
+        .summary {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin: 24px 0;
+            padding: 18px;
         }
         .button {
             display: inline-block;
             padding: 12px 24px;
-            background-color: #3498db;
+            background-color: #0284c7;
             color: #ffffff;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 8px;
+            font-weight: 700;
             margin-top: 20px;
         }
         .footer {
-            background-color: #f8f9fa;
-            padding: 15px;
-            text-align: center;
+            background-color: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            padding: 18px 32px;
             font-size: 12px;
-            color: #666;
+            color: #64748b;
         }
     </style>
 </head>
 <body>
+    <div style="padding: 32px 12px;">
     <div class="container">
         <div class="header">
-            <h1>Organization Invitation</h1>
+            <div class="brand">Catalyst Networks</div>
+            <h1>You've been invited to join {{ organization.name }}</h1>
+            <p class="intro">Secure workspace access for private networks, devices, certificates, and team operations.</p>
         </div>
         <div class="content">
             <p>Hello,</p>
             
             <p>You have been invited by {{ inviter_email }} to join {{ organization.name }} as a {{ role }}.</p>
+
+            <div class="summary">
+                <p class="eyebrow">Workspace access</p>
+                <p style="margin: 0;">Catalyst Networks helps teams securely manage private network access, devices, certificates, and team access from one hosted workspace.</p>
+            </div>
             
             <p>To accept this invitation, please click the button below:</p>
             
@@ -77,11 +118,12 @@
             
             <p>This invitation will expire in {{ expiry_days }} days.</p>
             
-            <p>Best regards,<br>The {{ organization.name }} Team</p>
+            <p>Best regards,<br>The Catalyst Networks Team</p>
         </div>
         <div class="footer">
             <p>This is an automated message, please do not reply to this email.</p>
         </div>
     </div>
+    </div>
 </body>
-</html> 
+</html>
