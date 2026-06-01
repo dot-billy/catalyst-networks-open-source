@@ -210,6 +210,67 @@ class NodeAccessPermissionTests(TestCase):
         self.assertIsNotNone(self.node.last_checkin)
 
 
+class NodeWebExternalPortTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(email='node-web-owner@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='Node Web Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        NetworkRange.objects.create(
+            organization=self.organization,
+            cidr='10.42.0.0/24',
+            description='node web range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='Node Web CA',
+            organization=self.organization,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('node-web-ca.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile('node-web-ca.key', b'key-bytes'),
+        )
+        self.node = Node.objects.create(
+            name='node-web-1',
+            organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip='10.42.0.20',
+            external_port=4242,
+            created_by=self.owner,
+        )
+        self.client.force_login(self.owner)
+
+    @mock.patch('nodes.web_views.regenerate_certificate', return_value=True)
+    def test_external_port_can_be_updated_for_standard_node(self, regenerate_certificate):
+        response = self.client.post(
+            reverse('nodes_org:edit', kwargs={'slug': self.organization.slug, 'pk': self.node.id}),
+            {
+                'name': self.node.name,
+                'external_port': '4343',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('nodes_org:detail', kwargs={'slug': self.organization.slug, 'pk': self.node.id}),
+        )
+        self.node.refresh_from_db()
+        self.assertFalse(self.node.is_lighthouse)
+        self.assertEqual(self.node.external_port, 4343)
+        regenerate_certificate.assert_called_once_with(self.node)
+
+    def test_external_port_rejects_out_of_range_value(self):
+        response = self.client.post(
+            reverse('nodes_org:edit', kwargs={'slug': self.organization.slug, 'pk': self.node.id}),
+            {
+                'name': self.node.name,
+                'external_port': '70000',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'External port must be a number between 1 and 65535.')
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.external_port, 4242)
+
+
 class NodeAPIMasterTokenRegressionTests(TestCase):
     def setUp(self):
         self.client = APIClient()

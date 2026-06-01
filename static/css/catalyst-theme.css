@@ -100,6 +100,17 @@ textarea:focus {
   color: var(--ui-text);
 }
 
+.btn-catalyst-outline {
+  background: transparent;
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+}
+
+.btn-catalyst-outline:hover {
+  background: var(--ui-surface-muted);
+  color: var(--ui-text);
+}
+
 .btn-catalyst-gradient {
   background: var(--ui-primary);
   border-color: var(--ui-primary);
@@ -163,6 +174,55 @@ textarea:focus {
 
 .catalyst-app-shell {
   min-height: 100vh;
+}
+
+.catalyst-auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.catalyst-auth-panel {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.catalyst-auth-panel-wide {
+  max-width: 36rem;
+}
+
+.catalyst-auth-panel-table {
+  max-width: 56rem;
+}
+
+.catalyst-auth-messages {
+  margin-bottom: 1rem;
+}
+
+.catalyst-auth-divider {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+  color: var(--ui-text-muted);
+  font-size: 0.88rem;
+}
+
+.catalyst-auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--ui-border);
+}
+
+.catalyst-auth-divider span {
+  position: relative;
+  padding: 0 0.75rem;
+  background: var(--ui-surface);
 }
 
 .catalyst-main {

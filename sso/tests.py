@@ -119,6 +119,68 @@ class SSOACSTests(TestCase):
         self.assertFalse(Membership.objects.filter(user=existing_user, organization=target_org).exists())
         self.assertEqual(Membership.objects.filter(user=existing_user).count(), 1)
 
+    def test_auto_created_sso_user_gets_unusable_password(self):
+        owner = User.objects.create_user(email='owner-acs@example.com', password='testpass')
+        target_org = Organization.objects.create(name='Auto Create Org', created_by=owner)
+        SSOConfiguration.objects.create(
+            organization=target_org,
+            is_enabled=True,
+            auto_create_users=True,
+            idp_entity_id='https://idp.example.com/metadata',
+            idp_sso_url='https://idp.example.com/sso',
+            idp_x509_cert='test-cert',
+        )
+        auth = SimpleNamespace(
+            process_response=lambda: None,
+            get_errors=lambda: [],
+            is_authenticated=lambda: True,
+            get_attributes=lambda: {
+                'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress': [
+                    'new-sso@example.com',
+                ],
+            },
+            get_nameid=lambda: 'new-sso@example.com',
+        )
+
+        with patch('sso.views.init_saml_auth', return_value=auth):
+            response = self.client.post(reverse('sso:acs', kwargs={'slug': target_org.slug}))
+
+        self.assertRedirects(response, '/dashboard/')
+        user = User.objects.get(email='new-sso@example.com')
+        self.assertFalse(user.has_usable_password())
+        self.assertTrue(Membership.objects.filter(user=user, organization=target_org, role='member').exists())
+
+    def test_acs_rejects_unsafe_relay_state(self):
+        owner = User.objects.create_user(email='owner-relay@example.com', password='testpass')
+        target_org = Organization.objects.create(name='Relay Org', created_by=owner)
+        SSOConfiguration.objects.create(
+            organization=target_org,
+            is_enabled=True,
+            auto_create_users=True,
+            idp_entity_id='https://idp.example.com/metadata',
+            idp_sso_url='https://idp.example.com/sso',
+            idp_x509_cert='test-cert',
+        )
+        auth = SimpleNamespace(
+            process_response=lambda: None,
+            get_errors=lambda: [],
+            is_authenticated=lambda: True,
+            get_attributes=lambda: {
+                'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress': [
+                    'relay-sso@example.com',
+                ],
+            },
+            get_nameid=lambda: 'relay-sso@example.com',
+        )
+
+        with patch('sso.views.init_saml_auth', return_value=auth):
+            response = self.client.post(
+                reverse('sso:acs', kwargs={'slug': target_org.slug}),
+                {'RelayState': 'https://evil.example/phish'},
+            )
+
+        self.assertRedirects(response, '/dashboard/')
+
 
 class SAMLSettingsTests(TestCase):
     def test_sp_settings_do_not_emit_sls_without_matching_route(self):

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 BLOCKED_PATHS = re.compile(
     r"(^|/)(\.git|licensing|plans|support|analytics|certs_data|media|staticfiles|"
+    r"saas_entitlements|billing|gitops|deployment-secrets|"
     r"\.superpowers|\.claude|\.cursor|\.codex|\.agents|venv|__pycache__)(/|$)|"
     r"(^|/)(\.env(?!\.example$|\.prod\.example$)(\..*)?|cookies\.txt|debug\.log|"
     r"build_deploy_logs\.json|celerybeat-schedule)$"
@@ -33,9 +34,11 @@ BUSINESS_PATTERNS = re.compile(
     r"(catalystnetworks\.io|catalystnetworks\.com|app\.catalystnetworks\.io|"
     r"demo\.catalystnetworks\.io|/etc/catalyst|customer-app-secrets|do-prod|"
     r"LicenseMiddleware|license_context|LICENSE_FILE|(^|/)licensing/|"
+    r"(^|/)saas_entitlements/|(^|/)billing/|(^|/)support/|"
     r"\b(pro|enterprise) license\b|\blicense gate\b|\benterprise plan limits\b|"
     r"\bdemo mode flows\b|\bpaid edition\b|\btrial\b|\bbilling\b|\bsubscription\b|"
-    r"\bupgrade\b|customer administration|\bSLA\b|\btelemetry\b|\banalytics\b)",
+    r"\bupgrade banner\b|\bupgrade\b|customer administration|\bSLA\b|\btelemetry\b|\banalytics\b|"
+    r"\bhosted support\b|\bcommercial entitlement\b|\bSaaS entitlement\b)",
     re.IGNORECASE,
 )
 
@@ -61,7 +64,9 @@ MAPPING_ASSIGNMENT_PATTERN = re.compile(r"[\"']?[A-Z0-9_]+[\"']?\s*:\s*([^\s`,;#
 ALLOWLIST = {
     "docs/superpowers/specs/2026-05-22-oss-customer-app-migration-design.md",
     "docs/superpowers/plans/2026-05-22-oss-customer-app-migration.md",
+    "docs/PORT_LEDGER.md",
     "tools/oss_guard_scan.py",
+    "tools/port_diff_intake.py",
 }
 
 EXPECTED_BINARY_HASHES = {
@@ -159,7 +164,21 @@ def is_known_safe_secret_like_line(relative: str, stripped: str) -> bool:
         and stripped == "registration_token = serializers.CharField(max_length=255)"
     ):
         return True
+    if (
+        relative == "nodes/tests.py"
+        and stripped == "HTTP_AUTHORIZATION='Bearer node-token-1',"
+    ):
+        return True
     return bool(re.match(r"^(if|elif)\s+[A-Za-z_][A-Za-z0-9_]*:\s*$", stripped))
+
+
+def is_known_safe_business_line(relative: str, stripped: str) -> bool:
+    if stripped.startswith("self.assertNotContains("):
+        return True
+    return relative in {
+        "tests/test_oss_guard_scan.py",
+        "tests/test_port_diff_intake.py",
+    }
 
 
 def is_safe_placeholder_secret(line: str, relative: str) -> bool:
@@ -211,7 +230,7 @@ def scan_file(path: Path) -> list[str]:
     for lineno, line in enumerate(text.splitlines(), 1):
         if SECRET_PATTERNS.search(line) and not is_safe_placeholder_secret(line, relative):
             findings.append(f"{relative}:{lineno}: secret-like value")
-        if BUSINESS_PATTERNS.search(line):
+        if BUSINESS_PATTERNS.search(line) and not is_known_safe_business_line(relative, line.strip()):
             findings.append(f"{relative}:{lineno}: business/private term")
     return findings
 

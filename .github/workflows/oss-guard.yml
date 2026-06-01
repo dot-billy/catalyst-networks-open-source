@@ -1,0 +1,22 @@
+name: OSS Guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run OSS guard scan
+        run: python tools/oss_guard_scan.py
+      - name: Run guard unit tests
+        run: python -m unittest tests.test_oss_guard_scan tests.test_port_diff_intake

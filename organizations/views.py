@@ -1,5 +1,7 @@
 from urllib.parse import urlencode
 
+from datetime import timedelta
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -8,14 +10,15 @@ from .models import Organization, Membership, NetworkRange, Invitation
 from .forms import OrganizationForm, NetworkRangeForm, InvitationForm
 import ipaddress
 from django.db import transaction
+from django.db.models import Count, F, Q
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
-from nodes.models import Node
+from nodes.models import Node, NodeRegistrationToken
 from security_groups.models import SecurityGroup
 from certificates.models import CertificateAuthority
 from .emails import resend_invitation_email, send_invitation_email
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse
 from .decorators import organization_member_required
 
 
@@ -159,27 +162,99 @@ def organization_create(request):
 def organization_detail(request, slug):
     """View an organization's details."""
     organization = get_object_or_404(Organization, slug=slug)
-    if not organization.members.filter(id=request.user.id).exists():
+    membership = Membership.objects.filter(organization=organization, user=request.user).first()
+    if not membership:
         messages.error(request, 'You do not have permission to view this organization.')
         return redirect('organizations:list')
-    
-    membership = organization.memberships.get(user=request.user)
+
     organization.role = membership.role
-    organization.lighthouse_nodes = organization.nodes.filter(is_lighthouse=True)
+    memberships = list(organization.memberships.select_related('user').all())
+    members_count = len(memberships)
+    nodes = Node.objects.filter(organization=organization)
+    nodes_count = nodes.count()
+    lighthouse_nodes = nodes.filter(is_lighthouse=True)
+    organization.lighthouse_nodes = lighthouse_nodes
+    lighthouse_nodes_count = lighthouse_nodes.count()
+    first_lighthouse_node = lighthouse_nodes.first()
+    certificate_authorities = CertificateAuthority.objects.filter(organization=organization).order_by('created_at')
+    certificate_authorities_count = certificate_authorities.count()
+    first_certificate_authority = certificate_authorities.first()
+    primary_network_range = NetworkRange.objects.filter(organization=organization).order_by('-created_at').first()
+    security_groups = SecurityGroup.objects.filter(organization=organization)
+    security_groups_count = security_groups.count()
+    recent_security_groups = list(
+        security_groups.annotate(
+            node_count=Count('nodes', distinct=True),
+            rule_count=Count('firewall_rules', distinct=True),
+        )[:5]
+    )
+    webhooks_count = organization.webhooks.count()
 
     # Setup steps
-    has_ca = CertificateAuthority.objects.filter(organization=organization).exists()
-    has_network_range = NetworkRange.objects.filter(organization=organization).exists()
-    has_node = Node.objects.filter(organization=organization).exists()
+    has_ca = certificate_authorities_count > 0
+    has_network_range = primary_network_range is not None
+    has_node = nodes_count > 0
     setup_steps_completed = sum([has_ca, has_network_range, has_node])
     setup_steps_total = 3
     setup_steps_percent = int((setup_steps_completed / setup_steps_total) * 100) if setup_steps_total > 0 else 0
+    now = timezone.now()
+    certificate_warning_cutoff = now + timedelta(days=30)
+    recent_nodes = list(nodes.select_related('certificate_authority')[:5])
+    for node in recent_nodes:
+        if not node.cert_expiration:
+            node.cert_status_label = 'Unknown'
+            node.cert_status_badge = 'ui-badge-warning'
+        elif node.cert_expiration <= now:
+            node.cert_status_label = 'Expired'
+            node.cert_status_badge = 'ui-badge-danger'
+        elif node.cert_expiration <= certificate_warning_cutoff:
+            node.cert_status_label = 'Expiring soon'
+            node.cert_status_badge = 'ui-badge-warning'
+        else:
+            node.cert_status_label = 'Healthy'
+            node.cert_status_badge = 'ui-badge-success'
+
+    certificate_attention_count = nodes.filter(
+        Q(cert_expiration__isnull=True) | Q(cert_expiration__lte=certificate_warning_cutoff)
+    ).count()
+    pending_invitations = list(Invitation.objects.filter(
+        organization=organization,
+        status='pending',
+        expires_at__gt=now,
+    ).order_by('-created_at'))
+    pending_invitations_count = len(pending_invitations)
+    registration_tokens = NodeRegistrationToken.objects.filter(organization=organization)
+    registration_tokens_count = registration_tokens.count()
+    valid_registration_tokens_count = registration_tokens.filter(
+        is_active=True,
+        expires_at__gt=now,
+    ).filter(
+        Q(uses_allowed=-1) | Q(uses_count__lt=F('uses_allowed'))
+    ).count()
+    registration_token_issue_count = registration_tokens_count - valid_registration_tokens_count
 
     return render(request, 'organizations/detail.html', {
         'organization': organization,
+        'memberships': memberships,
+        'members_count': members_count,
+        'nodes_count': nodes_count,
+        'lighthouse_nodes_count': lighthouse_nodes_count,
+        'first_lighthouse_node': first_lighthouse_node,
+        'certificate_authorities_count': certificate_authorities_count,
+        'first_certificate_authority': first_certificate_authority,
+        'primary_network_range': primary_network_range,
+        'security_groups_count': security_groups_count,
+        'recent_security_groups': recent_security_groups,
+        'webhooks_count': webhooks_count,
         'has_ca': has_ca,
         'has_network_range': has_network_range,
         'has_node': has_node,
+        'recent_nodes': recent_nodes,
+        'certificate_attention_count': certificate_attention_count,
+        'pending_invitations': pending_invitations,
+        'pending_invitations_count': pending_invitations_count,
+        'valid_registration_tokens_count': valid_registration_tokens_count,
+        'registration_token_issue_count': registration_token_issue_count,
         'setup_steps_completed': setup_steps_completed,
         'setup_steps_total': setup_steps_total,
         'setup_steps_percent': setup_steps_percent,
