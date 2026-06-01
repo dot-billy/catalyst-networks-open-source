@@ -68,6 +68,30 @@ class OrganizationTests(TestCase):
         self.assertContains(response, 'Access & Invitations')
         self.assertContains(response, 'SSO Settings')
 
+    def test_organization_detail_role_gates_sso_navigation(self):
+        admin = User.objects.create_user(email='admin@example.com', password='testpass')
+        member = User.objects.create_user(email='member@example.com', password='testpass')
+        Membership.objects.create(user=admin, organization=self.organization, role='admin')
+        Membership.objects.create(user=member, organization=self.organization, role='member')
+        sso_url = reverse('sso:configure', kwargs={'slug': self.organization.slug})
+
+        owner_response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+        self.assertContains(owner_response, sso_url)
+        self.assertContains(owner_response, 'SSO Settings')
+        self.assertContains(owner_response, '>SSO<')
+
+        self.client.force_login(admin)
+        admin_response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+        self.assertContains(admin_response, sso_url)
+        self.assertContains(admin_response, 'SSO Settings')
+        self.assertContains(admin_response, '>SSO<')
+
+        self.client.force_login(member)
+        member_response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+        self.assertNotContains(member_response, sso_url)
+        self.assertNotContains(member_response, 'SSO Settings')
+        self.assertNotContains(member_response, '>SSO<')
+
     def test_oss_shell_keeps_oss_navigation_product_specific(self):
         response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
 

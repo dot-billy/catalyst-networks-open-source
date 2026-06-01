@@ -78,7 +78,7 @@
             <form method="GET" action="" id="sso-form" class="flex gap-2" x-data="{ slug: '' }">
                 <input type="text" x-model="slug" placeholder="Organization slug" class="catalyst-input flex-1 text-sm">
                 <button type="button"
-                        @click="if (slug) window.location.href = '/sso/' + slug + '/login/'"
+                        @click="if (slug) { const next = '{{ next_url|escapejs }}'; window.location.href = '/sso/' + encodeURIComponent(slug) + '/login/' + (next ? '?next=' + encodeURIComponent(next) : '') }"
                         class="btn-catalyst btn-catalyst-secondary text-sm whitespace-nowrap">
                     SSO Login
                 </button>

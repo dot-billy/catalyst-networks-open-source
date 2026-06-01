@@ -3,7 +3,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
-class PublicAuthPageTests(TestCase):
+class LoginPageTemplateTests(TestCase):
     def assert_auth_shell_with_versioned_assets(self, response):
         self.assertTemplateUsed(response, "base/auth_base.html")
         self.assertContains(
@@ -20,6 +20,12 @@ class PublicAuthPageTests(TestCase):
         self.assertContains(response, "Organization slug")
         self.assertContains(response, "SSO Login")
         self.assert_auth_shell_with_versioned_assets(response)
+
+    def test_login_page_sso_button_preserves_next_url(self):
+        response = self.client.get(reverse("login"), {"next": "/organizations/acme/"})
+
+        self.assertContains(response, "const next = '/organizations/acme/'")
+        self.assertContains(response, "encodeURIComponent(next)")
 
     def test_password_reset_page_renders_versioned_auth_shell(self):
         response = self.client.get(reverse("password_reset"))

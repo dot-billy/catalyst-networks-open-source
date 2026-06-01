@@ -128,6 +128,14 @@
                                 </svg>
                                 Members
                             </a>
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'sso:configure' organization.slug %}" class="catalyst-menu-link {% if '/sso/' in request.path and '/configure/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zm0 0v6m-4 0h8m-9-6a5 5 0 1110 0v6H7v-6z" />
+                                </svg>
+                                SSO
+                            </a>
+                            {% endif %}
                             <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/webhooks/' in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
