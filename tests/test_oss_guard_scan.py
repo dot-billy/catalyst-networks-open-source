@@ -61,6 +61,32 @@ class OssGuardScanTests(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_customer_only_commercial_terms_are_flagged(self):
+        findings = self.scan_lines([
+            "Render the hosted support ticket form.",
+            "Show the upgrade banner for the enterprise plan limits.",
+            "Create a SaaS entitlement for this organization.",
+        ])
+
+        self.assertEqual(len(findings), 3)
+        self.assertRegex(findings[0], r"business/private term$")
+        self.assertRegex(findings[1], r"business/private term$")
+        self.assertRegex(findings[2], r"business/private term$")
+
+    def test_customer_only_paths_are_blocked(self):
+        fixture_dir = ROOT / "tests" / "_oss_guard_fixture" / "saas_entitlements"
+        fixture_dir.mkdir(parents=True, exist_ok=True)
+        fixture = fixture_dir / "models.py"
+        fixture.write_text("# placeholder\n", encoding="utf-8")
+        try:
+            findings = oss_guard_scan.scan_file(fixture)
+        finally:
+            fixture.unlink(missing_ok=True)
+            fixture_dir.rmdir()
+            fixture_dir.parent.rmdir()
+
+        self.assertEqual(findings, ["tests/_oss_guard_fixture/saas_entitlements/models.py: blocked path"])
+
 
 if __name__ == "__main__":
     unittest.main()

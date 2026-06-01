@@ -124,6 +124,12 @@
                         {% endif %}
                     </dd>
                 </div>
+                <div class="bg-dark-800 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+                    <dt class="text-sm font-medium text-gray-400">External Port</dt>
+                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
+                        {{ node.external_port|default:"4242" }}
+                    </dd>
+                </div>
                 <div class="bg-dark-900 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                     <dt class="text-sm font-medium text-gray-400">Created</dt>
                     <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.created_at|date:"F j, Y" }}</dd>
@@ -167,12 +173,6 @@
                     <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">{{ node.fqdn }}</dd>
                 </div>
                 {% endif %}
-                <div class="bg-{{ node.fqdn|yesno:'dark-900,dark-800' }} px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt class="text-sm font-medium text-gray-400">External Port</dt>
-                    <dd class="mt-1 text-sm text-light-100 sm:mt-0 sm:col-span-2">
-                        {{ node.external_port|default:"4242" }}
-                    </dd>
-                </div>
             </dl>
         </div>
         {% endif %}
@@ -361,4 +361,4 @@
 </div>
 
 
-{% endblock %} 
+{% endblock %}

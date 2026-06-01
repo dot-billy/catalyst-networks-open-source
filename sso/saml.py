@@ -9,7 +9,7 @@ def prepare_django_request(request):
     """Convert a Django HttpRequest into the format python3-saml expects."""
     return {
         'https': 'on' if request.is_secure() else 'off',
-        'http_host': request.META['HTTP_HOST'],
+        'http_host': request.get_host(),
         'script_name': request.META['PATH_INFO'],
         'server_port': request.META.get('SERVER_PORT', '443' if request.is_secure() else '80'),
         'get_data': request.GET.copy(),

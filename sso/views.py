@@ -1,12 +1,15 @@
 import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from onelogin.saml2.errors import OneLogin_Saml2_Error
 
 from organizations.models import Membership, Organization
 
@@ -28,6 +31,9 @@ def sso_login(request, slug):
         return redirect('login')
 
     auth = init_saml_auth(request, sso_config)
+    return_to = _safe_return_url(request.GET.get('next'), request)
+    if return_to:
+        return redirect(auth.login(return_to=return_to))
     return redirect(auth.login())
 
 
@@ -45,7 +51,13 @@ def sso_acs(request, slug):
         return redirect('login')
 
     auth = init_saml_auth(request, sso_config)
-    auth.process_response()
+    try:
+        auth.process_response()
+    except OneLogin_Saml2_Error as exc:
+        logger.error('SAML ACS exception for org %s: %s', org.slug, exc)
+        messages.error(request, 'SSO authentication failed. Please try again or contact your administrator.')
+        return redirect('login')
+
     errors = auth.get_errors()
 
     if errors:
@@ -85,6 +97,8 @@ def sso_acs(request, slug):
             first_name=first_name or '',
             last_name=last_name or '',
         )
+        user.set_unusable_password()
+        user.save(update_fields=['password'])
         created_user = True
         logger.info('Auto-provisioned user %s via SSO for org %s', email, org.slug)
     elif not Membership.objects.filter(user=user, organization=org).exists():
@@ -113,7 +127,8 @@ def sso_acs(request, slug):
     login(request, user, backend='django.contrib.auth.backends.ModelBackend')
     logger.info('SSO login successful for %s via org %s', email, org.slug)
 
-    return redirect('dashboard:dashboard')
+    return_to = _safe_return_url(request.POST.get('RelayState'), request)
+    return redirect(return_to or settings.LOGIN_REDIRECT_URL)
 
 
 def sso_metadata(request, slug):
@@ -221,3 +236,13 @@ def _get_attribute(attributes, attr_name, fallback=''):
     if values and isinstance(values, list):
         return values[0]
     return fallback
+
+
+def _safe_return_url(url, request):
+    if url and url_has_allowed_host_and_scheme(
+        url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return url
+    return ''

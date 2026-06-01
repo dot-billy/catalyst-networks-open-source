@@ -3,669 +3,546 @@
 {% block title %}{{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
 
 {% block content %}
-    <div class="space-y-6">
-        <!-- Organization Header -->
-        <div class="ui-page-header">
-            <div>
-                <h1 class="ui-page-title">{{ organization.name }}</h1>
-                <p class="ui-page-subtitle">Created {{ organization.created_at|date:"F j, Y" }}. Manage members, setup progress, and organization resources from one place.</p>
-            </div>
-            <div class="ui-page-actions">
-                {% url 'organizations:invitation_create' organization.slug as invite_member_url %}
+<div class="ops-command-center">
+    <div class="ui-page-header ops-command-header">
+        <div>
+            <div class="ops-eyebrow">Organization Command Center</div>
+            <h1 class="ui-page-title">{{ organization.name }}</h1>
+            <p class="ui-page-subtitle">Created {{ organization.created_at|date:"F j, Y" }}. Monitor operational readiness, node inventory, access, and resource configuration from one console.</p>
+            <div class="ops-meta-row">
                 <span class="ui-badge {% if organization.role == 'owner' or organization.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
                     {{ organization.role|title }}
                 </span>
-                {% if organization.role == 'owner' or organization.role == 'admin' %}
+                <span class="ops-muted">Slug: <code>{{ organization.slug }}</code></span>
+                <span class="ops-muted">{{ members_count }} members</span>
+            </div>
+        </div>
+        <div class="ui-page-actions">
+            {% url 'organizations:invitation_create' organization.slug as invite_member_url %}
+            {% if organization.role == 'owner' or organization.role == 'admin' %}
                 {% include "components/button.html" with text="Invite Member" href=invite_member_url variant="secondary" size="sm" %}
                 {% url 'sso:configure' organization.slug as sso_configure_url %}
                 {% include "components/button.html" with text="SSO Settings" href=sso_configure_url variant="secondary" size="sm" %}
-                {% endif %}
-                {% if organization.role == 'owner' %}
+                <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Registration Tokens</a>
+            {% endif %}
+            {% if organization.role == 'owner' %}
                 {% include "components/button.html" with text="Delete Organization" variant="danger" size="sm" onclick="document.getElementById('delete-modal').classList.remove('hidden')" %}
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Members and Invitations Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Members List -->
-            <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-medium text-light-100">Members</h2>
-                    <span class="text-sm text-gray-400">{{ organization.members.count }} total</span>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-700">
-                        <thead class="bg-dark-800">
-                            <tr>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Joined</th>
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody class="bg-dark-900 divide-y divide-gray-700">
-                            {% for membership in organization.memberships.all %}
-                            <tr class="hover:bg-dark-700 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ membership.user.email }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                        {% if membership.role == 'owner' %}
-                                            bg-green-100 text-green-800
-                                        {% elif membership.role == 'admin' %}
-                                            bg-blue-100 text-blue-800
-                                        {% else %}
-                                            bg-gray-100 text-gray-800
-                                        {% endif %}">
-                                        {{ membership.role|title }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ membership.created_at|date:"M d, Y" }}</td>
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    {% if organization.role == 'owner' or membership.role != 'owner' %}
-                                    <div class="flex justify-end space-x-2">
-                                        {% if membership.user != request.user %}
-                                        <button onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.remove('hidden')"
-                                                class="text-primary-400 hover:text-primary-300">
-                                            Change Role
-                                        </button>
-                                        <button onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.remove('hidden')"
-                                                class="text-red-400 hover:text-red-300">
-                                            Remove
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </td>
-                                {% endif %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Invitations List -->
-            <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-medium text-light-100">Pending Invitations</h2>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                    <a href="{% url 'organizations:invitation_create' organization.slug %}" class="text-sm text-primary-400 hover:underline">Send Invitation</a>
-                    {% endif %}
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-700">
-                        <thead class="bg-dark-800">
-                            <tr>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Expires</th>
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody class="bg-dark-900 divide-y divide-gray-700">
-                            {% for invitation in organization.invitations.all %}
-                            {% if invitation.status == 'pending' %}
-                            <tr class="hover:bg-dark-700 transition-colors">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ invitation.email }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span class="px-2 py-1 text-xs rounded-full 
-                                        {% if invitation.role == 'owner' %}
-                                            bg-green-100 text-green-800
-                                        {% elif invitation.role == 'admin' %}
-                                            bg-blue-100 text-blue-800
-                                        {% else %}
-                                            bg-gray-100 text-gray-800
-                                        {% endif %}">
-                                        {{ invitation.role|title }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
-                                        Pending
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                    {{ invitation.expires_at|date:"M d, Y" }}
-                                </td>
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    <div class="flex justify-end space-x-2">
-                                        <form method="post" action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}" class="inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                            <button type="submit" class="text-primary-400 hover:text-primary-300">
-                                                Resend
-                                            </button>
-                                        </form>
-                                        <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')"
-                                                class="text-red-400 hover:text-red-300">
-                                            Revoke
-                                        </button>
-                                    </div>
-                                </td>
-                                {% endif %}
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Setup Completeness Card -->
-        <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-            <h2 class="text-lg font-medium mb-3 text-light-100">Organization Setup</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- CA Status -->
-                <div class="flex items-center">
-                    <div class="p-2 rounded-full {% if organization.certificate_authorities.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.certificate_authorities.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            {% if organization.certificate_authorities.exists %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            {% else %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            {% endif %}
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-sm font-medium text-light-100">Certificate Authority</p>
-                        <p class="text-xs text-gray-500">
-                            {% if organization.certificate_authorities.exists %}
-                                Created on {{ organization.certificate_authorities.first.created_at|date:"M d, Y" }}
-                            {% else %}
-                                Required for node creation
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                    <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="text-primary-400 hover:underline">Create now</a>
-                                {% endif %}
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-                
-                <!-- Network Range Status -->
-                <div class="flex items-center">
-                    <div class="p-2 rounded-full {% if organization.network_ranges.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.network_ranges.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            {% if organization.network_ranges.exists %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            {% else %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            {% endif %}
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-sm font-medium text-light-100">Network Range</p>
-                        <p class="text-xs text-gray-500">
-                            {% if organization.network_ranges.exists %}
-                                {{ organization.network_ranges.first.cidr }}
-                            {% else %}
-                                Required for IP assignment
-                                {% if organization.role == 'owner' or organization.role == 'admin' %}
-                                    <a href="{% url 'organizations:network_range' slug=organization.slug %}" class="text-primary-400 hover:underline">Configure now</a>
-                                {% endif %}
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-                
-                <!-- Lighthouse Status -->
-                <div class="flex items-center">
-                    <div class="p-2 rounded-full {% if organization.lighthouse_nodes.exists %}bg-green-100{% else %}bg-yellow-100{% endif %} mr-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if organization.lighthouse_nodes.exists %}text-green-600{% else %}text-yellow-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            {% if organization.lighthouse_nodes.exists %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            {% else %}
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            {% endif %}
-                        </svg>
-                    </div>
-                    <div>
-                        <p class="text-sm font-medium text-light-100">Lighthouse Node</p>
-                        <p class="text-xs text-gray-500">
-                            {% if organization.lighthouse_nodes.exists %}
-                                {{ organization.lighthouse_nodes.first.name }} 
-                                ({{ organization.lighthouse_nodes.first.nebula_ip }})
-                            {% else %}
-                                Required for network connectivity
-                                {% if organization.role == 'owner' or organization.role == 'admin' and organization.certificate_authorities.exists and organization.network_ranges.exists %}
-                                    <a href="/docs/node-mgmt-cli/" class="text-primary-400 hover:underline">See documentation for adding a Lighthouse node using the Management CLI</a>
-                                {% else %}
-                                    <span class="text-gray-400">(Complete prerequisites first)</span>
-                                {% endif %}
-                            {% endif %}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Setup Progress Bar -->
-            <div class="mt-4">
-                <div class="w-full bg-dark-800 rounded-full h-2.5">
-                    <div class="bg-primary-500 h-2.5 rounded-full" style="width: {{ setup_steps_percent }}%"></div>
-                </div>
-                <p class="text-xs text-gray-500 mt-1 text-right">{{ setup_steps_completed }} of {{ setup_steps_total }} setup steps completed</p>
-            </div>
-        </div>
-
-        <!-- Resource Cards Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <!-- Nodes Card -->
-            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex items-center mb-2">
-                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-medium ml-2 text-light-100">Nodes</h2>
-                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.nodes.count }}</span>
-                </div>
-                <div class="mt-2 flex justify-between">
-                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all nodes</a>
-                </div>
-            </div>
-            
-            <!-- Registration Tokens Card -->
-            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex items-center mb-2">
-                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-medium ml-2 text-light-100">Registration Tokens</h2>
-                </div>
-                <div class="mt-2 flex justify-between">
-                    <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Manage tokens</a>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                    <a href="{% url 'nodes_org:token_create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Create token</a>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Security Groups Card -->
-            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex items-center mb-2">
-                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-medium ml-2 text-light-100">Security Groups</h2>
-                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.security_groups.count }}</span>
-                </div>
-                <div class="mt-2 flex justify-between">
-                    <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all groups</a>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                        {% if organization.nodes.exists %}
-                            <a href="{% url 'security_groups_org:create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Add group</a>
-                        {% else %}
-                            <span class="text-sm text-gray-400" title="Create at least one node first">Add group</span>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Certificates Card -->
-            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex items-center mb-2">
-                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-medium ml-2 text-light-100">Certificate Authorities</h2>
-                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.certificate_authorities.count }}</span>
-                </div>
-                <div class="mt-2 flex justify-between">
-                    <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all certificates</a>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                    <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">Add CA</a>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Webhooks Card -->
-            <div class="bg-dark-900 p-4 rounded-lg shadow border border-gray-700 hover-glow">
-                <div class="flex items-center mb-2">
-                    <div class="p-2 rounded-lg bg-primary-700 bg-opacity-20 text-primary-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-medium ml-2 text-light-100">Webhooks</h2>
-                    <span class="ml-auto text-xl font-bold text-primary-400">{{ organization.webhooks.count|default:"0" }}</span>
-                </div>
-                <div class="mt-2 flex justify-between">
-                    <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all webhooks</a>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Node/Lighthouse Management Instructions -->
-        <div id="cli-instructions" class="bg-dark-900 p-6 rounded-lg shadow border border-primary-700 hover-glow mb-8">
-            <h2 class="text-xl font-bold text-primary-400 mb-2">Add Nodes & Lighthouses via Management CLI</h2>
-            <p class="text-light-200 mb-4">To add new nodes or lighthouse nodes to your organization, use the {{ project_meta.NAME }} Management CLI. This approach is more secure and flexible than using the dashboard. Follow the steps below for your operating system.</p>
-            <div class="mb-4">
-                <span class="font-semibold text-light-100">Download the {{ project_meta.NAME }} CLI:</span>
-                <ul class="list-disc ml-6 mt-2">
-                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64" class="text-primary-400 hover:underline" download>Linux (x86_64)</a></li>
-                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64" class="text-primary-400 hover:underline" download>macOS (Intel)</a></li>
-                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-arm64" class="text-primary-400 hover:underline" download>macOS (Apple Silicon)</a></li>
-                    <li><a href="https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" class="text-primary-400 hover:underline" download>Windows (x86_64)</a></li>
-                </ul>
-            </div>
-            <div>
-                <div class="tabbed-instructions">
-                    <div class="tabs mb-2 flex space-x-2">
-                        <button class="tab-btn px-3 py-1 rounded bg-primary-700 text-white" onclick="showTab('linux')">Linux</button>
-                        <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('macos')">macOS</button>
-                        <button class="tab-btn px-3 py-1 rounded bg-dark-700 text-light-200" onclick="showTab('windows')">Windows</button>
-                    </div>
-                    <div id="tab-linux" class="tab-content w-full max-w-full">
-                        <ol class="list-decimal ml-6 mb-2">
-                            <li>Download the CLI binary:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">wget https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-linux-amd64
-chmod +x catalyst-networks-linux-amd64
-sudo mv catalyst-networks-linux-amd64 /usr/local/bin/catalyst-networks</pre>
-                        <ol start="2" class="list-decimal ml-6 mb-2">
-                            <li>Run the following command to add a node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
-                        <ol start="3" class="list-decimal ml-6 mb-2">
-                            <li>To add a lighthouse node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
-                    </div>
-                    <div id="tab-macos" class="tab-content hidden w-full max-w-full">
-                        <ol class="list-decimal ml-6 mb-2">
-                            <li>Download the CLI binary:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">curl -LO https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-darwin-amd64
-chmod +x catalyst-networks-darwin-amd64
-sudo mv catalyst-networks-darwin-amd64 /usr/local/bin/catalyst-networks</pre>
-                        <ol start="2" class="list-decimal ml-6 mb-2">
-                            <li>Run the following command to add a node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">catalyst-networks create --name mynode --hostname mynode.example.com</pre>
-                        <ol start="3" class="list-decimal ml-6 mb-2">
-                            <li>To add a lighthouse node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">catalyst-networks create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
-                    </div>
-                    <div id="tab-windows" class="tab-content hidden w-full max-w-full">
-                        <ol class="list-decimal ml-6 mb-2">
-                            <li>Download the CLI binary:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">Invoke-WebRequest -Uri `
-  "https://catalyst-networks.nyc3.digitaloceanspaces.com/go-binaries/catalyst-networks-windows-amd64.exe" `
-  -OutFile "catalyst-networks.exe"</pre>
-                        <ol start="2" class="list-decimal ml-6 mb-2">
-                            <li>Run the following command to add a node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full mb-2">.\catalyst-networks.exe create --name mynode --hostname mynode.example.com</pre>
-                        <ol start="3" class="list-decimal ml-6 mb-2">
-                            <li>To add a lighthouse node:</li>
-                        </ol>
-                        <pre class="bg-dark-800 text-light-100 rounded p-3 overflow-x-auto max-w-full">.\catalyst-networks.exe create --name mylighthouse --hostname mylighthouse.example.com --lighthouse</pre>
-                    </div>
-                </div>
-                <script>
-                function showTab(tab) {
-                    document.getElementById('tab-linux').classList.add('hidden');
-                    document.getElementById('tab-macos').classList.add('hidden');
-                    document.getElementById('tab-windows').classList.add('hidden');
-                    document.querySelectorAll('.tab-btn').forEach(btn => {
-                        btn.classList.remove('bg-primary-700', 'text-white');
-                        btn.classList.add('bg-dark-700', 'text-light-200');
-                    });
-                    document.getElementById('tab-' + tab).classList.remove('hidden');
-                    document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.add('bg-primary-700', 'text-white');
-                    document.querySelector('.tab-btn[onclick="showTab(\'' + tab + '\')"]').classList.remove('bg-dark-700', 'text-light-200');
-                }
-                // Default to Linux tab
-                showTab('linux');
-                </script>
-            </div>
-            <div class="mt-4 text-sm text-light-300">
-                <strong>Tip:</strong> You can generate registration tokens in the "Registration Tokens" section above. Use the token when prompted by the CLI to register new nodes or lighthouses.
-                <div class="mt-2">
-                    <a href="/docs/node-mgmt-cli/" class="text-primary-400 hover:underline">View full Node Management CLI docs</a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Nodes Section -->
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-medium text-light-100">Recent Nodes</h2>
-                <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all</a>
-            </div>
-            {% if organization.nodes.exists %}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-700">
-                        <thead class="bg-dark-800">
-                            <tr>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">IP Address</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Created</th>
-                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-dark-900 divide-y divide-gray-700">
-                            {% for node in organization.nodes.all|slice:":5" %}
-                                <tr class="hover:bg-dark-700 transition-colors">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ node.name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ node.nebula_ip }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                        {% if node.is_lighthouse %}
-                                            <span class="px-2 py-1 text-xs rounded-full bg-primary-700 bg-opacity-20 text-primary-400">Lighthouse</span>
-                                        {% else %}
-                                            <span class="px-2 py-1 text-xs rounded-full bg-primary-700 bg-opacity-20 text-primary-400">Standard</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ node.created_at|date:"M d, Y" }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="text-primary-400 hover:text-primary-300">View</a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="text-center py-4">
-                    <p class="text-gray-400">No nodes found in this organization.</p>
-                </div>
             {% endif %}
-        </div>
-
-        <!-- Recent Security Groups Section -->
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-medium text-light-100">Security Groups</h2>
-                <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="text-sm text-primary-400 hover:underline">View all</a>
-            </div>
-            {% if organization.security_groups.exists %}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-700">
-                        <thead class="bg-dark-800">
-                            <tr>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nodes</th>
-                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Rules</th>
-                                <th scope="col" class="relative px-6 py-3"><span class="sr-only">Actions</span></th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-dark-900 divide-y divide-gray-700">
-                            {% for sg in organization.security_groups.all|slice:":5" %}
-                                <tr class="hover:bg-dark-700 transition-colors">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-light-100">{{ sg.name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ sg.nodes.count }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">{{ sg.firewall_rules.count }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=sg.id %}" class="text-primary-400 hover:text-primary-300">View</a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="text-center py-4">
-                    <p class="text-gray-400">No security groups found in this organization.</p>
-                    {% if organization.role == 'owner' or organization.role == 'admin' %}
-                        {% if organization.nodes.exists %}
-                            <a href="{% url 'security_groups_org:create' slug=organization.slug %}" class="mt-2 inline-block text-primary-400 hover:underline">Create your first security group</a>
-                        {% else %}
-                            <p class="mt-2 text-gray-500">Create at least one node before creating security groups</p>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            {% endif %}
-        </div>
-
-        <!-- Recent Activity Section -->
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 hover-glow">
-            <h2 class="text-xl font-medium mb-4 text-light-100">Recent Activity</h2>
-            <div id="organization-activity" hx-get="{% url 'organizations:detail' slug=organization.slug %}activity/" hx-trigger="load" hx-swap="innerHTML" class="">
-                <div class="text-center py-4">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
-                    <p class="mt-2 text-gray-400">Loading activity...</p>
-                </div>
-            </div>
         </div>
     </div>
 
-    <!-- Modals -->
-    {% for membership in organization.memberships.all %}
-    <!-- Change Role Modal -->
-    <div id="change-role-modal-{{ membership.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
-            <div class="mt-3">
-                <h3 class="text-lg leading-6 font-medium text-light-100">Change Member Role</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-gray-400">Change role for {{ membership.user.email }}</p>
-                    <form method="post" action="{% url 'organizations:change_member_role' organization.slug membership.id %}" class="mt-4">
-                        {% csrf_token %}
-                        <select name="role" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-700 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md bg-dark-700 text-light-100">
-                            <option value="member" {% if membership.role == 'member' %}selected{% endif %}>Member</option>
-                            <option value="admin" {% if membership.role == 'admin' %}selected{% endif %}>Admin</option>
-                            {% if organization.role == 'owner' %}
-                            <option value="owner" {% if membership.role == 'owner' %}selected{% endif %}>Owner</option>
-                            {% endif %}
-                        </select>
-                        <div class="mt-5 flex justify-end space-x-3">
-                            <button type="button" onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.add('hidden')"
-                                    class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
-                                Cancel
-                            </button>
-                            <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
-                                Save Changes
-                            </button>
+    <section class="ops-kpi-grid" aria-label="Organization metrics">
+        <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="ops-kpi-card ops-kpi-card-primary">
+            <span class="ops-kpi-label">Nodes</span>
+            <strong class="ops-kpi-value">{{ nodes_count }}</strong>
+            <span class="ops-kpi-meta">{% if has_node %}{{ lighthouse_nodes_count }} lighthouse{% else %}No registered nodes{% endif %}</span>
+        </a>
+        <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="ops-kpi-card">
+            <span class="ops-kpi-label">Certificate Risk</span>
+            <strong class="ops-kpi-value">{{ certificate_attention_count }}</strong>
+            <span class="ops-kpi-meta">{% if certificate_attention_count == 1 %}1 node needs attention{% elif certificate_attention_count %}{{ certificate_attention_count }} nodes need attention{% elif has_ca %}No certificate warnings{% else %}CA setup required{% endif %}</span>
+        </a>
+        <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="ops-kpi-card">
+            <span class="ops-kpi-label">Security Groups</span>
+            <strong class="ops-kpi-value">{{ security_groups_count }}</strong>
+            <span class="ops-kpi-meta">{% if security_groups_count %}Policy targets configured{% else %}No groups yet{% endif %}</span>
+        </a>
+        {% if organization.role == 'owner' or organization.role == 'admin' %}
+        <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="ops-kpi-card">
+            <span class="ops-kpi-label">Registration Tokens</span>
+            <strong class="ops-kpi-value">{{ valid_registration_tokens_count }}</strong>
+            <span class="ops-kpi-meta">{% if valid_registration_tokens_count %}Valid provisioning tokens{% else %}No valid registration tokens{% endif %}</span>
+        </a>
+        {% else %}
+        <div class="ops-kpi-card">
+            <span class="ops-kpi-label">Registration Tokens</span>
+            <strong class="ops-kpi-value">{{ valid_registration_tokens_count }}</strong>
+            <span class="ops-kpi-meta">{% if valid_registration_tokens_count %}Valid provisioning tokens{% else %}No valid registration tokens{% endif %}</span>
+        </div>
+        {% endif %}
+    </section>
+
+    <div class="ops-layout-grid">
+        <main class="ops-layout-main">
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Node Operations</h2>
+                        <p>Recent inventory and lighthouse routing status.</p>
+                    </div>
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="ops-link">View all nodes</a>
+                </div>
+
+                <div class="ops-summary-row">
+                    <div class="ops-summary-item">
+                        <span class="ops-status-dot {% if has_node %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>{% if has_node %}Inventory present{% else %}No nodes registered{% endif %}</strong>
+                            <span>{{ nodes_count }} total nodes in this organization.</span>
                         </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Remove Member Modal -->
-    <div id="remove-member-modal-{{ membership.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
-            <div class="mt-3">
-                <h3 class="text-lg leading-6 font-medium text-light-100">Remove Member</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-gray-400">Are you sure you want to remove {{ membership.user.email }} from {{ organization.name }}?</p>
-                    <div class="mt-5 flex justify-end space-x-3">
-                        <button type="button" onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.add('hidden')"
-                                class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
-                            Cancel
-                        </button>
-                        <form method="post" action="{% url 'organizations:remove_member' organization.slug membership.id %}">
-                            {% csrf_token %}
-                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                                Remove
-                            </button>
-                        </form>
+                    </div>
+                    <div class="ops-summary-item">
+                        <span class="ops-status-dot {% if first_lighthouse_node %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>{% if first_lighthouse_node %}Lighthouse configured{% else %}Lighthouse needed{% endif %}</strong>
+                            <span>{% if first_lighthouse_node %}{{ lighthouse_nodes_count }} lighthouse node{{ lighthouse_nodes_count|pluralize }}{% else %}Add a lighthouse node after prerequisites are ready.{% endif %}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    {% endfor %}
 
-    {% for invitation in organization.invitations.all %}
-    {% if invitation.status == 'pending' %}
-    <!-- Revoke Invitation Modal -->
-    <div id="revoke-invitation-modal-{{ invitation.id }}" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
-            <div class="mt-3">
-                <h3 class="text-lg leading-6 font-medium text-light-100">Revoke Invitation</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-gray-400">Are you sure you want to revoke the invitation sent to {{ invitation.email }}?</p>
-                    <div class="mt-5 flex justify-end space-x-3">
-                        <button type="button" onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.add('hidden')"
-                                class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600">
-                            Cancel
-                        </button>
-                        <form method="post" action="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}">
-                            {% csrf_token %}
-                            <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                                Revoke
-                            </button>
-                        </form>
+                {% if recent_nodes %}
+                <div class="ui-table-wrapper ops-table-wrapper">
+                    <table class="ui-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Node</th>
+                                <th scope="col">Nebula IP</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">Certificate status</th>
+                                <th scope="col">Created</th>
+                                <th scope="col"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for node in recent_nodes %}
+                            <tr>
+                                <td class="font-medium text-gray-900">{{ node.name }}</td>
+                                <td class="text-gray-500">{{ node.nebula_ip }}</td>
+                                <td>
+                                    <span class="ui-badge {% if node.is_lighthouse %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                                        {% if node.is_lighthouse %}Lighthouse{% else %}Standard{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="ui-badge {{ node.cert_status_badge }}">
+                                        {{ node.cert_status_label }}
+                                    </span>
+                                </td>
+                                <td class="text-gray-500">{{ node.created_at|date:"M d, Y" }}</td>
+                                <td><a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="ops-link">View</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="ui-empty-state ops-empty-state">
+                    <h3>No nodes registered</h3>
+                    <p>Use the management CLI with a registration token to add endpoints and lighthouses to this organization.</p>
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Access & Invitations</h2>
+                        <p>Current members and pending invitations.</p>
+                    </div>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'organizations:invitation_create' organization.slug %}" class="ops-link">Send invitation</a>
+                    {% endif %}
+                </div>
+                <div class="ops-access-grid">
+                    <div class="ops-access-column">
+                        <div class="ops-mini-header">
+                            <h3>Members</h3>
+                            <span class="ui-badge ui-badge-muted">{{ members_count }} total</span>
+                        </div>
+                        <div class="ui-table-wrapper ops-table-wrapper">
+                            <table class="ui-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Email</th>
+                                        <th scope="col">Role</th>
+                                        <th scope="col">Joined</th>
+                                        {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                        <th scope="col"><span class="sr-only">Actions</span></th>
+                                        {% endif %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for membership in memberships %}
+                                    <tr>
+                                        <td class="font-medium text-gray-900">{{ membership.user.email }}</td>
+                                        <td>
+                                            <span class="ui-badge {% if membership.role == 'owner' %}ui-badge-success{% elif membership.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                                                {{ membership.role|title }}
+                                            </span>
+                                        </td>
+                                        <td class="text-gray-500">{{ membership.created_at|date:"M d, Y" }}</td>
+                                        {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                        <td>
+                                            {% if organization.role == 'owner' or membership.role != 'owner' %}
+                                            {% if membership.user != request.user %}
+                                            <div class="ui-inline-actions justify-end">
+                                                <button onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.remove('hidden')" class="btn-enhanced ui-button-secondary ui-button-sm">Change Role</button>
+                                                <button onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.remove('hidden')" class="btn-enhanced ui-button-danger ui-button-sm">Remove</button>
+                                            </div>
+                                            {% endif %}
+                                            {% endif %}
+                                        </td>
+                                        {% endif %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="ops-access-column">
+                        <div class="ops-mini-header">
+                            <h3>Pending Invitations</h3>
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'organizations:invitation_create' organization.slug %}" class="ops-link">Invite</a>
+                            {% endif %}
+                        </div>
+                        <div class="ui-table-wrapper ops-table-wrapper">
+                            <table class="ui-table">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Email</th>
+                                        <th scope="col">Role</th>
+                                        <th scope="col">Expires</th>
+                                        {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                        <th scope="col"><span class="sr-only">Actions</span></th>
+                                        {% endif %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for invitation in pending_invitations %}
+                                    <tr>
+                                        <td class="font-medium text-gray-900">{{ invitation.email }}</td>
+                                        <td>
+                                            <span class="ui-badge {% if invitation.role == 'owner' %}ui-badge-success{% elif invitation.role == 'admin' %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                                                {{ invitation.role|title }}
+                                            </span>
+                                        </td>
+                                        <td class="text-gray-500">{{ invitation.expires_at|date:"M d, Y" }}</td>
+                                        {% if organization.role == 'owner' or organization.role == 'admin' %}
+                                        <td>
+                                            <div class="ui-inline-actions justify-end">
+                                                <form method="post" action="{% url 'organizations:resend_invitation' organization.slug invitation.id %}" class="inline">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                    <button type="submit" class="btn-enhanced ui-button-secondary ui-button-sm">Resend</button>
+                                                </form>
+                                                <button onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.remove('hidden')" class="btn-enhanced ui-button-danger ui-button-sm">Revoke</button>
+                                            </div>
+                                        </td>
+                                        {% endif %}
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="{% if organization.role == 'owner' or organization.role == 'admin' %}4{% else %}3{% endif %}" class="text-gray-500">No pending invitations.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    {% endfor %}
+            </section>
 
-    <!-- Delete Organization Modal -->
-    <div id="delete-modal" class="hidden fixed inset-0 bg-dark-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-        <div class="relative mx-auto p-5 border shadow-lg rounded-md bg-dark-800 border-gray-700 w-full max-w-md">
-            <div class="mt-3 text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-900 bg-opacity-30">
-                    <svg class="h-6 w-6 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Security Groups</h2>
+                        <p>Recent policy targets and attached rules.</p>
+                    </div>
+                    <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="ops-link">View all groups</a>
                 </div>
-                <h3 class="text-lg leading-6 font-medium text-light-100 mt-2">Delete Organization</h3>
-                <div class="mt-2 px-7 py-3">
-                    <p class="text-light-300">Are you sure you want to delete <span class="font-semibold text-light-100">{{ organization.name }}</span>?</p>
-                    <p class="text-red-400 mt-2 text-sm">This action cannot be undone. All nodes, certificates, security groups, and other resources will be permanently deleted.</p>
+                {% if security_groups_count %}
+                <div class="ui-table-wrapper ops-table-wrapper">
+                    <table class="ui-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Nodes</th>
+                                <th scope="col">Rules</th>
+                                <th scope="col"><span class="sr-only">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sg in recent_security_groups %}
+                            <tr>
+                                <td class="font-medium text-gray-900">{{ sg.name }}</td>
+                                <td class="text-gray-500">{{ sg.node_count }}</td>
+                                <td class="text-gray-500">{{ sg.rule_count }}</td>
+                                <td><a href="{% url 'security_groups_org:detail' slug=organization.slug pk=sg.id %}" class="ops-link">View</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="flex justify-center space-x-4 mt-4">
-                    <button id="cancel-btn" 
-                            onclick="document.getElementById('delete-modal').classList.add('hidden')"
-                            class="px-4 py-2 bg-dark-700 text-light-200 border border-gray-700 rounded-md hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-dark-700">
-                        Cancel
-                    </button>
-                    <form method="post" action="{% url 'organizations:delete' slug=organization.slug %}">
-                        {% csrf_token %}
-                        <button type="submit" 
-                                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                            Delete
-                        </button>
-                    </form>
+                {% else %}
+                <div class="ui-empty-state ops-empty-state">
+                    <h3>No security groups configured</h3>
+                    <p>Create nodes first, then group them to simplify policy management.</p>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                        {% if has_node %}
+                        <a href="{% url 'security_groups_org:create' slug=organization.slug %}" class="ops-link">Create your first security group</a>
+                        {% endif %}
+                    {% endif %}
                 </div>
+                {% endif %}
+            </section>
+        </main>
+
+        <aside class="ops-layout-side">
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Attention Queue</h2>
+                        <p>Items that affect readiness.</p>
+                    </div>
+                </div>
+                <div class="ops-attention-list">
+                    <div class="ops-attention-item {% if has_ca %}ops-attention-item-ok{% else %}ops-attention-item-warning{% endif %}">
+                        <span class="ops-status-dot {% if has_ca %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Certificate authority</strong>
+                            <p>{% if has_ca %}A CA is available for node certificates.{% else %}Create a CA before issuing node certificates.{% endif %}</p>
+                            {% if not has_ca %}
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'certificates_org:create' slug=organization.slug %}" class="ops-link">Create CA</a>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="ops-attention-item {% if certificate_attention_count %}ops-attention-item-warning{% else %}ops-attention-item-ok{% endif %}">
+                        <span class="ops-status-dot {% if certificate_attention_count %}ops-status-dot-warning{% else %}ops-status-dot-success{% endif %}"></span>
+                        <div>
+                            <strong>Certificate status</strong>
+                            <p>{% if certificate_attention_count == 1 %}1 node needs certificate attention.{% elif certificate_attention_count %}{{ certificate_attention_count }} nodes need certificate attention.{% else %}No nodes are currently flagged for certificate risk.{% endif %}</p>
+                            <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="ops-link">Review certificates</a>
+                        </div>
+                    </div>
+                    <div class="ops-attention-item {% if has_network_range %}ops-attention-item-ok{% else %}ops-attention-item-warning{% endif %}">
+                        <span class="ops-status-dot {% if has_network_range %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Network range</strong>
+                            <p>{% if has_network_range %}{{ primary_network_range.cidr }} is configured for node addresses.{% else %}Configure a range before assigning Nebula IPs.{% endif %}</p>
+                            {% if not has_network_range %}
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'organizations:network_range' slug=organization.slug %}" class="ops-link">Configure range</a>
+                            {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="ops-attention-item {% if has_node %}ops-attention-item-ok{% else %}ops-attention-item-warning{% endif %}">
+                        <span class="ops-status-dot {% if has_node %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Node inventory</strong>
+                            <p>{% if has_node %}{{ nodes_count }} nodes are registered.{% else %}No nodes have checked into this organization yet.{% endif %}</p>
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="ops-link">Manage registration tokens</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="ops-attention-item {% if pending_invitations_count or registration_token_issue_count or not valid_registration_tokens_count %}ops-attention-item-warning{% else %}ops-attention-item-ok{% endif %}">
+                        <span class="ops-status-dot {% if pending_invitations_count or registration_token_issue_count or not valid_registration_tokens_count %}ops-status-dot-warning{% else %}ops-status-dot-success{% endif %}"></span>
+                        <div>
+                            <strong>Invitation & token readiness</strong>
+                            <p>
+                                {% if pending_invitations_count %}{{ pending_invitations_count }} pending invitation{{ pending_invitations_count|pluralize }}.{% else %}No pending invitations.{% endif %}
+                                {% if valid_registration_tokens_count %} {{ valid_registration_tokens_count }} valid registration token{{ valid_registration_tokens_count|pluralize }} available.{% else %} No valid registration tokens.{% endif %}
+                                {% if registration_token_issue_count == 1 %} 1 token needs attention.{% elif registration_token_issue_count %} {{ registration_token_issue_count }} tokens need attention.{% endif %}
+                            </p>
+                            {% if organization.role == 'owner' or organization.role == 'admin' %}
+                            <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="ops-link">Manage tokens</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="ops-attention-item {% if first_lighthouse_node %}ops-attention-item-ok{% else %}ops-attention-item-warning{% endif %}">
+                        <span class="ops-status-dot {% if first_lighthouse_node %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Lighthouse routing</strong>
+                            <p>{% if first_lighthouse_node %}{{ first_lighthouse_node.name }} is available as a lighthouse.{% else %}Add a lighthouse node for network connectivity.{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Setup Readiness</h2>
+                        <p>{{ setup_steps_completed }} of {{ setup_steps_total }} steps complete.</p>
+                    </div>
+                    <span class="ui-badge {% if setup_steps_percent == 100 %}ui-badge-success{% else %}ui-badge-warning{% endif %}">{{ setup_steps_percent }}%</span>
+                </div>
+                <div class="ops-progress-track" aria-label="Setup progress">
+                    <div class="ops-progress-fill" style="width: {{ setup_steps_percent }}%"></div>
+                </div>
+                <div class="ops-setup-list">
+                    <div class="ops-setup-item">
+                        <span class="ops-status-dot {% if has_ca %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Certificate Authority</strong>
+                            <span>{% if has_ca %}Created on {{ first_certificate_authority.created_at|date:"M d, Y" }}{% else %}Required for node creation{% endif %}</span>
+                        </div>
+                    </div>
+                    <div class="ops-setup-item">
+                        <span class="ops-status-dot {% if has_network_range %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Network Range</strong>
+                            <span>{% if has_network_range %}{{ primary_network_range.cidr }}{% else %}Required for IP assignment{% endif %}</span>
+                        </div>
+                    </div>
+                    <div class="ops-setup-item">
+                        <span class="ops-status-dot {% if has_node %}ops-status-dot-success{% else %}ops-status-dot-warning{% endif %}"></span>
+                        <div>
+                            <strong>Node Registration</strong>
+                            <span>{% if has_node %}{{ nodes_count }} nodes registered{% else %}Use CLI registration after prerequisites{% endif %}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Resource Shortcuts</h2>
+                        <p>Common operator destinations.</p>
+                    </div>
+                </div>
+                <div class="ops-resource-grid">
+                    <a href="{% url 'nodes_org:list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Nodes</strong>
+                        <span>{{ nodes_count }} endpoints</span>
+                    </a>
+                    {% if organization.role == 'owner' or organization.role == 'admin' %}
+                    <a href="{% url 'nodes_org:token_list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Registration Tokens</strong>
+                        <span>Provision endpoints</span>
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Certificates</strong>
+                        <span>{{ certificate_authorities_count }} authorities</span>
+                    </a>
+                    <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Security Groups</strong>
+                        <span>{{ security_groups_count }} groups</span>
+                    </a>
+                    <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Policies</strong>
+                        <span>Firewall rules</span>
+                    </a>
+                    <a href="{% url 'webhooks_org:list' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Webhooks</strong>
+                        <span>{{ webhooks_count }} endpoints</span>
+                    </a>
+                    <a href="{% url 'organizations:members' organization.slug %}" class="ops-resource-card">
+                        <strong>Members</strong>
+                        <span>{{ members_count }} users</span>
+                    </a>
+                    <a href="{% url 'notifications_org:preferences' slug=organization.slug %}" class="ops-resource-card">
+                        <strong>Notifications</strong>
+                        <span>Alert preferences</span>
+                    </a>
+                </div>
+            </section>
+
+            <section class="ops-panel">
+                <div class="ops-panel-header">
+                    <div>
+                        <h2>Recent Activity</h2>
+                        <p>Latest organization events.</p>
+                    </div>
+                </div>
+                <div id="organization-activity" hx-get="{% url 'organizations:detail' slug=organization.slug %}activity/" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="ops-loading">
+                        <div class="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+                        <p>Loading activity...</p>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>
+
+{% if organization.role == 'owner' or organization.role == 'admin' %}
+{% for membership in memberships %}
+{% if organization.role == 'owner' or membership.role != 'owner' %}
+{% if membership.user != request.user %}
+<div id="change-role-modal-{{ membership.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ops-modal-backdrop"></div>
+    <div class="ops-modal-panel">
+        <h3>Change Member Role</h3>
+        <p>Change role for {{ membership.user.email }}</p>
+        <form method="post" action="{% url 'organizations:change_member_role' organization.slug membership.id %}" class="space-y-4">
+            {% csrf_token %}
+            <select name="role" class="catalyst-select mt-1 block w-full">
+                <option value="member" {% if membership.role == 'member' %}selected{% endif %}>Member</option>
+                <option value="admin" {% if membership.role == 'admin' %}selected{% endif %}>Admin</option>
+                {% if organization.role == 'owner' %}
+                <option value="owner" {% if membership.role == 'owner' %}selected{% endif %}>Owner</option>
+                {% endif %}
+            </select>
+            <div class="ui-inline-actions justify-end">
+                <button type="button" onclick="document.getElementById('change-role-modal-{{ membership.id }}').classList.add('hidden')" class="btn-enhanced ui-button-secondary">Cancel</button>
+                <button type="submit" class="btn-enhanced ui-button-primary">Save Changes</button>
             </div>
+        </form>
+    </div>
+</div>
+
+<div id="remove-member-modal-{{ membership.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ops-modal-backdrop"></div>
+    <div class="ops-modal-panel">
+        <h3>Remove Member</h3>
+        <p>Are you sure you want to remove {{ membership.user.email }} from {{ organization.name }}?</p>
+        <div class="ui-inline-actions justify-end">
+            <button type="button" onclick="document.getElementById('remove-member-modal-{{ membership.id }}').classList.add('hidden')" class="btn-enhanced ui-button-secondary">Cancel</button>
+            <form method="post" action="{% url 'organizations:remove_member' organization.slug membership.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-enhanced ui-button-danger">Remove</button>
+            </form>
         </div>
     </div>
+</div>
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if organization.role == 'owner' or organization.role == 'admin' %}
+{% for invitation in pending_invitations %}
+<div id="revoke-invitation-modal-{{ invitation.id }}" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ops-modal-backdrop"></div>
+    <div class="ops-modal-panel">
+        <h3>Revoke Invitation</h3>
+        <p>Are you sure you want to revoke the invitation sent to {{ invitation.email }}?</p>
+        <div class="ui-inline-actions justify-end">
+            <button type="button" onclick="document.getElementById('revoke-invitation-modal-{{ invitation.id }}').classList.add('hidden')" class="btn-enhanced ui-button-secondary">Cancel</button>
+            <form method="post" action="{% url 'organizations:revoke_invitation' organization.slug invitation.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-enhanced ui-button-danger">Revoke</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if organization.role == 'owner' %}
+<div id="delete-modal" class="hidden fixed inset-0 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+    <div class="ops-modal-backdrop"></div>
+    <div class="ops-modal-panel ops-modal-panel-danger">
+        <h3>Delete Organization</h3>
+        <p>Are you sure you want to delete <span class="font-semibold text-gray-900">{{ organization.name }}</span>?</p>
+        <p class="ops-danger-text">This action cannot be undone. All nodes, certificates, security groups, and other resources will be permanently deleted.</p>
+        <div class="ui-inline-actions justify-end">
+            <button id="cancel-btn" type="button" onclick="document.getElementById('delete-modal').classList.add('hidden')" class="btn-enhanced ui-button-secondary">Cancel</button>
+            <form method="post" action="{% url 'organizations:delete' slug=organization.slug %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-enhanced ui-button-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}

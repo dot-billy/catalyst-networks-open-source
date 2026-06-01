@@ -108,6 +108,20 @@
                         </div>
                     </div>
 
+                    <!-- External Port -->
+                    <div class="sm:col-span-3">
+                        <label for="external_port" class="block text-sm font-medium text-light-100">External Port</label>
+                        <div class="mt-1">
+                            <input type="number" name="external_port" id="external_port"
+                                   value="{{ node.external_port|default:'4242' }}"
+                                   min="1"
+                                   max="65535"
+                                   required
+                                   class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
+                        </div>
+                        <p class="mt-2 text-sm text-light-300">Nebula listen port for generated node configs. Default: 4242.</p>
+                    </div>
+
                     <!-- Lighthouse specific fields - conditionally displayed -->
                     <div id="lighthouse_fields" class="sm:col-span-6 {% if not node.is_lighthouse %}hidden{% endif %} pt-4 border-t border-gray-700 mt-4">
                         <h4 class="text-base font-medium text-light-100 mb-3">Lighthouse Configuration</h4>
@@ -136,17 +150,6 @@
                                            placeholder="lighthouse.example.com">
                                 </div>
                                 <p class="mt-2 text-sm text-light-300">A domain name that resolves to this lighthouse's public IP address. Either this or Public IP is required.</p>
-                            </div>
-                            
-                            <!-- External Port -->
-                            <div class="sm:col-span-3">
-                                <label for="external_port" class="block text-sm font-medium text-light-100">External Port</label>
-                                <div class="mt-1">
-                                    <input type="number" name="external_port" id="external_port" 
-                                           value="{{ node.external_port|default:'4242' }}"
-                                           class="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-700 bg-dark-700 text-light-100 rounded-md">
-                                </div>
-                                <p class="mt-2 text-sm text-light-300">The external port where the lighthouse service is available (default: 4242).</p>
                             </div>
                         </div>
                     </div>
@@ -203,17 +206,13 @@
         const lighthouseFields = document.getElementById('lighthouse_fields');
         const publicIpField = document.getElementById('public_ip');
         const fqdnField = document.getElementById('fqdn');
-        const externalPortField = document.getElementById('external_port');
         
         if (isLighthouse) {
             lighthouseFields.classList.remove('hidden');
-            // Only require external port, not public IP (can use FQDN instead)
-            externalPortField.setAttribute('required', 'required');
         } else {
             lighthouseFields.classList.add('hidden');
             publicIpField.removeAttribute('required');
             fqdnField.removeAttribute('required');
-            externalPortField.removeAttribute('required');
         }
     }
     
@@ -239,4 +238,4 @@
         toggleLighthouseFields();
     });
 </script>
-{% endblock %} 
+{% endblock %}

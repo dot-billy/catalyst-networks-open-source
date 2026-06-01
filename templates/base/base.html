@@ -16,17 +16,17 @@
     {% load static %}
     {% include 'components/favicon.html' %}
 
-    <script src="{% static 'vendor/htmx-1.9.2.min.js' %}"></script>
-    <script src="{% static 'js/loading-states.js' %}"></script>
-    <script defer src="{% static 'vendor/alpine-3.13.1.min.js' %}"></script>
+    <script src="{% static 'vendor/htmx-1.9.2.min.js' %}?v={{ static_asset_version|urlencode }}"></script>
+    <script src="{% static 'js/loading-states.js' %}?v={{ static_asset_version|urlencode }}"></script>
+    <script defer src="{% static 'vendor/alpine-3.13.1.min.js' %}?v={{ static_asset_version|urlencode }}"></script>
 
-    <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
-    <link rel="stylesheet" href="{% static 'css/tailwind-output.css' %}">
-    <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
-    <link rel="stylesheet" href="{% static 'css/catalyst-theme.css' %}">
-    <link rel="stylesheet" href="{% static 'css/catalyst-sidebar.css' %}">
-    <link rel="stylesheet" href="{% static 'css/catalyst-overrides.css' %}">
-    <link rel="stylesheet" href="{% static 'css/forms.css' %}">
+    <link rel="stylesheet" href="{% static 'css/fonts.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/tailwind-output.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/design-system.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-theme.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-sidebar.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/catalyst-overrides.css' %}?v={{ static_asset_version|urlencode }}">
+    <link rel="stylesheet" href="{% static 'css/forms.css' %}?v={{ static_asset_version|urlencode }}">
 
     {% block extra_head %}{% endblock %}
 </head>
@@ -87,8 +87,12 @@
                         {% if organization %}
                         <div class="catalyst-menu-section">
                             <p class="catalyst-menu-title">Current Organization</p>
-                            <div class="catalyst-org-chip">{{ organization.name }}</div>
-                            <a href="{% url 'organizations:detail' slug=organization.slug %}" class="catalyst-menu-link {% if request.path == organization.get_absolute_url %}active{% endif %}">
+                            <div class="catalyst-org-chip">
+                                <div class="catalyst-org-name">{{ organization.name }}</div>
+                                <div class="catalyst-org-meta">{{ organization.role|default:"Member"|title }}</div>
+                            </div>
+                            {% url 'organizations:detail' slug=organization.slug as organization_detail_url %}
+                            <a href="{{ organization_detail_url }}" class="catalyst-menu-link {% if request.path == organization_detail_url %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 8h2v-2H7v2zm0-4h2v-2H7v2zm0-4h2V7H7v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2zm4 8h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z" />
                                 </svg>
@@ -100,11 +104,17 @@
                                 </svg>
                                 Nodes
                             </a>
-                            <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/security-groups/' in request.path %}active{% endif %}">
+                            <a href="{% url 'security_groups_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/security-groups/' in request.path and '/policies/' not in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
-                                Security Policies
+                                Groups
+                            </a>
+                            <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="catalyst-menu-link {% if '/policies/' in request.path %}active{% endif %}">
+                                <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Policies
                             </a>
                             <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/certificates/' in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -124,14 +134,12 @@
                                 </svg>
                                 Webhooks
                             </a>
-                            {% if organization.role == 'owner' or organization.role == 'admin' %}
                             <a href="{% url 'notifications_org:preferences' slug=organization.slug %}" class="catalyst-menu-link {% if '/notifications/' in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                                 </svg>
                                 Notifications
                             </a>
-                            {% endif %}
                         </div>
                         {% else %}
                         <div class="catalyst-workspace-empty">
@@ -158,7 +166,7 @@
         {% endif %}
 
         <div class="catalyst-content-wrapper">
-            <header class="catalyst-topbar {% if not user.is_authenticated %}catalyst-topbar-public{% endif %}">
+            <header class="catalyst-topbar ops-command-bar {% if not user.is_authenticated %}catalyst-topbar-public{% endif %}">
                 <div>
                     <p class="catalyst-topbar-eyebrow">
                         {% if organization %}
@@ -170,6 +178,9 @@
                     <h1 class="catalyst-topbar-title">{% block page_title %}Administration{% endblock %}</h1>
                 </div>
                 <div class="catalyst-topbar-actions">
+                    {% if user.is_authenticated %}
+                    <span class="ops-command-search" aria-label="Command search">Search workspace</span>
+                    {% endif %}
                     <a href="/docs/getting-started/">Docs</a>
                     {% if user.is_authenticated %}
                     <a href="{% url 'profile' %}">{{ user.email }}</a>

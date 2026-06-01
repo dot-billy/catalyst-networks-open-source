@@ -315,17 +315,26 @@ def org_node_edit(request, slug, pk):
         
         is_lighthouse = request.POST.get('is_lighthouse') == 'on'
         
-        # Get lighthouse-specific fields if it's a lighthouse node
+        # Get shared network settings and lighthouse-specific fields.
         public_ip = None
         fqdn = None
-        external_port = 4242
+        external_port = node.external_port or 4242
+        external_port_str = request.POST.get('external_port', '').strip()
+        if external_port_str:
+            try:
+                external_port = int(external_port_str)
+                if external_port < 1 or external_port > 65535:
+                    raise ValueError
+            except ValueError:
+                messages.error(request, "External port must be a number between 1 and 65535.")
+                return render(request, 'nodes/org_edit.html', {
+                    'organization': org,
+                    'node': node,
+                })
         
         if is_lighthouse:
             public_ip = request.POST.get('public_ip')
             fqdn = request.POST.get('fqdn')
-            external_port_str = request.POST.get('external_port')
-            if external_port_str and external_port_str.isdigit():
-                external_port = int(external_port_str)
             
             # Validate that lighthouse nodes have either public_ip or fqdn
             if not public_ip and not fqdn:
@@ -346,9 +355,10 @@ def org_node_edit(request, slug, pk):
                 original_is_lighthouse != is_lighthouse or 
                 (is_lighthouse and original_public_ip != public_ip)
             )
+            external_port_changed = (original_external_port or 4242) != external_port
             
             # Determine if certificate regeneration is needed
-            needs_cert_regeneration = name_changed or fqdn_changed or lighthouse_related_changes
+            needs_cert_regeneration = name_changed or fqdn_changed or lighthouse_related_changes or external_port_changed
             
             # Update node properties
             node.name = name
@@ -357,12 +367,11 @@ def org_node_edit(request, slug, pk):
             if is_lighthouse:
                 node.public_ip = public_ip
                 node.fqdn = fqdn
-                node.external_port = external_port
             else:
                 # Clear lighthouse-specific fields if it's not a lighthouse
                 node.public_ip = None
                 node.fqdn = None
-                node.external_port = 4242
+            node.external_port = external_port
                 
             node.save()
             

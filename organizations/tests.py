@@ -52,10 +52,21 @@ class OrganizationTests(TestCase):
         self.assertContains(response, 'Current Organization')
         self.assertContains(response, 'Summary')
         self.assertContains(response, 'Nodes')
-        self.assertContains(response, 'Security Policies')
+        self.assertContains(response, 'Groups')
+        self.assertContains(response, 'Policies')
         self.assertContains(response, 'Certificates')
         self.assertContains(response, 'Members')
         self.assertContains(response, 'Webhooks')
+
+    def test_organization_detail_uses_command_center_surface(self):
+        response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'ops-command-center')
+        self.assertContains(response, 'Organization Command Center')
+        self.assertContains(response, 'Node Operations')
+        self.assertContains(response, 'Access & Invitations')
+        self.assertContains(response, 'SSO Settings')
 
     def test_oss_shell_keeps_oss_navigation_product_specific(self):
         response = self.client.get(reverse('organizations:detail', kwargs={'slug': self.organization.slug}))
