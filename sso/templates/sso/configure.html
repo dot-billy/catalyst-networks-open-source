@@ -4,126 +4,236 @@
 {% block page_title %}SSO Configuration{% endblock %}
 
 {% block content %}
-<div class="space-y-6 max-w-3xl">
-    <!-- Header -->
-    <div class="ui-page-header">
+<div class="ops-command-center">
+    <div class="ui-page-header ops-command-header">
         <div>
-            <h1 class="ui-page-title">SSO / SAML Configuration</h1>
-            <p class="ui-page-subtitle">Configure SAML 2.0 Single Sign-On for {{ organization.name }}.</p>
+            <div class="ops-eyebrow">Identity Provider</div>
+            <h1 class="ui-page-title">SSO Configuration</h1>
+            <p class="ui-page-subtitle">Configure SAML, Sign in with Google, or generic OIDC for {{ organization.name }}.</p>
         </div>
         <div class="ui-page-actions">
-            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-catalyst btn-catalyst-secondary text-sm">
-                Back to Organization
-            </a>
+            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Back to Organization</a>
         </div>
     </div>
 
-    <!-- SSO Status -->
-    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
-        <div class="flex items-center justify-between">
+    <section class="ops-panel">
+        <div class="ops-panel-header">
             <div>
-                <h2 class="text-lg font-semibold text-light-100">SSO Status</h2>
-                <p class="text-sm text-gray-400 mt-1">
+                <h2>SSO Status</h2>
+                <p>
                     {% if sso_config.is_enabled %}
-                        SSO is <span class="text-green-400 font-medium">enabled</span>.
-                        {% if sso_config.enforce_sso %}
-                            Password login is <span class="text-yellow-400 font-medium">disabled</span> for this organization.
-                        {% endif %}
+                    SSO is enabled{% if sso_config.enforce_sso %} and password login is disabled for this organization{% endif %}.
                     {% else %}
-                        SSO is <span class="text-gray-500 font-medium">disabled</span>. Configure your IdP settings below, then enable.
+                    SSO is disabled. Save the provider settings below, then enable it.
                     {% endif %}
                 </p>
             </div>
             <form method="POST" action="{% url 'sso:toggle' organization.slug %}">
                 {% csrf_token %}
-                <button type="submit"
-                        class="btn-catalyst {% if sso_config.is_enabled %}btn-catalyst-danger{% else %}btn-catalyst-gradient{% endif %} text-sm">
+                <button type="submit" class="btn-enhanced {% if sso_config.is_enabled %}ui-button-danger{% else %}ui-button-primary{% endif %} ui-button-sm">
                     {% if sso_config.is_enabled %}Disable SSO{% else %}Enable SSO{% endif %}
                 </button>
             </form>
         </div>
-    </div>
+    </section>
 
-    <!-- Service Provider Info (for IdP configuration) -->
-    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
-        <h2 class="text-lg font-semibold text-light-100 mb-4">Service Provider Details</h2>
-        <p class="text-sm text-gray-400 mb-4">Use these values when configuring your Identity Provider (Okta, Azure AD, Google Workspace, etc.).</p>
-
-        <div class="space-y-3">
-            <div>
-                <label class="catalyst-label">SP Entity ID / Audience URI</label>
-                <div class="flex items-center gap-2">
-                    <input type="text" readonly value="{{ sp_metadata_url }}" class="catalyst-input font-mono text-sm flex-1">
-                    <button type="button" onclick="navigator.clipboard.writeText('{{ sp_metadata_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
-                </div>
-            </div>
-            <div>
-                <label class="catalyst-label">ACS URL (Reply URL)</label>
-                <div class="flex items-center gap-2">
-                    <input type="text" readonly value="{{ sp_acs_url }}" class="catalyst-input font-mono text-sm flex-1">
-                    <button type="button" onclick="navigator.clipboard.writeText('{{ sp_acs_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
-                </div>
-            </div>
-            <div>
-                <label class="catalyst-label">SP Metadata XML</label>
-                <div class="flex items-center gap-2">
-                    <input type="text" readonly value="{{ sp_metadata_url }}" class="catalyst-input font-mono text-sm flex-1">
-                    <a href="{% url 'sso:metadata' organization.slug %}" target="_blank" class="btn-catalyst btn-catalyst-secondary text-sm">View XML</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- IdP Configuration Form -->
-    <form method="POST" action="{% url 'sso:configure' organization.slug %}">
+    <form method="POST" action="{% url 'sso:configure' organization.slug %}" id="sso-config-form">
         {% csrf_token %}
 
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6">
-            <h2 class="text-lg font-semibold text-light-100">Identity Provider Settings</h2>
-
-            {% include "components/enhanced_form_field.html" with field=form.idp_entity_id label="IdP Entity ID (Issuer)" help_text="The unique identifier for your Identity Provider. Usually a URL." %}
-            {% include "components/enhanced_form_field.html" with field=form.idp_sso_url label="IdP SSO URL" help_text="The URL where SAML authentication requests are sent." %}
-            {% include "components/enhanced_form_field.html" with field=form.idp_slo_url label="IdP SLO URL (Optional)" help_text="Single Logout URL. Leave blank if your IdP doesn't support it." %}
-            {% include "components/enhanced_form_field.html" with field=form.idp_x509_cert label="IdP X.509 Certificate" field_type="textarea" help_text="Paste the certificate contents only (without BEGIN/END CERTIFICATE lines)." %}
+        {% if form.non_field_errors %}
+        <div class="catalyst-alert catalyst-alert-error">
+            <div class="catalyst-alert-content">{{ form.non_field_errors }}</div>
         </div>
+        {% endif %}
 
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6 mt-6">
-            <h2 class="text-lg font-semibold text-light-100">Attribute Mapping</h2>
-            <p class="text-sm text-gray-400">Map SAML attributes from your IdP to user fields. The defaults work with most providers (Azure AD, Okta, Google).</p>
+        <section class="ops-panel">
+            <div class="ops-panel-header">
+                <div>
+                    <h2>Provider Settings</h2>
+                    <p>Choose the provider type and keep shared provisioning rules in one place.</p>
+                </div>
+            </div>
 
-            {% include "components/enhanced_form_field.html" with field=form.attribute_email label="Email Attribute" %}
-            {% include "components/enhanced_form_field.html" with field=form.attribute_first_name label="First Name Attribute" %}
-            {% include "components/enhanced_form_field.html" with field=form.attribute_last_name label="Last Name Attribute" %}
-        </div>
+            <div class="space-y-6">
+                <div>
+                    <label class="catalyst-label">Provider Type</label>
+                    <div class="ui-inline-actions">
+                        {% for radio in form.provider_type %}
+                        <label class="ui-badge ui-badge-muted cursor-pointer">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.provider_type.errors %}<div class="form-error">{{ form.provider_type.errors }}</div>{% endif %}
+                </div>
 
-        <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700 space-y-6 mt-6">
-            <h2 class="text-lg font-semibold text-light-100">Provisioning & Access</h2>
+                <div class="ops-resource-grid">
+                    <div class="ops-resource-card">
+                        <strong>Catalyst SSO Login</strong>
+                        <span>{{ sp_login_url }}</span>
+                    </div>
+                    <div class="ops-resource-card">
+                        <strong>OIDC Initiation</strong>
+                        <span>{{ oidc_initiation_url }}</span>
+                    </div>
+                </div>
 
-            {% include "components/enhanced_form_field.html" with field=form.auto_create_users label="Auto-create users on first SSO login" field_type="checkbox" help_text="When enabled, users who authenticate via SSO will automatically get an account and membership in this organization." %}
-            {% include "components/enhanced_form_field.html" with field=form.default_role label="Default Role for New Users" field_type="select" help_text="Role assigned to auto-provisioned users." %}
-            {% include "components/enhanced_form_field.html" with field=form.enforce_sso label="Enforce SSO (disable password login)" field_type="checkbox" help_text="When enabled, organization members must use SSO. Password login will be blocked for users who belong to this organization." %}
-        </div>
+                <div class="grid gap-6 md:grid-cols-2">
+                    {% include "components/enhanced_form_field.html" with field=form.auto_create_users label="Auto-create users on first SSO login" field_type="checkbox" help_text="Create users and memberships after a successful SSO login." %}
+                    {% include "components/enhanced_form_field.html" with field=form.enforce_sso label="Enforce SSO" field_type="checkbox" help_text="Block password login for members of this organization." %}
+                    {% include "components/enhanced_form_field.html" with field=form.default_role label="Default Role for New Users" field_type="select" help_text="Role assigned to users created from SSO." %}
+                    {% include "components/enhanced_form_field.html" with field=form.oidc_allowed_domain label="Allowed Email Domain" help_text="Optional. Restrict OIDC sign-ins to a domain such as example.com." %}
+                </div>
+            </div>
+        </section>
 
-        <div class="mt-6 flex items-center gap-4">
-            <button type="submit" class="btn-catalyst btn-catalyst-gradient">
-                Save Configuration
-            </button>
-            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-catalyst btn-catalyst-secondary">
-                Cancel
-            </a>
+        <section class="ops-panel sso-provider-panel" data-provider-panel="saml">
+            <div class="ops-panel-header">
+                <div>
+                    <h2>SAML</h2>
+                    <p>Use these Catalyst service provider values in your SAML identity provider.</p>
+                </div>
+            </div>
+
+            <div class="ops-resource-grid">
+                <div class="ops-resource-card">
+                    <strong>SP Entity ID / Metadata</strong>
+                    <span>{{ sp_metadata_url }}</span>
+                </div>
+                <div class="ops-resource-card">
+                    <strong>ACS URL</strong>
+                    <span>{{ sp_acs_url }}</span>
+                </div>
+                <a href="{% url 'sso:metadata' organization.slug %}" target="_blank" class="ops-resource-card">
+                    <strong>Metadata XML</strong>
+                    <span>Open metadata document</span>
+                </a>
+            </div>
+
+            <div class="grid gap-6 md:grid-cols-2 mt-6">
+                {% include "components/enhanced_form_field.html" with field=form.idp_entity_id label="IdP Entity ID" help_text="The unique SAML issuer from your identity provider." %}
+                {% include "components/enhanced_form_field.html" with field=form.idp_sso_url label="IdP SSO URL" help_text="The SAML sign-in URL." %}
+                {% include "components/enhanced_form_field.html" with field=form.idp_slo_url label="IdP SLO URL" help_text="Optional logout URL." %}
+            </div>
+            {% include "components/enhanced_form_field.html" with field=form.idp_x509_cert label="IdP X.509 Certificate" field_type="textarea" help_text="Paste the certificate contents only." %}
+
+            <div class="grid gap-6 md:grid-cols-3">
+                {% include "components/enhanced_form_field.html" with field=form.attribute_email label="Email Attribute" %}
+                {% include "components/enhanced_form_field.html" with field=form.attribute_first_name label="First Name Attribute" %}
+                {% include "components/enhanced_form_field.html" with field=form.attribute_last_name label="Last Name Attribute" %}
+            </div>
+        </section>
+
+        <section class="ops-panel sso-provider-panel" data-provider-panel="oidc">
+            <div class="ops-panel-header">
+                <div>
+                    <h2>OIDC Provider</h2>
+                    <p>Select Sign in with Google or a generic OpenID Connect provider.</p>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div>
+                    <label class="catalyst-label">OIDC Mode</label>
+                    <div class="ui-inline-actions">
+                        {% for radio in form.oidc_mode %}
+                        <label class="ui-badge ui-badge-muted cursor-pointer">
+                            {{ radio.tag }}
+                            <span>{{ radio.choice_label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.oidc_mode.errors %}<div class="form-error">{{ form.oidc_mode.errors }}</div>{% endif %}
+                </div>
+
+                <div class="grid gap-6 md:grid-cols-2">
+                    {% include "components/enhanced_form_field.html" with field=form.oidc_display_name label="Display Name" help_text="Shown internally when this provider is synced to allauth." %}
+                    {% include "components/enhanced_form_field.html" with field=form.oidc_client_id label="Client ID" %}
+                    {% include "components/enhanced_form_field.html" with field=form.oidc_client_secret label="Client Secret" field_type="password" help_text="Leave blank to keep the existing secret." %}
+                    {% include "components/enhanced_form_field.html" with field=form.oidc_scopes label="Scopes" %}
+                </div>
+            </div>
+        </section>
+
+        <section class="ops-panel sso-oidc-mode-panel" data-oidc-mode-panel="google">
+            <div class="ops-panel-header">
+                <div>
+                    <h2>Sign in with Google</h2>
+                    <p>Use this OAuth callback URL in the Google Cloud console.</p>
+                </div>
+            </div>
+            <div class="ops-resource-grid">
+                <div class="ops-resource-card">
+                    <strong>Google Callback</strong>
+                    <span>{{ google_callback_url }}</span>
+                </div>
+                <div class="ops-resource-card">
+                    <strong>Catalyst Initiation Only</strong>
+                    <span>{{ oidc_initiation_url }}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="ops-panel sso-oidc-mode-panel" data-oidc-mode-panel="generic">
+            <div class="ops-panel-header">
+                <div>
+                    <h2>Generic OIDC</h2>
+                    <p>Use the provider callback in your OIDC application and the Catalyst route only to start login.</p>
+                </div>
+            </div>
+            <div class="grid gap-6 md:grid-cols-2">
+                {% include "components/enhanced_form_field.html" with field=form.oidc_issuer_url label="Issuer URL" help_text="The OIDC discovery issuer URL." %}
+                {% include "components/enhanced_form_field.html" with field=form.oidc_email_claim label="Email Claim" %}
+                {% include "components/enhanced_form_field.html" with field=form.oidc_first_name_claim label="First Name Claim" %}
+                {% include "components/enhanced_form_field.html" with field=form.oidc_last_name_claim label="Last Name Claim" %}
+                {% include "components/enhanced_form_field.html" with field=form.oidc_subject_claim label="Subject Claim" %}
+            </div>
+            <div class="ops-resource-grid mt-6">
+                <div class="ops-resource-card">
+                    <strong>Generic OIDC Callback</strong>
+                    <span>{{ generic_oidc_callback_url }}</span>
+                </div>
+                <div class="ops-resource-card">
+                    <strong>Catalyst Initiation Only</strong>
+                    <span>{{ oidc_initiation_url }}</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="ui-inline-actions">
+            <button type="submit" class="btn-enhanced ui-button-primary">Save Configuration</button>
+            <a href="{% url 'organizations:detail' organization.slug %}" class="btn-enhanced ui-button-secondary">Cancel</a>
         </div>
     </form>
-
-    <!-- SSO Login URL -->
-    {% if sso_config.is_enabled %}
-    <div class="bg-dark-900 p-6 rounded-lg shadow border border-gray-700">
-        <h2 class="text-lg font-semibold text-light-100 mb-2">SSO Login URL</h2>
-        <p class="text-sm text-gray-400 mb-3">Share this URL with your team members to sign in via SSO.</p>
-        <div class="flex items-center gap-2">
-            <input type="text" readonly value="{{ sp_login_url }}" class="catalyst-input font-mono text-sm flex-1">
-            <button type="button" onclick="navigator.clipboard.writeText('{{ sp_login_url }}')" class="btn-catalyst btn-catalyst-secondary text-sm">Copy</button>
-        </div>
-    </div>
-    {% endif %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const providerInputs = document.querySelectorAll('input[name="provider_type"]');
+        const oidcModeInputs = document.querySelectorAll('input[name="oidc_mode"]');
+        const providerPanels = document.querySelectorAll('[data-provider-panel]');
+        const oidcModePanels = document.querySelectorAll('[data-oidc-mode-panel]');
+
+        function selectedValue(inputs) {
+            const checked = Array.from(inputs).find((input) => input.checked);
+            return checked ? checked.value : '';
+        }
+
+        function syncPanels() {
+            const provider = selectedValue(providerInputs);
+            const oidcMode = selectedValue(oidcModeInputs);
+            providerPanels.forEach((panel) => {
+                panel.hidden = panel.dataset.providerPanel !== provider;
+            });
+            oidcModePanels.forEach((panel) => {
+                panel.hidden = provider !== 'oidc' || panel.dataset.oidcModePanel !== oidcMode;
+            });
+        }
+
+        providerInputs.forEach((input) => input.addEventListener('change', syncPanels));
+        oidcModeInputs.forEach((input) => input.addEventListener('change', syncPanels));
+        syncPanels();
+    });
+</script>
 {% endblock %}
