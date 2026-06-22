@@ -358,3 +358,74 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(rule.port_max, 51820)
         self.assertFalse(rule.source_groups.exists())
         self.assertQuerySetEqual(rule.source_nodes.all(), [self.source_node])
+
+
+class AssignNodesPickerTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.owner = User.objects.create_user(email='oss-picker-owner@example.com', password='testpass')
+        self.org = Organization.objects.create(name='Picker Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(
+            organization=self.org, cidr='10.60.0.0/24', description='picker range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='Picker CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('picker-ca.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile('picker-ca.key', b'key-bytes'),
+        )
+        self.group = SecurityGroup.objects.create(name='app-servers', organization=self.org)
+        self.lighthouse = Node.objects.create(
+            name='core-lighthouse', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.60.0.1', is_lighthouse=True, created_by=self.owner,
+        )
+        self.web = Node.objects.create(
+            name='web-01', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.60.0.10', created_by=self.owner,
+        )
+        self.db = Node.objects.create(
+            name='db-01', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.60.0.11', created_by=self.owner,
+        )
+        self.group.nodes.add(self.web)
+        self.client.force_login(self.owner)
+
+    def _url(self):
+        return reverse(
+            'security_groups_org:assign_nodes',
+            kwargs={'slug': self.org.slug, 'sg_id': self.group.id},
+        )
+
+    def test_get_renders_picker_toolbar(self):
+        resp = self.client.get(self._url())
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Search nodes by name or IP')
+        self.assertContains(resp, 'ui-node-picker-chip')
+        self.assertContains(resp, "filter = 'all'")
+        self.assertContains(resp, "filter = 'assigned'")
+        self.assertContains(resp, "filter = 'lighthouse'")
+        self.assertContains(resp, "filter = 'standard'")
+        self.assertContains(resp, 'selectAll(true)')
+        self.assertContains(resp, 'selectAll(false)')
+        self.assertContains(resp, 'of 3 selected')
+        self.assertContains(resp, 'value="%d"' % self.lighthouse.id)
+        self.assertContains(resp, 'value="%d"' % self.web.id)
+        self.assertContains(resp, 'value="%d"' % self.db.id)
+        self.assertContains(resp, 'ui-node-picker')
+        self.assertNotContains(resp, 'ui-selection-row')
+
+    def test_get_prechecks_assigned_nodes(self):
+        resp = self.client.get(self._url())
+        self.assertContains(resp, 'value="%d" checked' % self.web.id)
+        self.assertNotContains(resp, 'value="%d" checked' % self.db.id)
+
+    def test_post_sets_membership_exactly(self):
+        resp = self.client.post(self._url(), {'nodes': [self.lighthouse.id, self.db.id]})
+        self.assertRedirects(
+            resp,
+            reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.group.id}),
+        )
+        self.assertEqual(
+            set(self.group.nodes.values_list('id', flat=True)),
+            {self.lighthouse.id, self.db.id},
+        )

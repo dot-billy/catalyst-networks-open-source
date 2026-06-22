@@ -12,13 +12,64 @@
         </div>
     </div>
     <div class="ui-form-section">
-        <form method="post">
+        <form method="post"
+              x-data="{
+                q: '',
+                filter: 'all',
+                nodes: [
+                  {% for node in all_nodes %}{ id: {{ node.id }}, name: '{{ node.name|escapejs }}', ip: '{{ node.nebula_ip|default_if_none:''|escapejs }}', lh: {% if node.is_lighthouse %}true{% else %}false{% endif %} },
+                  {% endfor %}
+                ],
+                selected: {
+                  {% for node in all_nodes %}{{ node.id }}: {% if node in assigned_nodes %}true{% else %}false{% endif %},
+                  {% endfor %}
+                },
+                get nodeMap() { return Object.fromEntries(this.nodes.map(n => [n.id, n])); },
+                matches(id) {
+                  const n = this.nodeMap[id];
+                  if (!n) return true;
+                  if (this.q) {
+                    const hay = (n.name + ' ' + n.ip).toLowerCase();
+                    if (hay.indexOf(this.q.toLowerCase().trim()) === -1) return false;
+                  }
+                  if (this.filter === 'assigned') return !!this.selected[id];
+                  if (this.filter === 'lighthouse') return n.lh;
+                  if (this.filter === 'standard') return !n.lh;
+                  return true;
+                },
+                get selectedCount() { return this.nodes.filter(n => this.selected[n.id]).length; },
+                get visibleCount() { return this.nodes.filter(n => this.matches(n.id)).length; },
+                selectAll(v) { this.nodes.forEach(n => { if (this.matches(n.id)) this.selected[n.id] = v; }); }
+              }">
             {% csrf_token %}
             <p class="text-sm text-light-300 mb-6">If you remove a node here, its effective policy will update after save.</p>
-            <div class="ui-selection-grid">
+
+            {% if all_nodes %}
+            <div class="ui-node-picker-toolbar">
+                <div class="ui-node-picker-search">
+                    <svg class="ui-node-picker-search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="18" height="18" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                    <input type="text" x-model="q" placeholder="Search nodes by name or IP" aria-label="Search nodes">
+                </div>
+                <div class="ui-node-picker-controls">
+                    <div class="ui-node-picker-chips" role="group" aria-label="Filter nodes">
+                        <button type="button" class="ui-node-picker-chip" :class="{ 'is-active': filter === 'all' }" :aria-pressed="filter === 'all'" @click="filter = 'all'">All</button>
+                        <button type="button" class="ui-node-picker-chip" :class="{ 'is-active': filter === 'assigned' }" :aria-pressed="filter === 'assigned'" @click="filter = 'assigned'">Assigned</button>
+                        <button type="button" class="ui-node-picker-chip" :class="{ 'is-active': filter === 'lighthouse' }" :aria-pressed="filter === 'lighthouse'" @click="filter = 'lighthouse'">Lighthouse</button>
+                        <button type="button" class="ui-node-picker-chip" :class="{ 'is-active': filter === 'standard' }" :aria-pressed="filter === 'standard'" @click="filter = 'standard'">Standard</button>
+                    </div>
+                    <div class="ui-node-picker-meta">
+                        <span class="ui-node-picker-count" aria-live="polite"><span x-text="selectedCount"></span> of {{ all_nodes|length }} selected</span>
+                        <button type="button" class="ui-node-picker-linkbtn" @click="selectAll(true)">Select all</button>
+                        <button type="button" class="ui-node-picker-linkbtn" @click="selectAll(false)">Clear</button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="ui-node-picker">
                 {% for node in all_nodes %}
-                <label class="ui-selection-row">
-                    <input type="checkbox" name="nodes" value="{{ node.id }}" {% if node in assigned_nodes %}checked{% endif %} class="mt-1">
+                <label class="ui-node-picker-row" x-show="matches({{ node.id }})">
+                    <input type="checkbox" name="nodes" value="{{ node.id }}" {% if node in assigned_nodes %}checked{% endif %} x-model="selected[{{ node.id }}]">
                     <div class="flex-1">
                         <div class="flex items-center gap-3 flex-wrap">
                             <span class="font-semibold text-light-100">{{ node.name }}</span>
@@ -27,13 +78,10 @@
                             {% else %}
                                 <span class="ui-badge ui-badge-muted">Standard</span>
                             {% endif %}
+                            <span class="ui-badge ui-badge-success" x-show="selected[{{ node.id }}]" x-cloak>Assigned</span>
                         </div>
                         <div class="ui-meta-list">
                             <span>{{ node.nebula_ip }}</span>
-                            {% if node in assigned_nodes %}
-                            <span>•</span>
-                            <span>Currently assigned</span>
-                            {% endif %}
                         </div>
                     </div>
                 </label>
@@ -43,17 +91,20 @@
                     <p>This organization does not have any nodes available to assign yet.</p>
                 </div>
                 {% endfor %}
+                {% if all_nodes %}
+                <div class="ui-node-picker-empty" x-show="visibleCount === 0" x-cloak>No nodes match your search.</div>
+                {% endif %}
             </div>
 
-            <div class="ui-action-bar mt-8 justify-end">
+            <div class="ui-action-bar ui-node-picker-actions justify-end">
                 <a href="{% url 'security_groups_org:detail' slug=organization.slug pk=security_group.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">
                     Cancel
                 </a>
                 <button type="submit" class="btn-enhanced ui-button-primary ui-button-sm">
-                    Save Assignments
+                    Save assignments
                 </button>
             </div>
         </form>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
