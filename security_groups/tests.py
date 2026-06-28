@@ -93,6 +93,37 @@ class OrganizationSecurityGroupWorkflowTests(TestCase):
         self.assertFalse(FirewallRule.objects.filter(security_group=policy).exists())
 
 
+class GlobalSecurityGroupCreateTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.owner = User.objects.create_user(email='global-owner@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='Global Workflow Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+
+    def test_create_with_initial_cidr_rule_sets_match_type_cidr(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('security_groups:create'),
+            {
+                'name': 'Global Application',
+                'organization': str(self.organization.id),
+                'description': 'Global legacy create path',
+                'protocol': 'icmp',
+                'port_min': '',
+                'port_max': '',
+                'source_cidr': '10.0.0.0/8',
+                'rule_description': 'Allow ICMP from private networks',
+            },
+        )
+
+        policy = Tag.objects.get(name='Global Application', organization=self.organization)
+        self.assertRedirects(response, reverse('security_groups:detail', kwargs={'pk': policy.id}))
+        rule = FirewallRule.objects.get(security_group=policy)
+        self.assertEqual(rule.source_cidr, '10.0.0.0/8')
+        self.assertEqual(rule.match_type, 'cidr')
+
+
 class OrganizationSecurityPolicyWorkflowTests(TestCase):
     def setUp(self):
         self.client = Client()

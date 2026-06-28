@@ -232,6 +232,7 @@ def security_group_create(request):
                     port_min=port_min if port_min else None,
                     port_max=port_max if port_max else None,
                     source_cidr=source_cidr,
+                    match_type='cidr',
                     description=rule_description
                 )
             
