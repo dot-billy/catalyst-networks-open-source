@@ -32,7 +32,7 @@
                                     <div>
                                         <span class="text-catalyst-teal font-medium">{{ group.name }}</span>
                                     </div>
-                                    <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                    <form method="post" action="{% url 'nodes_org:assign_security_group' slug=organization.slug pk=node.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="security_group_id" value="{{ group.id }}">
                                         <input type="hidden" name="action" value="remove">
@@ -60,7 +60,7 @@
                                         <div>
                                             <span class="text-light-100 font-medium">{{ group.name }}</span>
                                         </div>
-                                        <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                        <form method="post" action="{% url 'nodes_org:assign_security_group' slug=organization.slug pk=node.id %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="security_group_id" value="{{ group.id }}">
                                             <input type="hidden" name="action" value="add">

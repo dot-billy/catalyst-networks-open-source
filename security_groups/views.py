@@ -5,11 +5,6 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import FirewallRule, SecurityGroup, Tag
-# from .serializers import (
-#     TagSerializer,
-#     FirewallRuleSerializer,
-#     FirewallRuleCreateSerializer
-# )
 from organizations.permissions import IsOrganizationOwnerOrAdmin
 from organizations.access import get_org_role, require_org_access
 from django.http import JsonResponse
@@ -24,142 +19,8 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.db import transaction
 from django.db.models import Prefetch, Q
-# from organizations.decorators import organization_owner_or_admin_required
 from organizations.mixins import OrganizationFilterMixin
 
-# REST API ViewSets
-# class TagViewSet(viewsets.ModelViewSet):
-#     """
-#     ViewSet for managing security groups.
-#     """
-#     serializer_class = TagSerializer
-#     permission_classes = [IsOrganizationOwnerOrAdmin]
-#     
-#     def get_queryset(self):
-#         """
-#         Filter security groups to only show those from organizations the user is a member of.
-#         """
-#         return Tag.objects.filter(organization__memberships__user=self.request.user)
-#     
-#     def perform_create(self, serializer):
-#         """
-#         Ensure that user can only create security groups in organizations they are a member of.
-#         """
-#         organization_id = self.request.data.get('organization')
-#         if not self.request.user.memberships.filter(
-#             organization_id=organization_id, 
-#             role__in=['owner', 'admin']
-#         ).exists():
-#             raise serializers.ValidationError(
-#                 {"organization": "You don't have permission to create security groups in this organization"}
-#             )
-#         
-#         serializer.save()
-#     
-#     @action(detail=True, methods=['get'])
-#     def rules(self, request, pk=None):
-#         """
-#         List all rules for a security group.
-#         """
-#         security_group = self.get_object()
-#         rules = security_group.rules.all()
-#         serializer = FirewallRuleSerializer(rules, many=True)
-#         return Response(serializer.data)
-#     
-#     @action(detail=True, methods=['get'])
-#     def nodes(self, request, pk=None):
-#         """
-#         List all nodes in this security group.
-#         """
-#         security_group = self.get_object()
-#         nodes = security_group.nodes.all()
-#         
-#         # Use NodeSerializer to serialize the nodes
-#         from nodes.serializers import NodeSerializer
-#         serializer = NodeSerializer(nodes, many=True)
-#         return Response(serializer.data)
-
-# class OrgSecurityGroupViewSet(OrganizationFilterMixin, TagViewSet):
-#     """
-#     ViewSet for managing security groups within a specific organization.
-#     
-#     This ViewSet provides the same functionality as TagViewSet,
-#     but filters security groups by the organization specified in the URL.
-#     """
-#     pass
-
-# class FirewallRuleViewSet(viewsets.ModelViewSet):
-#     """
-#     ViewSet for managing security rules.
-#     """
-#     permission_classes = [IsOrganizationOwnerOrAdmin]
-#     
-#     def get_serializer_class(self):
-#         """
-#         Use different serializers for create and retrieve operations.
-#         """
-#         if self.action in ['create', 'update', 'partial_update']:
-#             return FirewallRuleCreateSerializer
-#         return FirewallRuleSerializer
-#     
-#     def get_queryset(self):
-#         """
-#         Filter security rules to only show those from security groups in organizations 
-#         the user is a member of.
-#         """
-#         user = self.request.user
-#         return FirewallRule.objects.filter(
-#             security_group__organization__memberships__user=user
-#         )
-#     
-#     def perform_create(self, serializer):
-#         """
-#         Ensure that user can only create rules in security groups they have access to.
-#         """
-#         security_group_id = self.request.data.get('security_group')
-#         security_group = get_object_or_404(Tag, id=security_group_id)
-#         
-#         # Check if user can access this security group
-#         if not self.request.user.memberships.filter(
-#             organization=security_group.organization, 
-#             role__in=['owner', 'admin']
-#         ).exists():
-#             raise serializers.ValidationError(
-#                 {"security_group": "You don't have permission to add rules to this security group"}
-#             )
-#         
-#         serializer.save()
-
-# @method_decorator(csrf_exempt, name='dispatch')
-# class ExecuteSQLView(APIView):
-#     """
-#     Debug endpoint for executing SQL (TESTING ONLY - NOT FOR PRODUCTION).
-#     """
-#     def post(self, request, format=None):
-#         try:
-#             sql = request.data.get('sql')
-#             params = request.data.get('params', [])
-#             
-#             if not sql:
-#                 return JsonResponse({'error': 'SQL query is required'}, status=400)
-#                 
-#             # For security, only allow specific SQL operations
-#             sql_lower = sql.lower()
-#             if not (sql_lower.startswith('insert into nodes_node_security_groups') or 
-#                     sql_lower.startswith('delete from nodes_node_security_groups')):
-#                 return JsonResponse({'error': 'Only security group assignment operations are allowed'}, status=403)
-#             
-#             # Execute the SQL
-#             from django.db import connection
-#             with connection.cursor() as cursor:
-#                 cursor.execute(sql, params)
-#                 
-#             return JsonResponse({'status': 'success'})
-#             
-#         except Exception as e:
-#             return JsonResponse({'error': str(e)}, status=500)
-
-# Legacy web views (flat hierarchy)
 @login_required
 def security_group_list(request):
     """List security groups that the user has access to."""

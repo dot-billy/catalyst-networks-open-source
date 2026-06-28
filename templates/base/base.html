@@ -108,13 +108,13 @@
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
-                                Groups
+                                Tags
                             </a>
                             <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="catalyst-menu-link {% if '/policies/' in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Policies
+                                Rules
                             </a>
                             <a href="{% url 'certificates_org:list' slug=organization.slug %}" class="catalyst-menu-link {% if '/certificates/' in request.path %}active{% endif %}">
                                 <svg class="catalyst-menu-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

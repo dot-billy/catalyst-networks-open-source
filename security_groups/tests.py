@@ -711,3 +711,22 @@ class FirewallRuleNewFieldsTests(TestCase):
 
         self.assertIn('api', str(rule))
         self.assertIn('TCP port 8443', str(rule))
+
+
+class NavLabelTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership
+        self.client = Client()
+        self.owner = User.objects.create_user(email='nav@example.com', password='pw')
+        self.org = Organization.objects.create(name='Nav Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        self.client.force_login(self.owner)
+
+    def test_sidebar_uses_tags_and_rules_labels(self):
+        response = self.client.get(reverse('security_groups_org:list', kwargs={'slug': self.org.slug}))
+        self.assertEqual(response.status_code, 200)
+        # Desktop sidebar (base.html) renders on every page
+        self.assertContains(response, '>\n                                Tags\n')
+        self.assertContains(response, '>\n                                Rules\n')
+        self.assertNotContains(response, '>\n                                Groups\n')
+        self.assertNotContains(response, '>\n                                Policies\n')

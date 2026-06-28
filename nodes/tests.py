@@ -1281,3 +1281,36 @@ class PrepareNodePackageDirectionTests(TestCase):
         # Inbound must NOT have picked up the outbound rule's port.
         inbound_section = config_yaml.split('inbound:', 1)[1]
         self.assertNotIn('5432', inbound_section)
+
+
+class OrgNodeSecurityGroupsPageTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client = Client()
+        self.owner = User.objects.create_user(email='sg-page@example.com', password='pw')
+        self.org = Organization.objects.create(name='SG Page Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.70.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node = Node.objects.create(
+            name='page-node', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.70.0.10', external_port=4242, created_by=self.owner)
+        self.client.force_login(self.owner)
+
+    def test_per_node_security_groups_page_renders(self):
+        # Both {% url %} tags sit inside guards: one in {% for group in
+        # assigned_groups %} (node must have a tag), one in {% if security_groups %}
+        # with an UNassigned tag. Create two tags and assign one so BOTH tags
+        # render — otherwise the broken org_id= tag never executes (vacuous test).
+        from security_groups.models import Tag
+        assigned = Tag.objects.create(name='assigned-tag', organization=self.org)
+        Tag.objects.create(name='unassigned-tag', organization=self.org)
+        self.node.tags.add(assigned)
+
+        url = reverse('nodes_org:assign_security_group', kwargs={'slug': self.org.slug, 'pk': self.node.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
