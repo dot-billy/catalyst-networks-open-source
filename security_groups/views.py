@@ -222,10 +222,11 @@ def security_group_create(request):
                     )
 
                     if initial_rule_data:
-                        FirewallRule.objects.create(
+                        rule = FirewallRule.objects.create(
                             security_group=security_group,
                             **initial_rule_data,
                         )
+                        rule.target_groups.set([security_group])
 
                 return redirect('security_groups:detail', pk=security_group.id)
             return render(

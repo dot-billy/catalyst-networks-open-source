@@ -126,6 +126,7 @@ class GlobalSecurityGroupCreateTests(TestCase):
         rule = FirewallRule.objects.get(security_group=policy)
         self.assertEqual(rule.source_cidr, '10.0.0.0/8')
         self.assertEqual(rule.match_type, 'cidr')
+        self.assertQuerySetEqual(rule.target_groups.all(), [policy])
 
     def test_member_cannot_use_flat_create_for_org_policy(self):
         response = self._post_create(self.member, name='Member Created Policy')
