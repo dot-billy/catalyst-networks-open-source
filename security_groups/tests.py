@@ -97,31 +97,65 @@ class GlobalSecurityGroupCreateTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.owner = User.objects.create_user(email='global-owner@example.com', password='testpass')
+        self.member = User.objects.create_user(email='global-member@example.com', password='testpass')
+        self.outsider = User.objects.create_user(email='global-outsider@example.com', password='testpass')
         self.organization = Organization.objects.create(name='Global Workflow Org', created_by=self.owner)
         Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        Membership.objects.create(user=self.member, organization=self.organization, role='member')
+
+    def _post_create(self, user, name='Global Application', **overrides):
+        self.client.force_login(user)
+        data = {
+            'name': name,
+            'organization': str(self.organization.id),
+            'description': 'Global legacy create path',
+            'protocol': 'icmp',
+            'port_min': '',
+            'port_max': '',
+            'source_cidr': '10.0.0.0/8',
+            'rule_description': 'Allow ICMP from private networks',
+        }
+        data.update(overrides)
+        return self.client.post(reverse('security_groups:create'), data)
 
     def test_create_with_initial_cidr_rule_sets_match_type_cidr(self):
-        self.client.force_login(self.owner)
-
-        response = self.client.post(
-            reverse('security_groups:create'),
-            {
-                'name': 'Global Application',
-                'organization': str(self.organization.id),
-                'description': 'Global legacy create path',
-                'protocol': 'icmp',
-                'port_min': '',
-                'port_max': '',
-                'source_cidr': '10.0.0.0/8',
-                'rule_description': 'Allow ICMP from private networks',
-            },
-        )
+        response = self._post_create(self.owner)
 
         policy = Tag.objects.get(name='Global Application', organization=self.organization)
         self.assertRedirects(response, reverse('security_groups:detail', kwargs={'pk': policy.id}))
         rule = FirewallRule.objects.get(security_group=policy)
         self.assertEqual(rule.source_cidr, '10.0.0.0/8')
         self.assertEqual(rule.match_type, 'cidr')
+
+    def test_member_cannot_use_flat_create_for_org_policy(self):
+        response = self._post_create(self.member, name='Member Created Policy')
+
+        self.assertIn(response.status_code, (302, 403))
+        self.assertFalse(Tag.objects.filter(name='Member Created Policy').exists())
+        self.assertFalse(FirewallRule.objects.exists())
+
+    def test_outsider_cannot_use_flat_create_with_known_org_id(self):
+        response = self._post_create(self.outsider, name='Outsider Created Policy')
+
+        self.assertIn(response.status_code, (302, 403))
+        self.assertFalse(Tag.objects.filter(name='Outsider Created Policy').exists())
+        self.assertFalse(FirewallRule.objects.exists())
+
+    def test_invalid_initial_rule_rolls_back_created_tag(self):
+        self.client.raise_request_exception = False
+
+        response = self._post_create(
+            self.owner,
+            name='Invalid Rule Policy',
+            protocol='tcp',
+            port_min='9000',
+            port_max='80',
+            source_cidr='10.0.0.0/8',
+        )
+
+        self.assertGreaterEqual(response.status_code, 400)
+        self.assertFalse(Tag.objects.filter(name='Invalid Rule Policy').exists())
+        self.assertFalse(FirewallRule.objects.filter(description='Allow ICMP from private networks').exists())
 
 
 class OrganizationSecurityPolicyWorkflowTests(TestCase):
@@ -658,3 +692,21 @@ class FirewallRuleNewFieldsTests(TestCase):
         from security_groups.models import Tag
         tag = Tag.objects.create(name='db', organization=self.org, color='#22c55e')
         self.assertEqual(tag.color, '#22c55e')
+
+    def test_target_group_only_rule_has_stable_string(self):
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='api', organization=self.org)
+        rule = FirewallRule(
+            security_group=tag,
+            protocol='tcp',
+            port_min=8443,
+            port_max=8443,
+            match_type='any',
+        )
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.security_group = None
+        rule.save()
+
+        self.assertIn('api', str(rule))
+        self.assertIn('TCP port 8443', str(rule))

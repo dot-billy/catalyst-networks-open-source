@@ -211,32 +211,33 @@ def security_group_create(request):
         description = request.POST.get('description', '')
         
         if name and organization_id:
-            # Create the security group
-            security_group = Tag.objects.create(
-                name=name,
-                organization_id=organization_id,
-                description=description
+            org = check_org_access(request.user, org_id=organization_id, required_roles=['owner', 'admin'])
+            ok, initial_rule_data, organization_error = _validate_flat_initial_rule(request.POST)
+            if ok:
+                with transaction.atomic():
+                    security_group = Tag.objects.create(
+                        name=name,
+                        organization=org,
+                        description=description
+                    )
+
+                    if initial_rule_data:
+                        FirewallRule.objects.create(
+                            security_group=security_group,
+                            **initial_rule_data,
+                        )
+
+                return redirect('security_groups:detail', pk=security_group.id)
+            return render(
+                request,
+                'security_groups/create.html',
+                {
+                    'organizations': request.user.organizations.filter(id=organization_id),
+                    'form': {},
+                    'organization_error': organization_error,
+                },
+                status=400,
             )
-            
-            # Handle initial firewall rule if provided
-            protocol = request.POST.get('protocol')
-            port_min = request.POST.get('port_min')
-            port_max = request.POST.get('port_max')
-            source_cidr = request.POST.get('source_cidr')
-            rule_description = request.POST.get('rule_description')
-            
-            if protocol and (protocol == 'icmp' or (port_min and port_max)) and source_cidr:
-                FirewallRule.objects.create(
-                    security_group=security_group,
-                    protocol=protocol,
-                    port_min=port_min if port_min else None,
-                    port_max=port_max if port_max else None,
-                    source_cidr=source_cidr,
-                    match_type='cidr',
-                    description=rule_description
-                )
-            
-            return redirect('security_groups:detail', pk=security_group.id)
     
     # Get organizations the user is an admin of - FIXED QUERY
     # Get organizations where the user has owner or admin role using the Membership model
@@ -258,6 +259,51 @@ def security_group_create(request):
     }
     
     return render(request, 'security_groups/create.html', context)
+
+
+def _validate_flat_initial_rule(post):
+    """Validate optional legacy initial CIDR rule fields for the flat create route."""
+    protocol = post.get('protocol')
+    port_min_raw = post.get('port_min')
+    port_max_raw = post.get('port_max')
+    source_cidr = (post.get('source_cidr') or '').strip()
+    rule_description = post.get('rule_description') or ''
+
+    has_rule_input = any([protocol, port_min_raw, port_max_raw, source_cidr, rule_description])
+    if not has_rule_input:
+        return True, None, None
+
+    if protocol not in {choice[0] for choice in FirewallRule.PROTOCOL_CHOICES}:
+        return False, None, 'Choose a valid protocol.'
+    if not source_cidr:
+        return False, None, 'Source CIDR is required for the initial rule.'
+    try:
+        ipaddress.ip_network(source_cidr, strict=False)
+    except ValueError:
+        return False, None, 'Source CIDR must be a valid network.'
+
+    if protocol in ('tcp', 'udp'):
+        try:
+            port_min = int(port_min_raw) if port_min_raw else None
+            port_max = int(port_max_raw) if port_max_raw else port_min
+        except (TypeError, ValueError):
+            return False, None, 'Ports must be numeric.'
+        if port_min is None:
+            return False, None, 'A port is required for TCP and UDP rules.'
+        if port_min < 1 or port_max > 65535 or port_min > port_max:
+            return False, None, 'Ports must be between 1 and 65535, with the minimum no greater than the maximum.'
+    else:
+        port_min = None
+        port_max = None
+
+    return True, {
+        'protocol': protocol,
+        'port_min': port_min,
+        'port_max': port_max,
+        'source_cidr': source_cidr,
+        'match_type': 'cidr',
+        'description': rule_description,
+    }, None
 
 @login_required
 def security_group_detail(request, pk):

@@ -1,6 +1,7 @@
 """Connect notification events to security and model lifecycle signals."""
 import logging
 
+from django.db import transaction
 from django.db.models.signals import m2m_changed, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
@@ -14,6 +15,13 @@ def _dispatch_event(event_type, organization_id, data):
         dispatch_event(event_type, organization_id, data)
     except Exception:
         logger.exception("Failed to dispatch notification event %s", event_type)
+
+
+def _dispatch_event_on_commit(event_type, organization_id, data):
+    transaction.on_commit(
+        lambda event_type=event_type, organization_id=organization_id, data=data:
+            _dispatch_event(event_type, organization_id, data)
+    )
 
 
 def _node_payload(node):
@@ -131,23 +139,23 @@ def _group_names(group_ids):
 @receiver(post_save, sender='nodes.Node')
 def handle_node_saved(sender, instance, created, **kwargs):
     if created:
-        _dispatch_event('node.added', instance.organization_id, _node_payload(instance))
+        _dispatch_event_on_commit('node.added', instance.organization_id, _node_payload(instance))
 
 
 @receiver(pre_delete, sender='nodes.Node')
 def handle_node_deleted(sender, instance, **kwargs):
-    _dispatch_event('node.removed', instance.organization_id, _node_payload(instance))
+    _dispatch_event_on_commit('node.removed', instance.organization_id, _node_payload(instance))
 
 
 @receiver(post_save, sender='security_groups.Tag')
 def handle_group_saved(sender, instance, created, **kwargs):
     event_type = 'group.created' if created else 'group.updated'
-    _dispatch_event(event_type, instance.organization_id, _group_payload(instance))
+    _dispatch_event_on_commit(event_type, instance.organization_id, _group_payload(instance))
 
 
 @receiver(pre_delete, sender='security_groups.Tag')
 def handle_group_deleted(sender, instance, **kwargs):
-    _dispatch_event('group.deleted', instance.organization_id, _group_payload(instance))
+    _dispatch_event_on_commit('group.deleted', instance.organization_id, _group_payload(instance))
 
 
 @receiver(pre_save, sender='security_groups.FirewallRule')
@@ -178,25 +186,25 @@ def handle_policy_saved(sender, instance, created, **kwargs):
     event_type = 'policy.created' if created else 'policy.updated'
     if not created:
         instance._notification_changes = _policy_changed_fields(instance)
-    _dispatch_event(event_type, organization_id, _policy_payload(instance))
+    _dispatch_event_on_commit(event_type, organization_id, _policy_payload(instance))
 
 
 @receiver(pre_delete, sender='security_groups.FirewallRule')
 def handle_policy_deleted(sender, instance, **kwargs):
     organization_id = _policy_organization_id(instance)
     if organization_id:
-        _dispatch_event('policy.deleted', organization_id, _policy_payload(instance))
+        _dispatch_event_on_commit('policy.deleted', organization_id, _policy_payload(instance))
 
 
 @receiver(post_save, sender='organizations.Membership')
 def handle_membership_saved(sender, instance, created, **kwargs):
     event_type = 'member.created' if created else 'member.updated'
-    _dispatch_event(event_type, instance.organization_id, _member_payload(instance))
+    _dispatch_event_on_commit(event_type, instance.organization_id, _member_payload(instance))
 
 
 @receiver(pre_delete, sender='organizations.Membership')
 def handle_membership_deleted(sender, instance, **kwargs):
-    _dispatch_event('member.deleted', instance.organization_id, _member_payload(instance))
+    _dispatch_event_on_commit('member.deleted', instance.organization_id, _member_payload(instance))
 
 
 def _handle_group_node_membership_change(action, instance, reverse, model, pk_set):
@@ -224,7 +232,7 @@ def _handle_group_node_membership_change(action, instance, reverse, model, pk_se
     for group in groups:
         payload = _group_payload(group)
         payload['changes'] = changes
-        _dispatch_event('group.updated', group.organization_id, payload)
+        _dispatch_event_on_commit('group.updated', group.organization_id, payload)
 
 
 def _handle_policy_source_membership_change(source_type, action, instance, reverse, model, pk_set):
@@ -255,7 +263,7 @@ def _handle_policy_source_membership_change(source_type, action, instance, rever
         if not organization_id:
             continue
         policy._notification_changes = {change_key: source_names}
-        _dispatch_event('policy.updated', organization_id, _policy_payload(policy))
+        _dispatch_event_on_commit('policy.updated', organization_id, _policy_payload(policy))
 
 
 from nodes.models import Node

@@ -111,7 +111,7 @@ class FirewallRule(models.Model):
         verbose_name_plural = 'Firewall Rules'
 
     def __str__(self):
-        target = self.node.name if self.node else f"Group: {self.security_group.name}"
+        target = self._target_label()
         
         if self.protocol in ['tcp', 'udp'] and self.port_min and self.port_max:
             if self.port_min == self.port_max:
@@ -120,6 +120,17 @@ class FirewallRule(models.Model):
                 return f"{target}: {self.protocol.upper()} ports {self.port_min}-{self.port_max} from {self.source_cidr}"
         else:
             return f"{target}: {self.protocol.upper()} from {self.source_cidr}"
+
+    def _target_label(self):
+        if self.node_id:
+            return self.node.name
+        if self.security_group_id:
+            return f"Group: {self.security_group.name}"
+        if self.pk:
+            target_names = list(self.target_groups.values_list('name', flat=True))
+            if target_names:
+                return f"Groups: {', '.join(target_names)}"
+        return "Unattached rule"
 
     def clean(self):
         """
