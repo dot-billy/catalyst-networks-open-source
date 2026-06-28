@@ -2,9 +2,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import SecurityGroup, FirewallRule
+from .models import FirewallRule, SecurityGroup, Tag
 # from .serializers import (
-#     SecurityGroupSerializer, 
+#     TagSerializer,
 #     FirewallRuleSerializer,
 #     FirewallRuleCreateSerializer
 # )
@@ -26,18 +26,18 @@ from django.db.models import Prefetch, Q
 from organizations.mixins import OrganizationFilterMixin
 
 # REST API ViewSets
-# class SecurityGroupViewSet(viewsets.ModelViewSet):
+# class TagViewSet(viewsets.ModelViewSet):
 #     """
 #     ViewSet for managing security groups.
 #     """
-#     serializer_class = SecurityGroupSerializer
+#     serializer_class = TagSerializer
 #     permission_classes = [IsOrganizationOwnerOrAdmin]
 #     
 #     def get_queryset(self):
 #         """
 #         Filter security groups to only show those from organizations the user is a member of.
 #         """
-#         return SecurityGroup.objects.filter(organization__memberships__user=self.request.user)
+#         return Tag.objects.filter(organization__memberships__user=self.request.user)
 #     
 #     def perform_create(self, serializer):
 #         """
@@ -77,11 +77,11 @@ from organizations.mixins import OrganizationFilterMixin
 #         serializer = NodeSerializer(nodes, many=True)
 #         return Response(serializer.data)
 
-# class OrgSecurityGroupViewSet(OrganizationFilterMixin, SecurityGroupViewSet):
+# class OrgSecurityGroupViewSet(OrganizationFilterMixin, TagViewSet):
 #     """
 #     ViewSet for managing security groups within a specific organization.
 #     
-#     This ViewSet provides the same functionality as SecurityGroupViewSet,
+#     This ViewSet provides the same functionality as TagViewSet,
 #     but filters security groups by the organization specified in the URL.
 #     """
 #     pass
@@ -115,7 +115,7 @@ from organizations.mixins import OrganizationFilterMixin
 #         Ensure that user can only create rules in security groups they have access to.
 #         """
 #         security_group_id = self.request.data.get('security_group')
-#         security_group = get_object_or_404(SecurityGroup, id=security_group_id)
+#         security_group = get_object_or_404(Tag, id=security_group_id)
 #         
 #         # Check if user can access this security group
 #         if not self.request.user.memberships.filter(
@@ -165,13 +165,13 @@ def security_group_list(request):
     user_orgs = request.user.memberships.values_list('organization_id', flat=True)
     
     # Get security groups in those organizations
-    security_groups = SecurityGroup.objects.filter(organization_id__in=user_orgs)
+    security_groups = Tag.objects.filter(organization_id__in=user_orgs)
     
     # Handle organization filter
     selected_org = request.GET.get('organization', None)
     if selected_org:
         security_groups = security_groups.filter(organization_id=selected_org)
-        selected_org_name = SecurityGroup.objects.filter(organization_id=selected_org).first().organization.name if security_groups.exists() else None
+        selected_org_name = Tag.objects.filter(organization_id=selected_org).first().organization.name if security_groups.exists() else None
     else:
         selected_org_name = None
     
@@ -210,7 +210,7 @@ def security_group_create(request):
         
         if name and organization_id:
             # Create the security group
-            security_group = SecurityGroup.objects.create(
+            security_group = Tag.objects.create(
                 name=name,
                 organization_id=organization_id,
                 description=description
@@ -259,7 +259,7 @@ def security_group_create(request):
 @login_required
 def security_group_detail(request, pk):
     """View security group details."""
-    security_group = get_object_or_404(SecurityGroup, id=pk)
+    security_group = get_object_or_404(Tag, id=pk)
     
     # Check if user has access to this security group
     if not request.user.memberships.filter(
@@ -273,7 +273,7 @@ def security_group_detail(request, pk):
     rules = security_group.firewall_rules.prefetch_related(
         Prefetch(
             'source_groups',
-            queryset=SecurityGroup.objects.filter(organization=security_group.organization).order_by('name'),
+            queryset=Tag.objects.filter(organization=security_group.organization).order_by('name'),
             to_attr='org_source_groups',
         ),
         Prefetch(
@@ -308,9 +308,16 @@ def org_security_group_list(request, slug):
     # Check if user has access to the organization
     org = check_org_access(request.user, organization_slug=slug)
     
-    # Get security groups for this organization
-    security_groups = SecurityGroup.objects.filter(organization=org)
-    
+    # Get security groups for this organization, annotated with a "policies touching this group" count
+    from django.db.models import Count
+    security_groups = (
+        Tag.objects.filter(organization=org)
+        .annotate(
+            inbound_count=Count('firewall_rules', distinct=True),
+            outbound_count=Count('rules_as_source', distinct=True),
+        )
+    )
+
     # Handle search
     search_query = request.GET.get('search', '')
     if search_query:
@@ -338,7 +345,7 @@ def org_security_group_create(request, slug):
         description = request.POST.get('description', '')
 
         if name:
-            security_group = SecurityGroup.objects.create(
+            security_group = Tag.objects.create(
                 name=name,
                 organization=org,
                 description=description
@@ -366,14 +373,14 @@ def org_security_group_detail(request, slug, pk):
     org = check_org_access(request.user, organization_slug=slug)
     
     # Get the security group and check it belongs to this organization
-    security_group = get_object_or_404(SecurityGroup, id=pk, organization=org)
+    security_group = get_object_or_404(Tag, id=pk, organization=org)
     
     # Get rules and nodes for this security group
     from nodes.models import Node
     rules = security_group.firewall_rules.prefetch_related(
         Prefetch(
             'source_groups',
-            queryset=SecurityGroup.objects.filter(organization=org).order_by('name'),
+            queryset=Tag.objects.filter(organization=org).order_by('name'),
             to_attr='org_source_groups',
         ),
         Prefetch(
@@ -402,7 +409,7 @@ def org_security_group_edit(request, slug, pk):
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
     
     # Get the security group and check it belongs to this organization
-    security_group = get_object_or_404(SecurityGroup, id=pk, organization=org)
+    security_group = get_object_or_404(Tag, id=pk, organization=org)
     
     if request.method == 'POST':
         name = request.POST.get('name')
@@ -429,7 +436,7 @@ def org_security_group_delete(request, slug, pk):
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
     
     # Get the security group and check it belongs to this organization
-    security_group = get_object_or_404(SecurityGroup, id=pk, organization=org)
+    security_group = get_object_or_404(Tag, id=pk, organization=org)
     
     if request.method == 'POST':
         security_group.delete()
@@ -607,7 +614,7 @@ def org_assign_nodes(request, slug, sg_id):
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
     
     # Get the security group and check it belongs to this organization
-    security_group = get_object_or_404(SecurityGroup, id=sg_id, organization=org)
+    security_group = get_object_or_404(Tag, id=sg_id, organization=org)
     
     if request.method == 'POST':
         node_ids = request.POST.getlist('nodes')
@@ -652,7 +659,7 @@ def _policy_form_choices(org):
     from nodes.models import Node
 
     return {
-        'all_groups': SecurityGroup.objects.filter(organization=org).order_by('name'),
+        'all_groups': Tag.objects.filter(organization=org).order_by('name'),
         'all_nodes': Node.objects.filter(organization=org).order_by('name'),
     }
 
@@ -689,8 +696,8 @@ def _validate_policy_fields(org, post):
     dest_node_id = post.get('dest_node')
     if dest_type == 'group' and dest_group_id:
         try:
-            destination_group = SecurityGroup.objects.get(id=dest_group_id, organization=org)
-        except SecurityGroup.DoesNotExist:
+            destination_group = Tag.objects.get(id=dest_group_id, organization=org)
+        except Tag.DoesNotExist:
             return False, None, 'Destination group not found in this organization.'
         destination_node = None
     elif dest_type == 'host' and dest_node_id:
@@ -724,7 +731,7 @@ def _validate_policy_source(org, post):
         submitted_ids = {str(source_group_id) for source_group_id in source_group_ids}
         valid_ids = set(
             str(source_group_id) for source_group_id in
-            SecurityGroup.objects.filter(
+            Tag.objects.filter(
                 id__in=source_group_ids,
                 organization=org,
             ).values_list('id', flat=True)
@@ -820,13 +827,13 @@ def org_policy_create(request, slug):
     if request.method == 'GET':
         try:
             source_group_id = int(request.GET.get('source_group', '') or 0) or None
-            if source_group_id and SecurityGroup.objects.filter(id=source_group_id, organization=org).exists():
+            if source_group_id and Tag.objects.filter(id=source_group_id, organization=org).exists():
                 prefill_source_group_ids = [source_group_id]
         except ValueError:
             pass
         try:
             dest_group_id = int(request.GET.get('dest_group', '') or 0) or None
-            if dest_group_id and SecurityGroup.objects.filter(id=dest_group_id, organization=org).exists():
+            if dest_group_id and Tag.objects.filter(id=dest_group_id, organization=org).exists():
                 prefill_dest_group_id = dest_group_id
         except ValueError:
             pass
@@ -928,7 +935,7 @@ def org_unassign_node(request, slug, sg_id, node_id):
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
     
     # Get the security group and check it belongs to this organization
-    security_group = get_object_or_404(SecurityGroup, id=sg_id, organization=org)
+    security_group = get_object_or_404(Tag, id=sg_id, organization=org)
     
     # Get the node and check it belongs to this organization
     from nodes.models import Node

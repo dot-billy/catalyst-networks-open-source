@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from organizations.models import Organization
 from certificates.models import CertificateAuthority
-from security_groups.models import SecurityGroup
+from security_groups.models import Tag
 from simple_history.models import HistoricalRecords
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -38,11 +38,16 @@ class Node(models.Model):
     nebula_ip = models.GenericIPAddressField(
         help_text='IP address in the organization\'s network range'
     )
-    security_groups = models.ManyToManyField(
-        'security_groups.SecurityGroup',
+    tags = models.ManyToManyField(
+        'security_groups.Tag',
         related_name='nodes',
         blank=True,
-        help_text='Security groups this node belongs to (simple collections of nodes)'
+        # Explicit through model pins the existing join table AND its existing
+        # columns (node_id, securitygroup_id). Renaming the target model to Tag
+        # would otherwise make Django expect a tag_id column; the explicit
+        # through with db_column keeps the rename byte-for-byte / DDL-free.
+        through='nodes.NodeTag',
+        help_text='Tags applied to this node (become Nebula cert groups).'
     )
     cert_path = models.FileField(
         upload_to=node_cert_path,
@@ -213,21 +218,57 @@ class Node(models.Model):
         """
         Get all firewall rules applicable to this node, including:
         1. Rules directly attached to this node
-        2. Rules attached to security groups this node belongs to
+        2. Legacy rules attached to tags through security_group
+        3. Rules targeting tags through target_groups
         
         Returns a QuerySet of FirewallRule objects.
         """
+        from django.db.models import Q
         from security_groups.models import FirewallRule
         
         # Get rules directly attached to this node
         direct_rules = FirewallRule.objects.filter(node=self)
-        
-        # Get rules attached to security groups this node belongs to
-        group_ids = self.security_groups.values_list('id', flat=True)
-        group_rules = FirewallRule.objects.filter(security_group_id__in=group_ids)
-        
+
+        # Support both the legacy FK and the new target_groups path during the
+        # Tag/Rule transition.
+        tag_ids = self.tags.values_list('id', flat=True)
+        group_rules = FirewallRule.objects.filter(
+            Q(security_group_id__in=tag_ids) | Q(target_groups__in=tag_ids)
+        )
+
         # Combine and return unique rules
         return (direct_rules | group_rules).distinct()
+
+    @property
+    def security_groups(self):
+        """Backward-compatible name for callers that still treat tags as groups."""
+        return self.tags
+
+
+class NodeTag(models.Model):
+    """
+    Explicit through model for the Node.tags M2M.
+
+    It reproduces the pre-existing auto-generated join table exactly: same table
+    name (nodes_node_security_groups) and same columns (node_id,
+    securitygroup_id). This lets us rename the target model SecurityGroup -> Tag
+    with ZERO schema change — the column stays ``securitygroup_id`` via db_column
+    rather than becoming the model-derived ``tag_id``.
+    """
+    node = models.ForeignKey(
+        'nodes.Node',
+        on_delete=models.CASCADE,
+        db_column='node_id',
+    )
+    tag = models.ForeignKey(
+        'security_groups.Tag',
+        on_delete=models.CASCADE,
+        db_column='securitygroup_id',
+    )
+
+    class Meta:
+        db_table = 'nodes_node_security_groups'
+        unique_together = (('node', 'tag'),)
 
 def generate_token():
     """Generate a unique registration token"""

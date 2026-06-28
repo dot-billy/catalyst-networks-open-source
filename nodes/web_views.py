@@ -22,7 +22,7 @@ from django.views.decorators.http import require_http_methods
 from certificates.models import CertificateAuthority
 from organizations.access import require_org_access
 from organizations.models import Organization
-from security_groups.models import SecurityGroup
+from security_groups.models import Tag
 
 from notifications import dispatch as notification_dispatch
 
@@ -429,7 +429,7 @@ def regenerate_certificate(node):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         if group_names:
             cmd.extend(['-groups', ','.join(group_names)])
         
@@ -737,30 +737,30 @@ def org_node_security_groups(request, slug, pk):
     node = get_object_or_404(Node, id=pk, organization=org)
     
     # Get all security groups for this organization
-    security_groups = SecurityGroup.objects.filter(organization=org)
-    
+    security_groups = Tag.objects.filter(organization=org)
+
     # Get security groups assigned to this node
-    assigned_groups = node.security_groups.all()
-    
+    assigned_groups = node.tags.all()
+
     if request.method == 'POST':
         # Handle form submission for adding/removing security groups
         security_group_id = request.POST.get('security_group_id')
         action = request.POST.get('action')
-        
+
         if security_group_id and action:
-            security_group = get_object_or_404(SecurityGroup, id=security_group_id, organization=org)
+            security_group = get_object_or_404(Tag, id=security_group_id, organization=org)
             security_groups_changed = False
-            
+
             if action == 'add':
                 # Add security group to node
                 if security_group not in assigned_groups:
-                    node.security_groups.add(security_group)
+                    node.tags.add(security_group)
                     security_groups_changed = True
                     messages.success(request, f"Security group '{security_group.name}' added to node.")
             elif action == 'remove':
                 # Remove security group from node
                 if security_group in assigned_groups:
-                    node.security_groups.remove(security_group)
+                    node.tags.remove(security_group)
                     security_groups_changed = True
                     messages.success(request, f"Security group '{security_group.name}' removed from node.")
             

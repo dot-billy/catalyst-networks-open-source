@@ -6,7 +6,7 @@ from django.urls import reverse
 from certificates.models import CertificateAuthority
 from nodes.models import Node
 from organizations.models import Membership, NetworkRange, Organization
-from security_groups.models import FirewallRule, SecurityGroup
+from security_groups.models import FirewallRule, SecurityGroup, Tag
 
 User = get_user_model()
 
@@ -60,7 +60,7 @@ class OrganizationSecurityGroupWorkflowTests(TestCase):
             },
         )
 
-        policy = SecurityGroup.objects.get(name='Ingress', organization=self.organization)
+        policy = Tag.objects.get(name='Ingress', organization=self.organization)
 
         self.assertRedirects(
             response,
@@ -84,7 +84,7 @@ class OrganizationSecurityGroupWorkflowTests(TestCase):
             },
         )
 
-        policy = SecurityGroup.objects.get(name='Application', organization=self.organization)
+        policy = Tag.objects.get(name='Application', organization=self.organization)
 
         self.assertRedirects(
             response,
@@ -359,6 +359,25 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertFalse(rule.source_groups.exists())
         self.assertQuerySetEqual(rule.source_nodes.all(), [self.source_node])
 
+    def test_list_scopes_to_org(self):
+        FirewallRule.objects.create(
+            security_group=self.destination_group,
+            protocol='any',
+            description='visible-local-policy',
+        )
+        other_org = Organization.objects.create(name='Other', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=other_org, role='owner')
+        other_group = SecurityGroup.objects.create(name='other', organization=other_org)
+        FirewallRule.objects.create(security_group=other_group, protocol='any', description='leak-check')
+
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.organization.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'visible-local-policy')
+        self.assertNotContains(response, 'leak-check')
 
 class AssignNodesPickerTests(TestCase):
     def setUp(self):
@@ -429,3 +448,113 @@ class AssignNodesPickerTests(TestCase):
             set(self.group.nodes.values_list('id', flat=True)),
             {self.lighthouse.id, self.db.id},
         )
+
+
+class BackfillTests(TestCase):
+    def test_legacy_group_rule_backfills_target_and_match_type(self):
+        from organizations.models import Organization
+        from security_groups.models import Tag, FirewallRule
+        owner = User.objects.create_user(email='bf@example.com', password='pw')
+        org = Organization.objects.create(name='Backfill Org', created_by=owner)
+        tag = Tag.objects.create(name='web', organization=org)
+        src = Tag.objects.create(name='src', organization=org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80)
+        rule.save()
+        rule.source_groups.add(src)
+        # Simulate the data migration's effect by calling its helper directly:
+        from security_groups.migrations import _backfill_helpers as h  # created in Step 3
+        h.backfill_rule(rule)
+        rule.refresh_from_db()
+        self.assertIn(tag, rule.target_groups.all())
+        self.assertEqual(rule.match_type, 'groups')
+        self.assertEqual(rule.direction, 'in')
+
+    def test_legacy_node_rule_backfills_match_type_host(self):
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag, FirewallRule
+        from security_groups.migrations import _backfill_helpers as h
+        owner = User.objects.create_user(email='bf-node@example.com', password='pw')
+        org = Organization.objects.create(name='BF Node Org', created_by=owner)
+        NetworkRange.objects.create(organization=org, cidr='10.60.0.0/24', description='r')
+        ca = CertificateAuthority.objects.create(
+            name='CA', organization=org, created_by=owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        peer = Node.objects.create(name='peer', organization=org, certificate_authority=ca,
+                                   nebula_ip='10.60.0.10', external_port=4242, created_by=owner)
+        tag = Tag.objects.create(name='t', organization=org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80)
+        rule.save()
+        rule.source_nodes.add(peer)
+        h.backfill_rule(rule)
+        rule.refresh_from_db()
+        self.assertIn(tag, rule.target_groups.all())
+        self.assertEqual(rule.match_type, 'host')
+
+    def test_legacy_cidr_rule_backfills_match_type_cidr(self):
+        from organizations.models import Organization
+        from security_groups.models import Tag, FirewallRule
+        from security_groups.migrations import _backfill_helpers as h
+        owner = User.objects.create_user(email='bf-cidr@example.com', password='pw')
+        org = Organization.objects.create(name='BF Cidr Org', created_by=owner)
+        tag = Tag.objects.create(name='t', organization=org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80,
+                            source_cidr='10.0.0.0/8')
+        rule.save()
+        h.backfill_rule(rule)
+        rule.refresh_from_db()
+        self.assertIn(tag, rule.target_groups.all())
+        self.assertEqual(rule.match_type, 'cidr')
+
+    def test_legacy_sourceless_rule_backfills_match_type_any(self):
+        from organizations.models import Organization
+        from security_groups.models import Tag, FirewallRule
+        from security_groups.migrations import _backfill_helpers as h
+        owner = User.objects.create_user(email='bf-any@example.com', password='pw')
+        org = Organization.objects.create(name='BF Any Org', created_by=owner)
+        tag = Tag.objects.create(name='t', organization=org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80)
+        rule.save()  # no source
+        h.backfill_rule(rule)
+        rule.refresh_from_db()
+        self.assertEqual(rule.match_type, 'any')
+
+    def test_backfill_is_idempotent(self):
+        from organizations.models import Organization
+        from security_groups.models import Tag, FirewallRule
+        from security_groups.migrations import _backfill_helpers as h
+        owner = User.objects.create_user(email='bf-idem@example.com', password='pw')
+        org = Organization.objects.create(name='BF Idem Org', created_by=owner)
+        tag = Tag.objects.create(name='t', organization=org)
+        src = Tag.objects.create(name='src', organization=org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80)
+        rule.save()
+        rule.source_groups.add(src)
+        h.backfill_rule(rule)
+        h.backfill_rule(rule)  # second run must not duplicate or error
+        rule.refresh_from_db()
+        self.assertEqual(list(rule.target_groups.all()), [tag])
+        self.assertEqual(rule.match_type, 'groups')
+
+
+class FirewallRuleNewFieldsTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization
+        self.owner = User.objects.create_user(email='fr-fields@example.com', password='pw')
+        self.org = Organization.objects.create(name='FR Fields Org', created_by=self.owner)
+
+    def test_rule_defaults_to_inbound(self):
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='web', organization=self.org)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=443, port_max=443)
+        rule.save()
+        rule.target_groups.add(tag)
+        self.assertEqual(rule.direction, 'in')
+        self.assertIn(tag, rule.target_groups.all())
+
+    def test_tag_has_color_field(self):
+        from security_groups.models import Tag
+        tag = Tag.objects.create(name='db', organization=self.org, color='#22c55e')
+        self.assertEqual(tag.color, '#22c55e')

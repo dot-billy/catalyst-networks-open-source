@@ -3,9 +3,10 @@ import json
 import os
 import subprocess
 import zipfile
-from datetime import timezone as datetime_timezone
+from datetime import timedelta, timezone as datetime_timezone
 from types import SimpleNamespace
 from unittest import mock
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -19,7 +20,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 from nodes.api_views import NodeViewSet, OrgNodeViewSet
 from certificates.models import CertificateAuthority
 from nodes.api_registration import NodeRegistrationView
-from nodes.models import Node
+from nodes.models import Node, NodeRegistrationToken
 from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
 from security_groups.models import FirewallRule, SecurityGroup
@@ -208,7 +209,6 @@ class NodeAccessPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.node.refresh_from_db()
         self.assertIsNotNone(self.node.last_checkin)
-
 
 class NodeWebExternalPortTests(TestCase):
     def setUp(self):
@@ -598,6 +598,50 @@ class NodeCertificateReliabilityTests(TestCase):
         self.assertFalse(needs_regeneration)
         self.assertEqual(run.call_args.args[0][:3], ['nebula-cert', 'print', '-json'])
 
+    def test_download_reuses_certificate_when_claims_match_node_state(self):
+        self._save_node_certificate_files()
+        group = SecurityGroup.objects.create(name='admins', organization=self.organization)
+        self.node.tags.add(group)
+        cert_info = {
+            'details': {
+                'groups': ['admins'],
+                'ips': ['10.44.0.10/24'],
+            }
+        }
+        completed = subprocess.CompletedProcess(
+            args=['nebula-cert', 'print'],
+            returncode=0,
+            stdout=json.dumps(cert_info),
+            stderr='',
+        )
+
+        with mock.patch('nodes.api_registration.subprocess.run', return_value=completed):
+            needs_regeneration = NodeRegistrationView()._certificate_needs_regeneration(self.node)
+
+        self.assertFalse(needs_regeneration)
+
+    def test_download_reuses_v17_certificate_ips_when_claims_match_node_state(self):
+        self._save_node_certificate_files()
+        group = SecurityGroup.objects.create(name='admins', organization=self.organization)
+        self.node.tags.add(group)
+        cert_info = {
+            'details': {
+                'groups': ['admins'],
+                'networks': ['10.44.0.10/24'],
+            }
+        }
+        completed = subprocess.CompletedProcess(
+            args=['nebula-cert', 'print'],
+            returncode=0,
+            stdout=json.dumps(cert_info),
+            stderr='',
+        )
+
+        with mock.patch('nodes.api_registration.subprocess.run', return_value=completed):
+            needs_regeneration = NodeRegistrationView()._certificate_needs_regeneration(self.node)
+
+        self.assertFalse(needs_regeneration)
+
     @mock.patch('notifications.dispatch.queue_notification_event')
     def test_mobile_node_creation_queues_lifecycle_notifications(self, queue_notification_event):
         self.client.force_login(self.owner)
@@ -788,3 +832,385 @@ class NodeCertificateReliabilityTests(TestCase):
         self.node.refresh_from_db()
         self.assertEqual(self.node.cert_expiration, timezone.datetime(2030, 1, 1, tzinfo=datetime_timezone.utc))
         self.assertEqual(result['new_expiration'], self.node.cert_expiration.isoformat())
+
+
+class MasterTokenRegistrationRegressionTests(TestCase):
+    """F-01: the REGISTRATION_MASTER_TOKEN cross-tenant fallback must stay deleted.
+
+    A global master token allowed registering nodes in any organization. Token
+    registration must only succeed against a per-org NodeRegistrationToken row.
+    """
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.owner = User.objects.create_user(email='f01-owner@example.com', password='testpass')
+        self.organization = Organization.objects.create(name='F01 Org', created_by=self.owner)
+
+    def _register(self, token_value):
+        request = self.factory.post(
+            f'/api/org/{self.organization.slug}/nodes/register/',
+            {
+                'organization_slug': self.organization.slug,
+                'node_name': 'f01-node',
+                'registration_token': token_value,
+            },
+            format='json',
+        )
+        return NodeRegistrationView.as_view()(request, slug=self.organization.slug)
+
+    def test_master_token_env_var_does_not_authorize_registration(self):
+        with patch.dict(os.environ, {'REGISTRATION_MASTER_TOKEN': 'leaked-master-token'}):
+            response = self._register('leaked-master-token')
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error'], 'Invalid Registration Token')
+        self.assertEqual(Node.objects.count(), 0)
+
+    def test_per_org_token_still_reaches_node_creation(self):
+        org_token = NodeRegistrationToken.objects.create(
+            organization=self.organization,
+            description='f01 regression token',
+            created_by=self.owner,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        from rest_framework import status as drf_status
+        from rest_framework.response import Response
+
+        with patch.object(
+            NodeRegistrationView, '_create_node',
+            return_value=Response({'status': 'success'}, status=drf_status.HTTP_201_CREATED),
+        ) as create_node:
+            response = self._register(org_token.token)
+
+        self.assertEqual(response.status_code, 201)
+        create_node.assert_called_once()
+        self.assertEqual(create_node.call_args.kwargs['organization'], self.organization)
+
+class NodeTagsRenameTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(email='tags-rename@example.com', password='pw')
+        self.org = Organization.objects.create(name='Tags Rename Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.44.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node = Node.objects.create(
+            name='n1', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.44.0.10', external_port=4242, created_by=self.owner)
+
+    def test_node_tags_flattens_into_expected_certificate_groups(self):
+        from security_groups.models import Tag
+        from nodes.tasks import _expected_certificate_groups
+        t = Tag.objects.create(name='admins', organization=self.org)
+        self.node.tags.add(t)
+        self.assertEqual(_expected_certificate_groups(self.node), ['admins'])
+
+
+class ResolverTargetGroupsTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(email='resolver@example.com', password='pw')
+        self.org = Organization.objects.create(name='Resolver Org', created_by=self.owner)
+        NetworkRange.objects.create(organization=self.org, cidr='10.45.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node = Node.objects.create(
+            name='n', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.45.0.10', external_port=4242, created_by=self.owner)
+
+    def test_target_groups_rule_is_resolved_for_tagged_node(self):
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='db', organization=self.org)
+        self.node.tags.add(tag)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=5432, port_max=5432)
+        rule.save()
+        rule.target_groups.add(tag)        # new target path
+        rule.security_group = None         # clear legacy FK to prove target_groups is used
+        rule.save()
+        self.assertIn(rule, self.node.get_all_applicable_firewall_rules())
+
+
+class FirewallRenderEquivalenceTests(TestCase):
+    """
+    Lock the firewall-render inbound-equivalence guarantee.
+
+    Each test case asserts an EXPLICIT expected YAML fragment so that any future
+    renderer change that alters the inbound output is caught immediately.
+    """
+
+    def setUp(self):
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(email='equiv@example.com', password='pw')
+        self.organization = Organization.objects.create(name='Equiv Org', created_by=self.owner)
+        NetworkRange.objects.create(organization=self.organization, cidr='10.50.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.organization, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'ca-cert-bytes'),
+            ca_key=SimpleUploadedFile('ca.key', b'ca-key-bytes'))
+
+    def _make_node(self, name, ip, suffix=''):
+        """Create a node with seeded cert/key files so _prepare_node_package succeeds."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        node = Node.objects.create(
+            name=name, organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip=ip, external_port=4242, created_by=self.owner)
+        node.cert_path.save(f'{name}.crt', SimpleUploadedFile(f'{name}.crt', b'node-cert'), save=False)
+        node.key_path.save(f'{name}.key', SimpleUploadedFile(f'{name}.key', b'node-key'), save=True)
+        return node
+
+    def _cert_info(self, node, groups=None):
+        return {'details': {'groups': groups or [], 'networks': [f'{node.nebula_ip}/24']}}
+
+    def _render(self, node, groups=None):
+        """Call _prepare_node_package with cert-regeneration patched out."""
+        with patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False):
+            response = NodeRegistrationView()._prepare_node_package(node)
+        return response.data['config_yaml']
+
+    def test_inbound_tag_source_rule_renders_groups_and_port(self):
+        """
+        direction='in' rule with source_groups=['web'] targeting tag 'db':
+        inbound must contain a groups: entry listing 'web' and port 5432 / proto tcp.
+        """
+        from security_groups.models import Tag, FirewallRule
+        db_tag = Tag.objects.create(name='db', organization=self.organization)
+        web_tag = Tag.objects.create(name='web', organization=self.organization)
+        node = self._make_node('db-node', '10.50.0.10')
+        node.tags.add(db_tag)
+
+        # Save-twice pattern: clean() requires a target at initial save.
+        rule = FirewallRule(security_group=db_tag, protocol='tcp', port_min=5432, port_max=5432, direction='in')
+        rule.save()
+        rule.target_groups.add(db_tag)
+        rule.source_groups.add(web_tag)
+        rule.security_group = None
+        rule.save()
+
+        config_yaml = self._render(node)
+        inbound_section = config_yaml.split('inbound:', 1)[1]
+
+        # Must contain proto tcp, port 5432, and the source group name 'web'.
+        self.assertIn('tcp', inbound_section)
+        self.assertIn('5432', inbound_section)
+        self.assertIn('web', inbound_section)
+        # Explicit fragment: the groups list entry
+        self.assertIn('groups:', inbound_section)
+
+    def test_inbound_cidr_source_rule_renders_cidr_not_host(self):
+        """
+        direction='in' rule with source_cidr='10.0.0.0/8', port 22:
+        inbound must contain cidr: 10.0.0.0/8 (NOT a 'host:' key) with port 22.
+        Nebula matches IP/CIDR sources via the 'cidr' key; 'host' matches the
+        remote cert NAME and would never match a CIDR (CNCUST 7bbd288c).
+        """
+        from security_groups.models import Tag, FirewallRule
+        infra_tag = Tag.objects.create(name='infra', organization=self.organization)
+        node = self._make_node('ssh-node', '10.50.0.11')
+        node.tags.add(infra_tag)
+
+        rule = FirewallRule(
+            security_group=infra_tag, protocol='tcp', port_min=22, port_max=22,
+            direction='in', source_cidr='10.0.0.0/8')
+        rule.save()
+        rule.target_groups.add(infra_tag)
+        rule.security_group = None
+        rule.save()
+
+        config_yaml = self._render(node)
+        inbound_section = config_yaml.split('inbound:', 1)[1]
+
+        # Explicit fragment: cidr: 10.0.0.0/8 and port 22
+        self.assertIn('cidr: 10.0.0.0/8', inbound_section)
+        self.assertIn('22', inbound_section)
+        self.assertIn('tcp', inbound_section)
+        # CIDR source must use Nebula's 'cidr:' key, NOT 'host:' (host never matches a CIDR)
+        self.assertNotIn('host: 10.0.0.0/8', inbound_section)
+
+    def test_inbound_node_source_renders_cidr_slash32(self):
+        """
+        direction='in' rule with source_nodes=[peer]: inbound must match that peer
+        by its Nebula IP as a /32 via 'cidr:', NOT 'host:' (CNCUST 7bbd288c).
+        """
+        from security_groups.models import Tag, FirewallRule
+        app_tag = Tag.objects.create(name='app', organization=self.organization)
+        node = self._make_node('app-node', '10.50.0.13')
+        node.tags.add(app_tag)
+        src = self._make_node('peer-node', '10.50.0.20')
+
+        rule = FirewallRule(
+            security_group=app_tag, protocol='tcp', port_min=443, port_max=443, direction='in')
+        rule.save()
+        rule.target_groups.add(app_tag)
+        rule.source_nodes.add(src)
+        rule.security_group = None
+        rule.save()
+
+        config_yaml = self._render(node)
+        inbound_section = config_yaml.split('inbound:', 1)[1]
+
+        self.assertIn('cidr: 10.50.0.20/32', inbound_section)
+        self.assertNotIn('host: 10.50.0.20', inbound_section)
+
+    def test_port_range_renders_min_max_string(self):
+        """A TCP rule with port_min != port_max renders 'min-max'."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='range', organization=self.organization)
+        node = self._make_node('range-node', '10.50.0.14')
+        node.tags.add(tag)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=8000, port_max=8100,
+                            direction='in', source_cidr='10.0.0.0/8')
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.security_group = None
+        rule.save()
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+        self.assertIn('8000-8100', inbound_section)
+        self.assertIn('cidr: 10.0.0.0/8', inbound_section)
+
+    def test_proto_any_rule_renders_any_port_any(self):
+        """A protocol='any' rule renders proto: any / port: any with its source."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='anyp', organization=self.organization)
+        node = self._make_node('any-node', '10.50.0.15')
+        node.tags.add(tag)
+        rule = FirewallRule(security_group=tag, protocol='any', direction='in', source_cidr='10.0.0.0/8')
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.security_group = None
+        rule.save()
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+        self.assertIn('proto: any', inbound_section)
+        self.assertIn('cidr: 10.0.0.0/8', inbound_section)
+
+    def test_authored_icmp_rule_renders_with_source(self):
+        """An authored icmp rule (distinct from the seed) carries its source, no port."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='icmp-tgt', organization=self.organization)
+        src = Tag.objects.create(name='icmp-src', organization=self.organization)
+        node = self._make_node('icmp-node', '10.50.0.16')
+        node.tags.add(tag)
+        rule = FirewallRule(security_group=tag, protocol='icmp', direction='in')
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.source_groups.add(src)
+        rule.security_group = None
+        rule.save()
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+        self.assertIn('icmp-src', inbound_section)
+
+    def test_node_direct_rule_renders(self):
+        """A rule attached directly to a node (node FK) is resolved + rendered (cidr:/32 source)."""
+        from security_groups.models import FirewallRule
+        node = self._make_node('direct-node', '10.50.0.17')
+        src = self._make_node('direct-src', '10.50.0.27')
+        rule = FirewallRule(node=node, protocol='tcp', port_min=80, port_max=80, direction='in')
+        rule.save()
+        rule.source_nodes.add(src)
+        rule.save()
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+        self.assertIn('cidr: 10.50.0.27/32', inbound_section)
+        self.assertIn('80', inbound_section)
+
+    def test_sourceless_rule_is_skipped_and_suppresses_allow_all(self):
+        """KNOWN SHARP EDGE: a rule with no source renders nothing, yet its presence
+        suppresses the default allow-all -> the node is left effectively deny-all on
+        inbound (only the icmp seed). Documents current behaviour."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='nosrc', organization=self.organization)
+        node = self._make_node('nosrc-node', '10.50.0.18')
+        node.tags.add(tag)
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=22, port_max=22, direction='in')
+        rule.save()
+        rule.target_groups.add(tag)  # target set, but NO source
+        rule.security_group = None
+        rule.save()
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+        self.assertIn('proto: icmp', inbound_section)   # seed still present
+        self.assertNotIn('port: any', inbound_section)  # allow-all suppressed
+        self.assertNotIn('22', inbound_section)         # sourceless rule rendered nothing
+
+    def test_node_with_no_applicable_rules_has_icmp_seed_and_allow_all(self):
+        """
+        A node with no applicable firewall rules must have BOTH the ICMP seed
+        (proto: icmp, host: any) AND the default allow-all (port: any, proto: any,
+        host: any) in the inbound section.
+        """
+        node = self._make_node('bare-node', '10.50.0.12')
+
+        config_yaml = self._render(node)
+        inbound_section = config_yaml.split('inbound:', 1)[1]
+
+        # ICMP seed must be present
+        self.assertIn('host: any', inbound_section)
+        # Default allow-all must also be present (added when no explicit rules)
+        self.assertIn('port: any', inbound_section)
+        # Both 'host: any' entries — verify two distinct fragments co-exist
+        self.assertIn('proto: icmp', inbound_section)
+        self.assertIn('proto: any', inbound_section)
+
+
+class PrepareNodePackageDirectionTests(TestCase):
+    """Renderer must split applicable rules by direction into inbound/outbound."""
+
+    def setUp(self):
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(email='direction@example.com', password='pw')
+        self.organization = Organization.objects.create(name='Direction Org', created_by=self.owner)
+        NetworkRange.objects.create(organization=self.organization, cidr='10.46.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.organization, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'ca-cert-bytes'),
+            ca_key=SimpleUploadedFile('ca.key', b'ca-key-bytes'))
+        self.node = Node.objects.create(
+            name='n', organization=self.organization, certificate_authority=self.ca,
+            nebula_ip='10.46.0.10', external_port=4242, created_by=self.owner)
+        # _prepare_node_package reads cert/key from disk; seed them so the call
+        # succeeds without certificate regeneration.
+        self.node.cert_path.save('node.crt', SimpleUploadedFile('node.crt', b'node-cert'), save=False)
+        self.node.key_path.save('node.key', SimpleUploadedFile('node.key', b'node-key'), save=True)
+
+    def _cert_info(self):
+        return {'details': {'groups': [], 'networks': [f'{self.node.nebula_ip}/24']}}
+
+    def test_outbound_rule_renders_in_outbound_block(self):
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='db', organization=self.organization)
+        self.node.tags.add(tag)
+        out_rule = FirewallRule(
+            security_group=tag, protocol='tcp', port_min=5432, port_max=5432,
+            direction='out', source_cidr='10.0.0.0/8')
+        out_rule.save()
+        out_rule.target_groups.add(tag)
+        out_rule.security_group = None
+        out_rule.save()
+
+        with patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False):
+            response = NodeRegistrationView()._prepare_node_package(self.node)
+
+        config_yaml = response.data['config_yaml']
+
+        # The explicit outbound rule must land in the outbound: block, carrying
+        # port 5432 / proto tcp, and the bare allow-all must no longer be the
+        # sole outbound entry (deny-by-default egress once authored).
+        outbound_section = config_yaml.split('outbound:', 1)[1].split('inbound:', 1)[0]
+        self.assertIn('5432', outbound_section)
+        self.assertIn('tcp', outbound_section)
+        # Allow-all egress was dropped: 'host: any' should not be the lone entry.
+        self.assertNotIn("proto: any", outbound_section)
+
+        # Inbound must NOT have picked up the outbound rule's port.
+        inbound_section = config_yaml.split('inbound:', 1)[1]
+        self.assertNotIn('5432', inbound_section)

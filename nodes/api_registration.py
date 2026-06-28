@@ -654,7 +654,7 @@ class NodeRegistrationView(APIView):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         if group_names:
             cmd.extend(['-groups', ','.join(group_names)])
         
@@ -688,7 +688,7 @@ class NodeRegistrationView(APIView):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         return sorted(set(group_names))
 
     def _expected_certificate_networks(self, node):
@@ -865,77 +865,83 @@ class NodeRegistrationView(APIView):
                     # In production, lighthouse nodes should have public_ip or fqdn set
                     config['static_host_map'][lh['ip']] = [f"{lh['ip']}:{lh['external_port']}"]
         
-        # Add security group rules
-        # Get all security groups this node belongs to
-        all_firewall_rules = node.get_all_applicable_firewall_rules()
+        # Add security group rules, split by direction.
+        applicable = node.get_all_applicable_firewall_rules()
+        inbound_rules = [r for r in applicable if r.direction == 'in']
+        outbound_rules = [r for r in applicable if r.direction == 'out']
         logger.debug(
-            "Building firewall config for node %s (%s): %d applicable rules",
-            node.id,
-            node.name,
-            all_firewall_rules.count(),
+            "Building firewall config for node %s (%s): %d inbound, %d outbound applicable rules",
+            node.id, node.name, len(inbound_rules), len(outbound_rules),
         )
 
-        # Only add the default allow-all rule if there are no explicit rules defined
-        if not all_firewall_rules.exists():
-            # Add default allow-all rule only if no specific rules exist
+        def render_sources(rule):
+            # Returns a list of source-match dicts (ONE firewall entry per source).
+            # SOURCE precedence: groups > nodes > CIDR. Reads the rule's SOURCE
+            # fields; target_groups (which nodes the rule applies to) is handled by
+            # get_all_applicable_firewall_rules.
+            src_groups = list(
+                rule.source_groups.filter(
+                    organization=node.organization,
+                ).values_list('name', flat=True)
+            )
+            if src_groups:
+                return [{'groups': src_groups}]
+            node_ips = list(
+                rule.source_nodes.filter(
+                    organization=node.organization,
+                ).values_list('nebula_ip', flat=True)
+            )
+            if node_ips:
+                # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
+                # Nebula's 'host' key matches the remote CERT NAME, not an IP, so
+                # host:<ip> never matches a real node (CNCUST 7bbd288c).
+                return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
+            if rule.source_cidr:
+                # Nebula matches IP/CIDR sources via the 'cidr' key (radix tree vs
+                # the peer's VPN IP); 'host' is a cert-NAME matcher and never matches
+                # a CIDR -- emit 'cidr' (CNCUST 7bbd288c, empirically confirmed).
+                return [{'cidr': rule.source_cidr}]
+            logger.debug("Skipping rule %s with no source specified", rule.id)
+            return []
+
+        def render_proto_port(rule, fr):
+            if rule.protocol == 'any':
+                fr['proto'] = 'any'
+                fr['port'] = 'any'
+            elif rule.protocol == 'icmp':
+                fr['proto'] = 'icmp'
+            else:  # TCP or UDP
+                fr['proto'] = rule.protocol
+                if rule.port_min is not None and rule.port_max is not None:
+                    if rule.port_min == rule.port_max:
+                        fr['port'] = rule.port_min
+                    else:
+                        fr['port'] = f"{rule.port_min}-{rule.port_max}"
+                else:
+                    fr['port'] = 'any'
+
+        # Inbound: keep the ICMP seed; append default allow-all only when there
+        # are no explicit inbound rules (preserves legacy output exactly).
+        if not inbound_rules:
             config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
         else:
-            # Process all applicable rules
-            for rule in all_firewall_rules:
-                firewall_rule = {}
-                
-                # Protocol/port
-                if rule.protocol == 'any':
-                    firewall_rule['proto'] = 'any'
-                    firewall_rule['port'] = 'any'
-                elif rule.protocol == 'icmp':
-                    firewall_rule['proto'] = 'icmp'
-                else:  # TCP or UDP
-                    firewall_rule['proto'] = rule.protocol
-                    if rule.port_min is not None and rule.port_max is not None:
-                        if rule.port_min == rule.port_max:
-                            firewall_rule['port'] = rule.port_min
-                        else:
-                            firewall_rule['port'] = f"{rule.port_min}-{rule.port_max}"
-                    else:
-                        firewall_rule['port'] = 'any'
-                
-                # Source handling - prioritize in this order:
-                # 1. Source Groups (if any)
-                # 2. Source Nodes (if any)
-                # 3. Source CIDR (if any)
-                # 4. Skip rule if no source is specified (avoid empty host field)
-                
-                # Check if rule has source groups
-                group_names = list(
-                    rule.source_groups.filter(
-                        organization=node.organization,
-                    ).values_list('name', flat=True)
-                )
-                if group_names:
-                    # Use the 'groups' field when source groups are specified
-                    firewall_rule['groups'] = group_names
-                    # Do NOT add an empty 'host' field when groups are specified
-                else:
-                    # Only handle host field if no source groups were specified
-                    node_ips = list(
-                        rule.source_nodes.filter(
-                            organization=node.organization,
-                        ).values_list('nebula_ip', flat=True)
-                    )
-                    if node_ips:
-                        firewall_rule['host'] = node_ips if len(node_ips) > 1 else node_ips[0]
-                    # Source CIDR
-                    elif rule.source_cidr:
-                        firewall_rule['host'] = rule.source_cidr
-                    else:
-                        # If no source is specified, skip this rule
-                        logger.debug("Skipping rule %s with no source specified", rule.id)
-                        continue
-                
-                # Add the rule to the config
-                config['firewall']['inbound'].append(firewall_rule)
-            
+            for rule in inbound_rules:
+                base = {}
+                render_proto_port(rule, base)
+                for src in render_sources(rule):
+                    config['firewall']['inbound'].append({**base, **src})
+
+        # Outbound is allow-list like inbound: explicit egress rules switch egress
+        # to deny-by-default (drop the default allow-all from the config above).
+        # When no outbound rule is authored, the default allow-all stays untouched.
+        if outbound_rules:
+            config['firewall']['outbound'] = []
+            for rule in outbound_rules:
+                base = {}
+                render_proto_port(rule, base)
+                for src in render_sources(rule):
+                    config['firewall']['outbound'].append({**base, **src})
+
         # Format as YAML string
         config_yaml = self._dict_to_yaml(config)
         

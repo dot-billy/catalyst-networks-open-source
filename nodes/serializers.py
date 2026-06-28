@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import Node
 from organizations.models import Organization
 from certificates.models import CertificateAuthority
-from security_groups.models import SecurityGroup
+from security_groups.models import Tag, SecurityGroup
 import ipaddress
 import subprocess
 import os
@@ -58,7 +58,7 @@ class NodeSerializer(serializers.ModelSerializer):
         return obj.certificate_authority.name
         
     def get_security_groups(self, obj):
-        return [sg.name for sg in obj.security_groups.all()]
+        return [sg.name for sg in obj.tags.all()]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -66,7 +66,7 @@ class NodeSerializer(serializers.ModelSerializer):
         if 'context' in kwargs and 'request' in kwargs['context']:
             user = kwargs['context']['request'].user
             if self.fields.get('security_groups'):
-                self.fields['security_groups'].queryset = SecurityGroup.objects.filter(
+                self.fields['security_groups'].queryset = Tag.objects.filter(
                     organization__memberships__user=user
                 )
 
@@ -131,7 +131,7 @@ class NodeSerializer(serializers.ModelSerializer):
         node = Node.objects.create(**validated_data)
 
         # Add security groups
-        node.security_groups.set(security_groups)
+        node.tags.set(security_groups)
 
         # Generate certificate
         ca = validated_data['certificate_authority']

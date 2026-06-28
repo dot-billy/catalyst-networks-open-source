@@ -1,23 +1,24 @@
 from django.db import models
 from simple_history.models import HistoricalRecords
 
-class SecurityGroup(models.Model):
-    """
-    SecurityGroup model - simple collections of nodes for easier management.
-    """
+class Tag(models.Model):
+    """A membership label on nodes. A tag on a node becomes a Nebula cert `groups:` entry."""
     name = models.CharField(max_length=255)
     organization = models.ForeignKey(
         'organizations.Organization',
         on_delete=models.CASCADE,
-        related_name='security_groups'
+        related_name='tags'
     )
     description = models.TextField(blank=True)
+    color = models.CharField(max_length=7, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
-    history = HistoricalRecords()
+    # Keep the existing history table — the model rename is state-only, no data move.
+    history = HistoricalRecords(table_name='security_groups_historicalsecuritygroup')
 
     class Meta:
-        verbose_name = 'Security Group'
-        verbose_name_plural = 'Security Groups'
+        db_table = 'security_groups_securitygroup'   # keep existing table — no data move
+        verbose_name = 'Tag'
+        verbose_name_plural = 'Tags'
         constraints = [
             models.UniqueConstraint(fields=['name', 'organization'], name='unique_sg_name_org'),
         ]
@@ -46,19 +47,29 @@ class FirewallRule(models.Model):
         help_text='Node this rule applies to (if not attached to a security group)'
     )
     security_group = models.ForeignKey(
-        SecurityGroup,
+        Tag,
         on_delete=models.CASCADE,
         related_name='firewall_rules',
         null=True,
         blank=True,
         help_text='Security group this rule applies to (if not attached to a specific node)'
     )
+    DIRECTION_CHOICES = [('in', 'Inbound'), ('out', 'Outbound')]
+    MATCH_TYPE_CHOICES = [('groups', 'Tags'), ('host', 'Host/Node'), ('cidr', 'CIDR'), ('any', 'Any')]
+
     protocol = models.CharField(
         max_length=10,
         choices=PROTOCOL_CHOICES,
         default='tcp',
         help_text='Network protocol this rule applies to'
     )
+    direction = models.CharField(max_length=3, choices=DIRECTION_CHOICES, default='in',
+                                 help_text='Inbound rules gate traffic INTO the target; outbound gates traffic OUT.')
+    match_type = models.CharField(max_length=6, choices=MATCH_TYPE_CHOICES, default='any',
+                                  help_text='Which source/destination field is authoritative.')
+    target_groups = models.ManyToManyField(
+        'security_groups.Tag', blank=True, related_name='rules_targeting',
+        help_text='Tags whose nodes this rule applies TO (replaces the single security_group FK).')
     port_min = models.IntegerField(
         null=True,
         blank=True,
@@ -76,9 +87,13 @@ class FirewallRule(models.Model):
         help_text='Source CIDR block (optional)'
     )
     source_groups = models.ManyToManyField(
-        'security_groups.SecurityGroup',
+        'security_groups.Tag',
         blank=True,
         related_name='rules_as_source',
+        # Explicit through model pins the existing join table and its existing
+        # columns. Renaming SecurityGroup -> Tag would otherwise make Django
+        # expect a tag_id column; db_column='securitygroup_id' keeps it DDL-free.
+        through='security_groups.FirewallRuleSourceGroup',
         help_text='Source security groups allowed by this rule'
     )
     source_nodes = models.ManyToManyField(
@@ -112,13 +127,14 @@ class FirewallRule(models.Model):
         """
         from django.core.exceptions import ValidationError
         
-        # Rule must be attached to either a node or a security group (but not both)
-        if not self.node and not self.security_group:
-            raise ValidationError("Rule must be attached to either a node or a security group")
-        
+        # Rule must target at least one of: a node, the legacy security_group FK, or target_groups.
+        has_target = bool(self.node_id) or bool(self.security_group_id) or (self.pk and self.target_groups.exists())
+        if not has_target:
+            raise ValidationError("Rule must target a node, a tag, or one or more target groups")
+
         if self.node and self.security_group:
             raise ValidationError("Rule cannot be attached to both a node and a security group")
-        
+
         # Validate target belongs to same organization for consistency
         if self.node and self.security_group and self.node.organization != self.security_group.organization:
             raise ValidationError("Node and security group must belong to the same organization")
@@ -187,3 +203,33 @@ class FirewallRule(models.Model):
                 'description': 'PostgreSQL access'
             }
         }
+
+
+class FirewallRuleSourceGroup(models.Model):
+    """
+    Explicit through model for FirewallRule.source_groups.
+
+    Reproduces the pre-existing auto-generated join table exactly: same table
+    (security_groups_firewallrule_source_groups) and columns (firewallrule_id,
+    securitygroup_id). Keeps the SecurityGroup -> Tag rename DDL-free by pinning
+    ``securitygroup_id`` via db_column instead of the model-derived ``tag_id``.
+    """
+    firewallrule = models.ForeignKey(
+        'security_groups.FirewallRule',
+        on_delete=models.CASCADE,
+        db_column='firewallrule_id',
+    )
+    tag = models.ForeignKey(
+        'security_groups.Tag',
+        on_delete=models.CASCADE,
+        db_column='securitygroup_id',
+    )
+
+    class Meta:
+        db_table = 'security_groups_firewallrule_source_groups'
+        unique_together = (('firewallrule', 'tag'),)
+
+
+# Temporary backward-compatibility alias (Phase 0 rename). Any import that still
+# references ``SecurityGroup`` keeps working through this alias. Remove in Phase 4 cleanup.
+SecurityGroup = Tag

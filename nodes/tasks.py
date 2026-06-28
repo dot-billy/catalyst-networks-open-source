@@ -20,7 +20,7 @@ def _expected_certificate_groups(node):
     group_names = []
     if node.is_lighthouse:
         group_names.append('lighthouse')
-    group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+    group_names.extend(list(node.tags.values_list('name', flat=True)))
     return sorted(set(group_names))
 
 
