@@ -132,12 +132,8 @@ class FirewallRule(models.Model):
         if not has_target:
             raise ValidationError("Rule must target a node, a tag, or one or more target groups")
 
-        if self.node and self.security_group:
+        if self.node_id and self.security_group_id:
             raise ValidationError("Rule cannot be attached to both a node and a security group")
-
-        # Validate target belongs to same organization for consistency
-        if self.node and self.security_group and self.node.organization != self.security_group.organization:
-            raise ValidationError("Node and security group must belong to the same organization")
         
         # ICMP doesn't use ports
         if self.protocol == 'icmp' and (self.port_min is not None or self.port_max is not None):

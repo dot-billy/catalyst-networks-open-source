@@ -200,6 +200,8 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertQuerySetEqual(rule.source_groups.all(), [self.source_group])
         self.assertFalse(rule.source_nodes.exists())
         self.assertEqual(rule.source_cidr, '')
+        self.assertEqual(rule.match_type, 'groups')
+        self.assertQuerySetEqual(rule.target_groups.all(), [self.destination_group])
 
     def test_member_cannot_create_source_to_destination_policy(self):
         self.client.force_login(self.member)
@@ -252,6 +254,71 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(rule.port_min, 443)
         self.assertEqual(rule.port_max, 443)
         self.assertEqual(rule.description, 'Original allow rule')
+        self.assertQuerySetEqual(rule.source_groups.all(), [self.source_group])
+        self.assertFalse(rule.source_nodes.exists())
+
+    def test_legacy_add_rejects_foreign_source_group_without_creating_rule(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                'security_groups_org:add_rule',
+                kwargs={'slug': self.organization.slug, 'sg_id': self.destination_group.id},
+            ),
+            {
+                'source_type': 'group',
+                'source_group': [str(self.foreign_source_group.id)],
+                'protocol': 'tcp',
+                'port': '443',
+                'description': 'Foreign legacy add attempt',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Source group not found in this organization.')
+        self.assertFalse(FirewallRule.objects.filter(description='Foreign legacy add attempt').exists())
+
+    def test_legacy_edit_rejects_foreign_source_node_without_mutating_rule(self):
+        self.client.force_login(self.owner)
+        rule = FirewallRule.objects.create(
+            security_group=self.destination_group,
+            protocol='tcp',
+            port_min=443,
+            port_max=443,
+            description='Original legacy rule',
+            match_type='groups',
+        )
+        rule.source_groups.set([self.source_group])
+
+        response = self.client.post(
+            reverse(
+                'security_groups_org:edit_rule',
+                kwargs={
+                    'slug': self.organization.slug,
+                    'sg_id': self.destination_group.id,
+                    'rule_id': rule.id,
+                },
+            ),
+            {
+                'source_type': 'host',
+                'source_node': str(self.foreign_source_node.id),
+                'protocol': 'udp',
+                'port_min': '53',
+                'port_max': '53',
+                'description': 'Invalid legacy edit',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Source host not found in this organization.')
+        rule.refresh_from_db()
+        self.assertEqual(rule.security_group, self.destination_group)
+        self.assertIsNone(rule.node)
+        self.assertEqual(rule.protocol, 'tcp')
+        self.assertEqual(rule.port_min, 443)
+        self.assertEqual(rule.port_max, 443)
+        self.assertEqual(rule.description, 'Original legacy rule')
+        self.assertEqual(rule.match_type, 'groups')
         self.assertQuerySetEqual(rule.source_groups.all(), [self.source_group])
         self.assertFalse(rule.source_nodes.exists())
 
@@ -358,6 +425,8 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(rule.port_max, 51820)
         self.assertFalse(rule.source_groups.exists())
         self.assertQuerySetEqual(rule.source_nodes.all(), [self.source_node])
+        self.assertEqual(rule.match_type, 'host')
+        self.assertFalse(rule.target_groups.exists())
 
     def test_list_scopes_to_org(self):
         FirewallRule.objects.create(

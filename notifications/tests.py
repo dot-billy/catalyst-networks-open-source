@@ -5,8 +5,10 @@ from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+import notifications
 import requests
 
+from .apps import NotificationsConfig
 from organizations.models import Membership, Organization
 
 from .dispatch import dispatch_notification
@@ -14,6 +16,14 @@ from .models import EventType, NotificationIntegration, default_notification_eve
 
 
 User = get_user_model()
+
+
+class NotificationsConfigTests(TestCase):
+    @mock.patch("notifications.apps.importlib.import_module")
+    def test_ready_imports_signals(self, import_module):
+        NotificationsConfig("notifications", notifications).ready()
+
+        import_module.assert_called_once_with("notifications.signals")
 
 
 @override_settings(**{"FIELD_ENCRYPTION_KEY": Fernet.generate_key().decode()})

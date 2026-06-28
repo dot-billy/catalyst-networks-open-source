@@ -1,3 +1,5 @@
+import ipaddress
+
 from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
@@ -459,37 +461,19 @@ def org_add_rule(request, slug, sg_id):
     security_group = get_object_or_404(SecurityGroup, id=sg_id, organization=org)
     
     if request.method == 'POST':
-        protocol = request.POST.get('protocol')
-        port = request.POST.get('port')
-        port_val = int(port) if port and port.isdigit() else None
-        description = request.POST.get('description', '')
-        source_type = request.POST.get('source_type')
-        source_group_ids = request.POST.getlist('source_group')
-        source_node_id = request.POST.get('source_node')
+        post = request.POST.copy()
+        post['dest_type'] = 'group'
+        post['dest_group'] = str(security_group.id)
         error_message = None
 
-        # Validation: port only applies to TCP/UDP and a source is always required.
-        valid = protocol and (protocol in ['icmp', 'any'] or port)
-        has_source = (
-            (source_type == 'group' and source_group_ids) or
-            (source_type == 'host' and source_node_id)
-        )
-        if valid and has_source:
-            rule = FirewallRule.objects.create(
-                security_group=security_group,
-                protocol=protocol,
-                port_min=port_val if protocol in ['tcp', 'udp'] else None,
-                port_max=port_val if protocol in ['tcp', 'udp'] else None,
-                description=description
-            )
-            if source_type == 'group' and source_group_ids:
-                rule.source_groups.set(source_group_ids)
-            elif source_type == 'host' and source_node_id:
-                rule.source_nodes.set([source_node_id])
+        ok, field_data, error_message = _validate_policy_fields(org, post)
+        if ok:
+            ok, source_data, error_message = _validate_policy_source(org, post)
+        if ok:
+            with transaction.atomic():
+                _save_policy_rule(FirewallRule(), field_data, source_data)
             messages.success(request, 'Rule added to the policy.')
             return redirect('security_groups_org:detail', slug=slug, pk=sg_id)
-        else:
-            error_message = 'Choose a protocol, define a source, and add a port for TCP/UDP rules.'
     else:
         error_message = None
 
@@ -522,44 +506,20 @@ def org_edit_rule(request, slug, sg_id, rule_id):
     rule = get_object_or_404(FirewallRule, id=rule_id, security_group=security_group)
     
     if request.method == 'POST':
-        protocol = request.POST.get('protocol')
-        port_min = request.POST.get('port_min')
-        port_max = request.POST.get('port_max')
-        source_cidr = request.POST.get('source_cidr', '')
-        description = request.POST.get('description', '')
-        source_type = request.POST.get('source_type')  # 'group' or 'host'
-        source_group_ids = request.POST.getlist('source_group')
-        source_node_id = request.POST.get('source_node')
-        
-        # Update simple fields
-        rule.protocol = protocol
-        rule.port_min = port_min if port_min else None
-        rule.port_max = port_max if port_max else None
-        rule.description = description
-        
-        # Reset sources
-        rule.source_cidr = ''
-        rule.save()  # Save first so M2M updates apply cleanly
-        rule.source_groups.clear()
-        rule.source_nodes.clear()
-        
-        # Apply source selection in priority order like add flow
-        if source_type == 'group' and source_group_ids:
-            rule.source_groups.set(source_group_ids)
-        elif source_type == 'host' and source_node_id:
-            from nodes.models import Node
-            try:
-                node_obj = Node.objects.get(id=source_node_id, organization=org)
-                rule.source_nodes.set([node_obj.id])
-            except Node.DoesNotExist:
-                pass
-        else:
-            # Fallback to CIDR if provided
-            rule.source_cidr = source_cidr
-        
-        rule.save()
-        messages.success(request, 'Rule updated.')
-        return redirect('security_groups_org:detail', slug=slug, pk=sg_id)
+        post = request.POST.copy()
+        post['dest_type'] = 'group'
+        post['dest_group'] = str(security_group.id)
+
+        ok, field_data, error_message = _validate_policy_fields(org, post)
+        if ok:
+            ok, source_data, error_message = _validate_policy_source(org, post)
+        if ok:
+            with transaction.atomic():
+                _save_policy_rule(rule, field_data, source_data)
+            messages.success(request, 'Rule updated.')
+            return redirect('security_groups_org:detail', slug=slug, pk=sg_id)
+    else:
+        error_message = None
     
     # Build context for editing sources
     all_groups = SecurityGroup.objects.filter(organization=org)
@@ -578,6 +538,7 @@ def org_edit_rule(request, slug, sg_id, rule_id):
         'selected_group_ids': selected_group_ids,
         'selected_node_id': selected_node_id,
         'default_source_type': default_source_type,
+        'error_message': error_message,
     }
     
     return render(request, 'security_groups/org_edit_rule.html', context)
@@ -726,26 +687,60 @@ def _validate_policy_source(org, post):
     source_type = post.get('source_type')
     source_group_ids = post.getlist('source_group')
     source_node_id = post.get('source_node')
+    source_cidr = post.get('source_cidr', '').strip()
 
     if source_type == 'group' and source_group_ids:
-        submitted_ids = {str(source_group_id) for source_group_id in source_group_ids}
+        try:
+            submitted_ids = [int(source_group_id) for source_group_id in source_group_ids]
+        except (TypeError, ValueError):
+            return False, None, 'Source group not found in this organization.'
         valid_ids = set(
-            str(source_group_id) for source_group_id in
             Tag.objects.filter(
-                id__in=source_group_ids,
+                id__in=submitted_ids,
                 organization=org,
             ).values_list('id', flat=True)
         )
-        if valid_ids != submitted_ids:
+        if valid_ids != set(submitted_ids):
             return False, None, 'Source group not found in this organization.'
-        return True, {'source_group_ids': list(valid_ids), 'source_node_ids': []}, None
+        return True, {
+            'match_type': 'groups',
+            'source_group_ids': list(dict.fromkeys(submitted_ids)),
+            'source_node_ids': [],
+            'source_cidr': '',
+        }, None
 
     if source_type == 'host' and source_node_id:
         try:
-            node = Node.objects.get(id=source_node_id, organization=org)
-        except Node.DoesNotExist:
+            node_id = int(source_node_id)
+            node = Node.objects.get(id=node_id, organization=org)
+        except (TypeError, ValueError, Node.DoesNotExist):
             return False, None, 'Source host not found in this organization.'
-        return True, {'source_group_ids': [], 'source_node_ids': [node.id]}, None
+        return True, {
+            'match_type': 'host',
+            'source_group_ids': [],
+            'source_node_ids': [node.id],
+            'source_cidr': '',
+        }, None
+
+    if source_cidr and not source_group_ids and not source_node_id:
+        try:
+            ipaddress.ip_network(source_cidr, strict=False)
+        except ValueError:
+            return False, None, 'Source CIDR must be a valid network.'
+        return True, {
+            'match_type': 'cidr',
+            'source_group_ids': [],
+            'source_node_ids': [],
+            'source_cidr': source_cidr,
+        }, None
+
+    if source_type == 'any':
+        return True, {
+            'match_type': 'any',
+            'source_group_ids': [],
+            'source_node_ids': [],
+            'source_cidr': '',
+        }, None
 
     return False, None, 'Choose a source group or host.'
 
@@ -758,10 +753,15 @@ def _save_policy_rule(rule, field_data, source_data):
     rule.description = field_data['description']
     rule.security_group = field_data['destination_group']
     rule.node = field_data['destination_node']
-    rule.source_cidr = ''
+    rule.match_type = source_data['match_type']
+    rule.source_cidr = source_data['source_cidr']
     rule.save()
     rule.source_groups.set(source_data['source_group_ids'])
     rule.source_nodes.set(source_data['source_node_ids'])
+    if field_data['destination_group']:
+        rule.target_groups.set([field_data['destination_group']])
+    else:
+        rule.target_groups.clear()
     return rule
 
 

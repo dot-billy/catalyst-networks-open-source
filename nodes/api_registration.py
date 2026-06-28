@@ -876,30 +876,31 @@ class NodeRegistrationView(APIView):
 
         def render_sources(rule):
             # Returns a list of source-match dicts (ONE firewall entry per source).
-            # SOURCE precedence: groups > nodes > CIDR. Reads the rule's SOURCE
-            # fields; target_groups (which nodes the rule applies to) is handled by
+            # target_groups (which nodes the rule applies to) is handled by
             # get_all_applicable_firewall_rules.
-            src_groups = list(
-                rule.source_groups.filter(
-                    organization=node.organization,
-                ).values_list('name', flat=True)
-            )
-            if src_groups:
-                return [{'groups': src_groups}]
-            node_ips = list(
-                rule.source_nodes.filter(
-                    organization=node.organization,
-                ).values_list('nebula_ip', flat=True)
-            )
-            if node_ips:
-                # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
-                # Nebula's 'host' key matches the remote CERT NAME, not an IP, so
-                # host:<ip> never matches a real node (CNCUST 7bbd288c).
-                return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
-            if rule.source_cidr:
-                # Nebula matches IP/CIDR sources via the 'cidr' key (radix tree vs
-                # the peer's VPN IP); 'host' is a cert-NAME matcher and never matches
-                # a CIDR -- emit 'cidr' (CNCUST 7bbd288c, empirically confirmed).
+            if rule.match_type == 'any':
+                return [{'host': 'any'}]
+            if rule.match_type == 'groups':
+                src_groups = list(
+                    rule.source_groups.filter(
+                        organization=node.organization,
+                    ).values_list('name', flat=True)
+                )
+                if src_groups:
+                    return [{'groups': src_groups}]
+            elif rule.match_type == 'host':
+                node_ips = list(
+                    rule.source_nodes.filter(
+                        organization=node.organization,
+                    ).values_list('nebula_ip', flat=True)
+                )
+                if node_ips:
+                    # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
+                    # Nebula's 'host' key matches the remote cert name, not an IP.
+                    return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
+            elif rule.match_type == 'cidr' and rule.source_cidr:
+                # Nebula matches IP/CIDR sources via the 'cidr' key; 'host' is a
+                # cert-name matcher and never matches a CIDR.
                 return [{'cidr': rule.source_cidr}]
             logger.debug("Skipping rule %s with no source specified", rule.id)
             return []
@@ -920,27 +921,30 @@ class NodeRegistrationView(APIView):
                 else:
                     fr['port'] = 'any'
 
+        def render_rule_entries(rule):
+            base = {}
+            render_proto_port(rule, base)
+            return [{**base, **src} for src in render_sources(rule)]
+
         # Inbound: keep the ICMP seed; append default allow-all only when there
-        # are no explicit inbound rules (preserves legacy output exactly).
-        if not inbound_rules:
-            config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
+        # are no explicit rendered inbound rules.
+        inbound_entries = []
+        for rule in inbound_rules:
+            inbound_entries.extend(render_rule_entries(rule))
+        if inbound_entries:
+            config['firewall']['inbound'].extend(inbound_entries)
         else:
-            for rule in inbound_rules:
-                base = {}
-                render_proto_port(rule, base)
-                for src in render_sources(rule):
-                    config['firewall']['inbound'].append({**base, **src})
+            config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
 
         # Outbound is allow-list like inbound: explicit egress rules switch egress
         # to deny-by-default (drop the default allow-all from the config above).
-        # When no outbound rule is authored, the default allow-all stays untouched.
+        # When no outbound rule renders, the default allow-all stays untouched.
         if outbound_rules:
-            config['firewall']['outbound'] = []
+            outbound_entries = []
             for rule in outbound_rules:
-                base = {}
-                render_proto_port(rule, base)
-                for src in render_sources(rule):
-                    config['firewall']['outbound'].append({**base, **src})
+                outbound_entries.extend(render_rule_entries(rule))
+            if outbound_entries:
+                config['firewall']['outbound'] = outbound_entries
 
         # Format as YAML string
         config_yaml = self._dict_to_yaml(config)

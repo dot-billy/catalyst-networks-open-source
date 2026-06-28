@@ -507,6 +507,7 @@ class NodeCertificateReliabilityTests(TestCase):
             port_min=443,
             port_max=443,
             description='mixed source groups',
+            match_type='groups',
         )
         rule.source_groups.set([local_source_group, foreign_group])
 
@@ -539,6 +540,7 @@ class NodeCertificateReliabilityTests(TestCase):
             port_min=5432,
             port_max=5432,
             description='mixed source nodes',
+            match_type='host',
         )
         rule.source_nodes.set([local_source_node, foreign_node])
 
@@ -990,7 +992,14 @@ class FirewallRenderEquivalenceTests(TestCase):
         node.tags.add(db_tag)
 
         # Save-twice pattern: clean() requires a target at initial save.
-        rule = FirewallRule(security_group=db_tag, protocol='tcp', port_min=5432, port_max=5432, direction='in')
+        rule = FirewallRule(
+            security_group=db_tag,
+            protocol='tcp',
+            port_min=5432,
+            port_max=5432,
+            direction='in',
+            match_type='groups',
+        )
         rule.save()
         rule.target_groups.add(db_tag)
         rule.source_groups.add(web_tag)
@@ -1012,7 +1021,7 @@ class FirewallRenderEquivalenceTests(TestCase):
         direction='in' rule with source_cidr='10.0.0.0/8', port 22:
         inbound must contain cidr: 10.0.0.0/8 (NOT a 'host:' key) with port 22.
         Nebula matches IP/CIDR sources via the 'cidr' key; 'host' matches the
-        remote cert NAME and would never match a CIDR (CNCUST 7bbd288c).
+        remote cert NAME and would never match a CIDR.
         """
         from security_groups.models import Tag, FirewallRule
         infra_tag = Tag.objects.create(name='infra', organization=self.organization)
@@ -1021,7 +1030,7 @@ class FirewallRenderEquivalenceTests(TestCase):
 
         rule = FirewallRule(
             security_group=infra_tag, protocol='tcp', port_min=22, port_max=22,
-            direction='in', source_cidr='10.0.0.0/8')
+            direction='in', source_cidr='10.0.0.0/8', match_type='cidr')
         rule.save()
         rule.target_groups.add(infra_tag)
         rule.security_group = None
@@ -1040,7 +1049,7 @@ class FirewallRenderEquivalenceTests(TestCase):
     def test_inbound_node_source_renders_cidr_slash32(self):
         """
         direction='in' rule with source_nodes=[peer]: inbound must match that peer
-        by its Nebula IP as a /32 via 'cidr:', NOT 'host:' (CNCUST 7bbd288c).
+        by its Nebula IP as a /32 via 'cidr:', NOT 'host:'.
         """
         from security_groups.models import Tag, FirewallRule
         app_tag = Tag.objects.create(name='app', organization=self.organization)
@@ -1049,7 +1058,8 @@ class FirewallRenderEquivalenceTests(TestCase):
         src = self._make_node('peer-node', '10.50.0.20')
 
         rule = FirewallRule(
-            security_group=app_tag, protocol='tcp', port_min=443, port_max=443, direction='in')
+            security_group=app_tag, protocol='tcp', port_min=443, port_max=443,
+            direction='in', match_type='host')
         rule.save()
         rule.target_groups.add(app_tag)
         rule.source_nodes.add(src)
@@ -1069,7 +1079,7 @@ class FirewallRenderEquivalenceTests(TestCase):
         node = self._make_node('range-node', '10.50.0.14')
         node.tags.add(tag)
         rule = FirewallRule(security_group=tag, protocol='tcp', port_min=8000, port_max=8100,
-                            direction='in', source_cidr='10.0.0.0/8')
+                            direction='in', source_cidr='10.0.0.0/8', match_type='cidr')
         rule.save()
         rule.target_groups.add(tag)
         rule.security_group = None
@@ -1084,7 +1094,9 @@ class FirewallRenderEquivalenceTests(TestCase):
         tag = Tag.objects.create(name='anyp', organization=self.organization)
         node = self._make_node('any-node', '10.50.0.15')
         node.tags.add(tag)
-        rule = FirewallRule(security_group=tag, protocol='any', direction='in', source_cidr='10.0.0.0/8')
+        rule = FirewallRule(
+            security_group=tag, protocol='any', direction='in',
+            source_cidr='10.0.0.0/8', match_type='cidr')
         rule.save()
         rule.target_groups.add(tag)
         rule.security_group = None
@@ -1100,7 +1112,7 @@ class FirewallRenderEquivalenceTests(TestCase):
         src = Tag.objects.create(name='icmp-src', organization=self.organization)
         node = self._make_node('icmp-node', '10.50.0.16')
         node.tags.add(tag)
-        rule = FirewallRule(security_group=tag, protocol='icmp', direction='in')
+        rule = FirewallRule(security_group=tag, protocol='icmp', direction='in', match_type='groups')
         rule.save()
         rule.target_groups.add(tag)
         rule.source_groups.add(src)
@@ -1114,7 +1126,9 @@ class FirewallRenderEquivalenceTests(TestCase):
         from security_groups.models import FirewallRule
         node = self._make_node('direct-node', '10.50.0.17')
         src = self._make_node('direct-src', '10.50.0.27')
-        rule = FirewallRule(node=node, protocol='tcp', port_min=80, port_max=80, direction='in')
+        rule = FirewallRule(
+            node=node, protocol='tcp', port_min=80, port_max=80,
+            direction='in', match_type='host')
         rule.save()
         rule.source_nodes.add(src)
         rule.save()
@@ -1122,22 +1136,75 @@ class FirewallRenderEquivalenceTests(TestCase):
         self.assertIn('cidr: 10.50.0.27/32', inbound_section)
         self.assertIn('80', inbound_section)
 
-    def test_sourceless_rule_is_skipped_and_suppresses_allow_all(self):
-        """KNOWN SHARP EDGE: a rule with no source renders nothing, yet its presence
-        suppresses the default allow-all -> the node is left effectively deny-all on
-        inbound (only the icmp seed). Documents current behaviour."""
+    def test_inbound_match_type_any_renders_host_any(self):
+        """A match_type='any' inbound rule renders an explicit Nebula host:any source."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='any-in', organization=self.organization)
+        node = self._make_node('any-in-node', '10.50.0.18')
+        node.tags.add(tag)
+        rule = FirewallRule(
+            security_group=tag,
+            protocol='tcp',
+            port_min=22,
+            port_max=22,
+            direction='in',
+            match_type='any',
+        )
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.security_group = None
+        rule.save()
+
+        inbound_section = self._render(node).split('inbound:', 1)[1]
+
+        self.assertIn('port: 22', inbound_section)
+        self.assertIn('proto: tcp', inbound_section)
+        self.assertIn('host: any', inbound_section)
+
+    def test_outbound_match_type_any_renders_allow_any_source(self):
+        """A match_type='any' outbound rule produces allow-any egress, not an empty list."""
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='any-out', organization=self.organization)
+        node = self._make_node('any-out-node', '10.50.0.19')
+        node.tags.add(tag)
+        rule = FirewallRule(
+            security_group=tag,
+            protocol='any',
+            direction='out',
+            match_type='any',
+        )
+        rule.save()
+        rule.target_groups.add(tag)
+        rule.security_group = None
+        rule.save()
+
+        outbound_section = self._render(node).split('outbound:', 1)[1].split('inbound:', 1)[0]
+
+        self.assertIn('port: any', outbound_section)
+        self.assertIn('proto: any', outbound_section)
+        self.assertIn('host: any', outbound_section)
+
+    def test_malformed_sourceless_rule_does_not_suppress_allow_all(self):
+        """A non-any rule with no source is skipped without removing default allow-all."""
         from security_groups.models import Tag, FirewallRule
         tag = Tag.objects.create(name='nosrc', organization=self.organization)
-        node = self._make_node('nosrc-node', '10.50.0.18')
+        node = self._make_node('nosrc-node', '10.50.0.28')
         node.tags.add(tag)
-        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=22, port_max=22, direction='in')
+        rule = FirewallRule(
+            security_group=tag,
+            protocol='tcp',
+            port_min=22,
+            port_max=22,
+            direction='in',
+            match_type='groups',
+        )
         rule.save()
         rule.target_groups.add(tag)  # target set, but NO source
         rule.security_group = None
         rule.save()
         inbound_section = self._render(node).split('inbound:', 1)[1]
         self.assertIn('proto: icmp', inbound_section)   # seed still present
-        self.assertNotIn('port: any', inbound_section)  # allow-all suppressed
+        self.assertIn('port: any', inbound_section)     # allow-all still present
         self.assertNotIn('22', inbound_section)         # sourceless rule rendered nothing
 
     def test_node_with_no_applicable_rules_has_icmp_seed_and_allow_all(self):
@@ -1191,7 +1258,7 @@ class PrepareNodePackageDirectionTests(TestCase):
         self.node.tags.add(tag)
         out_rule = FirewallRule(
             security_group=tag, protocol='tcp', port_min=5432, port_max=5432,
-            direction='out', source_cidr='10.0.0.0/8')
+            direction='out', source_cidr='10.0.0.0/8', match_type='cidr')
         out_rule.save()
         out_rule.target_groups.add(tag)
         out_rule.security_group = None
