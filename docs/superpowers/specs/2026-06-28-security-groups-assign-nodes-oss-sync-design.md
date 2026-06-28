@@ -26,14 +26,15 @@ Cherry-pick these commercial commits in order:
 
 | Order | Commit | Purpose |
 | --- | --- | --- |
-| 1 | `e220956` | Phase 4 foundation: UI renames, route scaffolding, NoReverseMatch fix, dead-code cleanup |
-| 2 | `90b5ede` | Tag list/detail and plain-English summaries |
-| 3 | `0fee70c` | Node x Tag matrix and batched membership changes |
-| 4 | `64dee9d` | Direction-first rule editor and live rule preview |
-| 5 | `5bf9fc4` | Per-node Effective Rules |
-| 6 | `6a5426d` | Recipe wizard and idempotent preset rules |
-| 7 | `722719c` | Surface target-group firewall rules in detail/list views |
-| 8 | `9b6a2a2` | Dense searchable Assign Nodes picker |
+| 1 | `cacea6b` | Backend prerequisite: Tags, directional Rules, target groups, CIDR source handling, config rendering updates |
+| 2 | `e220956` | Phase 4 foundation: UI renames, route scaffolding, NoReverseMatch fix, dead-code cleanup |
+| 3 | `90b5ede` | Tag list/detail and plain-English summaries |
+| 4 | `0fee70c` | Node x Tag matrix and batched membership changes |
+| 5 | `64dee9d` | Direction-first rule editor and live rule preview |
+| 6 | `5bf9fc4` | Per-node Effective Rules |
+| 7 | `6a5426d` | Recipe wizard and idempotent preset rules |
+| 8 | `722719c` | Surface target-group firewall rules in detail/list views |
+| 9 | `9b6a2a2` | Dense searchable Assign Nodes picker |
 
 If a cherry-pick applies documentation under `.superpowers` or commercial planning files, drop those files from the OSS commit unless they are rewritten as OSS-facing documentation under `docs/` and pass the product-boundary review.
 
