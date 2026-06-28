@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 from certificates.models import CertificateAuthority
 from nodes.models import Node
@@ -722,11 +723,26 @@ class NavLabelTests(TestCase):
         Membership.objects.create(user=self.owner, organization=self.org, role='owner')
         self.client.force_login(self.owner)
 
+    def _anchor_text_for(self, response, href):
+        html = response.content.decode()
+        href_marker = f'href="{href}"'
+        href_index = html.index(href_marker)
+        anchor_start = html.rfind('<a ', 0, href_index)
+        anchor_end = html.index('</a>', href_index) + len('</a>')
+        return ' '.join(strip_tags(html[anchor_start:anchor_end]).split())
+
     def test_sidebar_uses_tags_and_rules_labels(self):
         response = self.client.get(reverse('security_groups_org:list', kwargs={'slug': self.org.slug}))
         self.assertEqual(response.status_code, 200)
-        # Desktop sidebar (base.html) renders on every page
-        self.assertContains(response, '>\n                                Tags\n')
-        self.assertContains(response, '>\n                                Rules\n')
-        self.assertNotContains(response, '>\n                                Groups\n')
-        self.assertNotContains(response, '>\n                                Policies\n')
+        tags_text = self._anchor_text_for(
+            response,
+            reverse('security_groups_org:list', kwargs={'slug': self.org.slug}),
+        )
+        rules_text = self._anchor_text_for(
+            response,
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.org.slug}),
+        )
+        self.assertEqual(tags_text, 'Tags')
+        self.assertEqual(rules_text, 'Rules')
+        self.assertNotEqual(tags_text, 'Groups')
+        self.assertNotEqual(rules_text, 'Policies')

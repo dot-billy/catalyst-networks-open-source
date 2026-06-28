@@ -1288,7 +1288,6 @@ class OrgNodeSecurityGroupsPageTests(TestCase):
         from organizations.models import Organization, Membership, NetworkRange
         from certificates.models import CertificateAuthority
         from django.core.files.uploadedfile import SimpleUploadedFile
-        self.client = Client()
         self.owner = User.objects.create_user(email='sg-page@example.com', password='pw')
         self.org = Organization.objects.create(name='SG Page Org', created_by=self.owner)
         Membership.objects.create(user=self.owner, organization=self.org, role='owner')
