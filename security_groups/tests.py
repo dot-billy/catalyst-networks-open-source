@@ -943,3 +943,182 @@ class TagDetailSummaryTests(TestCase):
             nebula_ip=ip,
             created_by=owner,
         )
+
+
+class NodeTagMatrixViewTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='matrix@example.com', password='pw')
+        self.org = Organization.objects.create(name='Matrix Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.80.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node1 = Node.objects.create(name='node-1', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.80.0.10', external_port=4242, created_by=self.owner)
+        self.node2 = Node.objects.create(name='node-2', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.80.0.11', external_port=4242, created_by=self.owner)
+        self.tagA = Tag.objects.create(name='alpha', organization=self.org)
+        self.tagB = Tag.objects.create(name='bravo', organization=self.org)
+        self.node1.tags.add(self.tagA)
+        self.client.force_login(self.owner)
+
+    def test_matrix_renders_nodes_tags_and_membership(self):
+        response = self.client.get(reverse('security_groups_org:matrix', kwargs={'slug': self.org.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'node-1')
+        self.assertContains(response, 'alpha')
+        nodes_by_id = {n.id: n for n in response.context['nodes']}
+        self.assertIn(self.tagA.id, nodes_by_id[self.node1.id].tag_id_set)
+        self.assertNotIn(self.tagB.id, nodes_by_id[self.node1.id].tag_id_set)
+        self.assertEqual(nodes_by_id[self.node2.id].tag_id_set, set())
+
+
+class NodeTagMatrixApplyTests(TestCase):
+    def setUp(self):
+        import json
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.json = json
+        self.client = Client()
+        self.owner = User.objects.create_user(email='apply@example.com', password='pw')
+        self.org = Organization.objects.create(name='Apply Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.81.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node1 = Node.objects.create(name='n1', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.81.0.10', external_port=4242, created_by=self.owner)
+        self.tagA = Tag.objects.create(name='alpha', organization=self.org)
+        self.tagB = Tag.objects.create(name='bravo', organization=self.org)
+        self.node1.tags.add(self.tagA)
+        # a foreign org's tag, to test org-scoping
+        self.other_org = Organization.objects.create(name='Other', created_by=self.owner)
+        self.foreign_tag = Tag.objects.create(name='foreign', organization=self.other_org)
+        self.client.force_login(self.owner)
+        self.url = reverse('security_groups_org:matrix_apply', kwargs={'slug': self.org.slug})
+
+    def test_apply_adds_and_removes(self):
+        changes = self.json.dumps([
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagA.id, 'op': 'remove'},
+        ])
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 200)
+        self.node1.refresh_from_db()
+        ids = set(self.node1.tags.values_list('id', flat=True))
+        self.assertIn(self.tagB.id, ids)
+        self.assertNotIn(self.tagA.id, ids)
+
+    def test_apply_ignores_foreign_tag(self):
+        changes = self.json.dumps([{'node': self.node1.id, 'tag': self.foreign_tag.id, 'op': 'add'}])
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(self.foreign_tag.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_rejects_non_admin(self):
+        # check_org_access raises PermissionDenied for an insufficient-role member → 403.
+        viewer = User.objects.create_user(email='viewer@example.com', password='pw')
+        from organizations.models import Membership
+        Membership.objects.create(user=viewer, organization=self.org, role='viewer')
+        self.client.force_login(viewer)
+        changes = self.json.dumps([{'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'}])
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(self.tagB.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_rejects_non_member_idor(self):
+        # A user with NO membership in this org must be denied access (IDOR guard).
+        # check_org_access raises PermissionDenied for a non-member → 403.
+        outsider = User.objects.create_user(email='outsider@example.com', password='pw')
+        self.client.force_login(outsider)
+        changes = self.json.dumps([{'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'}])
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(self.tagB.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_bad_json_returns_400(self):
+        # Malformed JSON in the changes field must return 400, not 200.
+        response = self.client.post(self.url, {'changes': 'not-valid-json{'})
+        self.assertEqual(response.status_code, 400)
+        # No membership changes must have occurred.
+        self.assertIn(self.tagA.id, set(self.node1.tags.values_list('id', flat=True)))
+
+
+class NodeTagMatrixResignTests(TestCase):
+    def setUp(self):
+        import json
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.json = json
+        self.client = Client()
+        self.owner = User.objects.create_user(email='resign@example.com', password='pw')
+        self.org = Organization.objects.create(name='Resign Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.82.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node1 = Node.objects.create(name='n1', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.82.0.10', external_port=4242, created_by=self.owner)
+        self.node2 = Node.objects.create(name='n2', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.82.0.11', external_port=4242, created_by=self.owner)
+        self.tagA = Tag.objects.create(name='alpha', organization=self.org)
+        self.tagB = Tag.objects.create(name='bravo', organization=self.org)
+        self.client.force_login(self.owner)
+        self.url = reverse('security_groups_org:matrix_apply', kwargs={'slug': self.org.slug})
+
+    def test_one_resign_per_affected_node_deduped(self):
+        from unittest.mock import patch
+        changes = self.json.dumps([
+            {'node': self.node1.id, 'tag': self.tagA.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},  # node1 affected twice
+            {'node': self.node2.id, 'tag': self.tagA.id, 'op': 'add'},
+        ])
+        with patch('security_groups.views.renew_node_certificate') as mock_task:
+            response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_task.delay.call_count, 2)
+        called_ids = {c.args[0] for c in mock_task.delay.call_args_list}
+        self.assertEqual(called_ids, {self.node1.id, self.node2.id})
+
+
+class NodeTagMatrixStagingTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='stage@example.com', password='pw')
+        self.org = Organization.objects.create(name='Stage Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.83.0.0/24', description='r')
+        ca = CertificateAuthority.objects.create(name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        Node.objects.create(name='n1', organization=self.org, certificate_authority=ca,
+            nebula_ip='10.83.0.10', external_port=4242, created_by=self.owner)
+        Tag.objects.create(name='alpha', organization=self.org)
+        self.client.force_login(self.owner)
+
+    def test_matrix_renders_staging_scaffold(self):
+        response = self.client.get(reverse('security_groups_org:matrix', kwargs={'slug': self.org.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'x-data')
+        self.assertContains(response, 'changes pending')
+        self.assertContains(response, reverse('security_groups_org:matrix_apply', kwargs={'slug': self.org.slug}))
+        self.assertContains(response, 'csrfmiddlewaretoken')

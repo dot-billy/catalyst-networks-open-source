@@ -1,0 +1,80 @@
+{% extends "base/base.html" %}
+{% block title %}Tag Matrix - {{ organization.name }}{% endblock %}
+{% block page_title %}Tag Matrix{% endblock %}
+{% block content %}
+<div x-data="tagMatrix()">
+    <div class="ui-page-header flex items-center justify-between">
+        <div>
+            <h1 class="ui-page-title">Tag Matrix</h1>
+            <p class="ui-page-subtitle">{% if user_role == 'owner' or user_role == 'admin' %}Toggle cells, then Apply. Membership changes re-sign the node's certificate.{% else %}You have read-only access to this matrix.{% endif %}</p>
+        </div>
+        {% if user_role == 'owner' or user_role == 'admin' %}
+        <div x-show="count > 0" class="flex items-center gap-3">
+            <span class="text-light-200" x-text="count + ' changes pending'"></span>
+            {# Use htmx:afterSwap (fires only on successful swap) with .camel modifier so Alpine
+               receives the correctly-cased event name that HTMX 1.9.2 dispatches. #}
+            <form method="post" action="{% url 'security_groups_org:matrix_apply' slug=organization.slug %}"
+                  hx-post="{% url 'security_groups_org:matrix_apply' slug=organization.slug %}"
+                  hx-target="#matrix-result" hx-swap="innerHTML"
+                  @htmx:after-swap.camel="reset()">
+                {% csrf_token %}
+                <input type="hidden" name="changes" :value="payload()">
+                <button type="submit" class="ui-btn ui-btn-primary ui-btn-sm">Apply</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+    <div id="matrix-result"></div>
+
+    {% if nodes and tags %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead>
+                <tr>
+                    <th class="text-left p-2 text-light-300">Node \ Tag</th>
+                    {% for tag in tags %}<th class="p-2 text-light-200">{{ tag.name }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for node in nodes %}
+                <tr class="border-t border-dark-600">
+                    <td class="p-2 text-light-100 font-medium">{{ node.name }}</td>
+                    {% for tag in tags %}
+                    <td class="p-2 text-center">
+                        <input type="checkbox" data-node="{{ node.id }}" data-tag="{{ tag.id }}"
+                               {% if tag.id in node.tag_id_set %}checked{% endif %}
+                               {% if user_role == 'owner' or user_role == 'admin' %}@change="toggle({{ node.id }}, {{ tag.id }}, $event.target.checked)"{% else %}disabled{% endif %}>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-light-300">Add at least one node and one tag to use the matrix.</p>
+    {% endif %}
+</div>
+
+<script>
+function tagMatrix() {
+    return {
+        staged: {},
+        get count() { return Object.keys(this.staged).length; },
+        toggle(node, tag, checked) {
+            const key = node + ':' + tag;
+            if (key in this.staged) { delete this.staged[key]; }
+            else { this.staged[key] = checked ? 'add' : 'remove'; }
+        },
+        payload() {
+            return JSON.stringify(Object.entries(this.staged).map(([k, op]) => {
+                const [node, tag] = k.split(':').map(Number);
+                return { node, tag, op };
+            }));
+        },
+        reset() { this.staged = {}; },
+    };
+}
+</script>
+{% endblock %}

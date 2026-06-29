@@ -14,6 +14,8 @@
             {% if user_role == 'owner' or user_role == 'admin' %}
             {% url 'security_groups_org:create' slug=organization.slug as create_security_group_url %}
             {% include "components/button.html" with text="Create Policy" href=create_security_group_url variant="primary" size="sm" %}
+            {% url 'security_groups_org:matrix' slug=organization.slug as matrix_url %}
+            {% include "components/button.html" with text="Tag Matrix" href=matrix_url variant="secondary" size="sm" %}
             {% endif %}
         </div>
     </div>

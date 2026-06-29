@@ -1,3 +1,5 @@
+import json
+
 import ipaddress
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -6,9 +8,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import FirewallRule, SecurityGroup, Tag
 from .summaries import summarize_tag, target_rules_for_tag, target_rules_queryset
+from nodes.models import Node
+from nodes.tasks import renew_node_certificate
+from django.views.decorators.http import require_POST
 from organizations.permissions import IsOrganizationOwnerOrAdmin
 from organizations.access import get_org_role, require_org_access
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.views import APIView
@@ -254,6 +259,60 @@ def org_security_group_list(request, slug):
     }
     
     return render(request, 'security_groups/org_list.html', context)
+
+
+@login_required
+def org_node_tag_matrix(request, slug):
+    """Org-wide Node x Tag membership grid."""
+    org = check_org_access(request.user, organization_slug=slug)
+    tags = list(Tag.objects.filter(organization=org).order_by('name'))
+    nodes = list(Node.objects.filter(organization=org).order_by('name'))
+    membership = {}
+    for nid, tid in Node.tags.through.objects.filter(node__organization=org).values_list('node_id', 'tag_id'):
+        membership.setdefault(nid, set()).add(tid)
+    for n in nodes:
+        n.tag_id_set = membership.get(n.id, set())
+    context = {
+        'organization': org,
+        'tags': tags,
+        'nodes': nodes,
+        'user_role': get_org_role(request.user, org),
+    }
+    return render(request, 'security_groups/matrix.html', context)
+
+
+@login_required
+@require_POST
+def org_node_tag_matrix_apply(request, slug):
+    """Commit a batch of Node x Tag membership changes, org-scoped."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    raw = request.POST.get('changes', '[]')
+    try:
+        changes = json.loads(raw)
+    except (ValueError, TypeError):
+        return HttpResponseBadRequest('Invalid JSON in changes field.')
+    # Bulk-load org-scoped nodes and tags once to avoid N+1 and validate membership.
+    nodes_by_id = {n.id: n for n in Node.objects.filter(organization=org)}
+    tags_by_id = {t.id: t for t in Tag.objects.filter(organization=org)}
+    affected = set()
+    with transaction.atomic():
+        for ch in changes:
+            nid, tid, op = ch.get('node'), ch.get('tag'), ch.get('op')
+            if nid not in nodes_by_id or tid not in tags_by_id or op not in ('add', 'remove'):
+                continue
+            node = nodes_by_id[nid]
+            tag = tags_by_id[tid]
+            if op == 'add':
+                node.tags.add(tag)
+            else:
+                node.tags.remove(tag)
+            affected.add(nid)
+    # Queue re-signs outside the atomic block so a mid-batch crash rolls back all
+    # membership changes without queuing any certificate renewals.
+    for nid in affected:
+        renew_node_certificate.delay(nid)
+    return render(request, 'security_groups/_matrix_apply_result.html', {'count': len(affected)})
+
 
 @login_required
 def org_security_group_create(request, slug):
