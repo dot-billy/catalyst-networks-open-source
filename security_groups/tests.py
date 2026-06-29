@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.html import strip_tags
 
@@ -836,6 +838,24 @@ class TagListSummaryTests(TestCase):
         self.assertContains(response, 'Accepts HTTPS from anywhere.')
         self.assertContains(response, '1 rules')
 
+    def test_list_summaries_do_not_query_organization_per_tag(self):
+        from security_groups.models import Tag, FirewallRule
+        for index in range(3):
+            tag = Tag.objects.create(name=f'web-{index}', organization=self.org)
+            rule = FirewallRule(security_group=tag, direction='in', match_type='any', protocol='tcp', port_min=443, port_max=443)
+            rule.save(); rule.target_groups.add(tag); rule.security_group = None; rule.save()
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse('security_groups_org:list', kwargs={'slug': self.org.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        organization_selects = [
+            query['sql']
+            for query in queries.captured_queries
+            if 'FROM "organizations_organization"' in query['sql']
+        ]
+        self.assertLessEqual(len(organization_selects), 2, organization_selects)
+
 
 class TagDetailSummaryTests(TestCase):
     def setUp(self):
@@ -852,6 +872,7 @@ class TagDetailSummaryTests(TestCase):
         r = FirewallRule(security_group=self.web, direction='in', match_type='groups', protocol='tcp', port_min=22, port_max=22, description='ssh from admin')
         r.save(); r.target_groups.add(self.web); r.security_group = None; r.save()
         r.source_groups.add(self.admin_tag)
+        self.rule = r
         self.client.force_login(self.owner)
 
     def test_detail_page_shows_tag_summary(self):
@@ -860,6 +881,26 @@ class TagDetailSummaryTests(TestCase):
         self.assertContains(response, 'Accepts SSH from tag admin.')
         self.assertContains(response, '1 rules')
         self.assertContains(response, 'ssh from admin')
+
+    def test_target_group_only_rule_detail_actions_work(self):
+        edit_url = reverse(
+            'security_groups_org:edit_rule',
+            kwargs={'slug': self.org.slug, 'sg_id': self.web.id, 'rule_id': self.rule.id},
+        )
+        delete_url = reverse(
+            'security_groups_org:delete_rule',
+            kwargs={'slug': self.org.slug, 'sg_id': self.web.id, 'rule_id': self.rule.id},
+        )
+
+        edit_response = self.client.get(edit_url)
+        self.assertEqual(edit_response.status_code, 200)
+
+        delete_response = self.client.post(delete_url)
+        self.assertRedirects(
+            delete_response,
+            reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.web.id}),
+        )
+        self.assertFalse(FirewallRule.objects.filter(id=self.rule.id).exists())
 
     def test_rendered_summary_hides_foreign_source_names(self):
         local_host = self._node('local-node', self.org, self.owner, '10.70.0.10')

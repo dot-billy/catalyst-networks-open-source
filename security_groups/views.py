@@ -224,6 +224,7 @@ def org_security_group_list(request, slug):
     target_rule_qs = target_rules_queryset(org)
     security_groups = (
         Tag.objects.filter(organization=org)
+        .select_related('organization')
         .prefetch_related(
             Prefetch('firewall_rules', queryset=target_rule_qs, to_attr='legacy_target_rules'),
             Prefetch('rules_targeting', queryset=target_rule_qs, to_attr='m2m_target_rules'),
@@ -400,6 +401,16 @@ def org_add_rule(request, slug, sg_id):
     
     return render(request, 'security_groups/org_add_rule.html', context)
 
+
+def _get_target_rule_or_404(org, security_group, rule_id):
+    return get_object_or_404(
+        target_rules_queryset(org).filter(
+            Q(security_group=security_group) | Q(target_groups=security_group),
+        ),
+        id=rule_id,
+    )
+
+
 @login_required
 def org_edit_rule(request, slug, sg_id, rule_id):
     """Edit a rule in an organization context."""
@@ -410,7 +421,7 @@ def org_edit_rule(request, slug, sg_id, rule_id):
     security_group = get_object_or_404(SecurityGroup, id=sg_id, organization=org)
     
     # Get the rule and check it belongs to this security group
-    rule = get_object_or_404(FirewallRule, id=rule_id, security_group=security_group)
+    rule = _get_target_rule_or_404(org, security_group, rule_id)
     
     if request.method == 'POST':
         post = request.POST.copy()
@@ -460,7 +471,7 @@ def org_delete_rule(request, slug, sg_id, rule_id):
     security_group = get_object_or_404(SecurityGroup, id=sg_id, organization=org)
     
     # Get the rule and check it belongs to this security group
-    rule = get_object_or_404(FirewallRule, id=rule_id, security_group=security_group)
+    rule = _get_target_rule_or_404(org, security_group, rule_id)
     
     if request.method == 'POST':
         rule.delete()

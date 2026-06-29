@@ -28,6 +28,7 @@ def target_rules_queryset(organization):
     return (
         FirewallRule.objects
         .filter(Q(security_group__organization=organization) | Q(target_groups__organization=organization))
+        .select_related('security_group', 'security_group__organization', 'node', 'node__organization')
         .prefetch_related(
             Prefetch(
                 'source_groups',
