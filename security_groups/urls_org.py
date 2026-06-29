@@ -33,4 +33,7 @@ urlpatterns = [
     # Direction-first rule editor
     path('rules/new/', views.org_rule_create, name='rule_create'),
     path('rules/preview/', views.org_rule_preview, name='rule_preview'),
+
+    # Recipe wizard
+    path('recipes/', views.org_recipes, name='recipes'),
 ]

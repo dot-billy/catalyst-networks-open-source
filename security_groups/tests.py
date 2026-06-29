@@ -1736,3 +1736,110 @@ class RuleFormPreviewWiringTests(TestCase):
         self.assertContains(resp, reverse('security_groups_org:rule_preview', kwargs={'slug': self.org.slug}))
         self.assertContains(resp, 'hx-post')
         self.assertContains(resp, 'rule-preview')
+
+
+class RecipeFieldsTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization
+        self.org = Organization.objects.create(name='Recipe Fields Org',
+            created_by=User.objects.create_user(email='rf@example.com', password='pw'))
+
+    def test_recipe_fields_exist_with_defaults(self):
+        from security_groups.models import Tag, FirewallRule
+        tag = Tag.objects.create(name='web', organization=self.org)
+        self.assertEqual(tag.recipe, '')
+        self.assertEqual(tag.recipe_answers, {})
+        rule = FirewallRule(security_group=tag, protocol='tcp', port_min=80, port_max=80)
+        rule.save()
+        self.assertFalse(rule.managed_by_recipe)
+        tag.recipe = 'web'; tag.recipe_answers = {'k': 'v'}; tag.save()
+        tag.refresh_from_db()
+        self.assertEqual(tag.recipe, 'web')
+        self.assertEqual(tag.recipe_answers, {'k': 'v'})
+
+
+class ApplyRecipeTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization
+        from security_groups.models import Tag
+        self.org = Organization.objects.create(name='Apply Recipe Org',
+            created_by=User.objects.create_user(email='ar@example.com', password='pw'))
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        self.db = Tag.objects.create(name='db', organization=self.org)
+
+    def test_apply_web_recipe_creates_two_rules(self):
+        from security_groups.recipes import apply_recipe
+        from security_groups.models import FirewallRule
+        created = apply_recipe(self.web, 'web', self.org)
+        self.assertEqual(len(created), 2)
+        ports = sorted(r.port_min for r in created)
+        self.assertEqual(ports, [80, 443])
+        for r in created:
+            self.assertTrue(r.managed_by_recipe)
+            self.assertEqual(set(r.target_groups.values_list('id', flat=True)), {self.web.id})
+            self.assertIsNone(r.security_group)
+        self.web.refresh_from_db()
+        self.assertEqual(self.web.recipe, 'web')
+
+    def test_db_recipe_sources_from_web_tag(self):
+        from security_groups.recipes import apply_recipe
+        created = apply_recipe(self.db, 'db', self.org)
+        self.assertEqual(len(created), 1)
+        rule = created[0]
+        self.assertEqual(rule.port_min, 5432)
+        self.assertEqual(set(rule.source_groups.values_list('name', flat=True)), {'web'})
+
+    def test_apply_is_idempotent(self):
+        from security_groups.recipes import apply_recipe
+        from security_groups.models import FirewallRule
+        apply_recipe(self.web, 'web', self.org)
+        apply_recipe(self.web, 'web', self.org)  # re-apply
+        self.assertEqual(FirewallRule.objects.filter(target_groups=self.web, managed_by_recipe=True).count(), 2)
+
+    def test_apply_preserves_hand_added_rules(self):
+        from security_groups.recipes import apply_recipe
+        from security_groups.models import FirewallRule
+        hand = FirewallRule(security_group=self.web, protocol='tcp', port_min=9000, port_max=9000)
+        hand.save(); hand.target_groups.add(self.web); hand.security_group = None; hand.save()
+        apply_recipe(self.web, 'web', self.org)
+        apply_recipe(self.web, 'web', self.org)
+        self.assertTrue(FirewallRule.objects.filter(id=hand.id).exists())  # hand-added survives
+        self.assertEqual(FirewallRule.objects.filter(target_groups=self.web).count(), 3)  # 1 hand + 2 recipe
+
+    def test_unknown_recipe_raises(self):
+        from security_groups.recipes import apply_recipe
+        with self.assertRaises(ValueError):
+            apply_recipe(self.web, 'nope', self.org)
+
+
+class RecipeWizardTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='rw@example.com', password='pw')
+        self.org = Organization.objects.create(name='RW Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        self.url = reverse('security_groups_org:recipes', kwargs={'slug': self.org.slug})
+        self.client.force_login(self.owner)
+
+    def test_get_lists_recipes(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Web tier')
+        self.assertContains(resp, 'Database tier')
+
+    def test_post_applies_recipe_to_tag(self):
+        from security_groups.models import FirewallRule
+        resp = self.client.post(self.url, {'recipe': 'web', 'tag': str(self.web.id)})
+        self.assertIn(resp.status_code, (302, 200))
+        self.assertEqual(FirewallRule.objects.filter(target_groups=self.web, managed_by_recipe=True).count(), 2)
+
+    def test_post_requires_admin(self):
+        from organizations.models import Membership
+        viewer = User.objects.create_user(email='rwv@example.com', password='pw')
+        Membership.objects.create(user=viewer, organization=self.org, role='viewer')
+        self.client.force_login(viewer)
+        resp = self.client.post(self.url, {'recipe': 'web', 'tag': str(self.web.id)})
+        self.assertEqual(resp.status_code, 403)

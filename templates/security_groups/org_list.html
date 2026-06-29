@@ -16,6 +16,8 @@
             {% include "components/button.html" with text="Create Policy" href=create_security_group_url variant="primary" size="sm" %}
             {% url 'security_groups_org:matrix' slug=organization.slug as matrix_url %}
             {% include "components/button.html" with text="Tag Matrix" href=matrix_url variant="secondary" size="sm" %}
+            {% url 'security_groups_org:recipes' slug=organization.slug as recipes_url %}
+            {% include "components/button.html" with text="Recipes" href=recipes_url variant="secondary" size="sm" %}
             {% endif %}
         </div>
     </div>

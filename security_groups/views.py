@@ -5,7 +5,7 @@ import ipaddress
 from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
-from rest_framework.response import Response
+from .recipes import RECIPES, apply_recipe
 from .models import FirewallRule, SecurityGroup, Tag
 from .summaries import summarize_tag, target_rules_for_tag, target_rules_queryset
 from nodes.models import Node
@@ -1255,3 +1255,24 @@ def org_rule_preview(request, slug):
         'entries': entries, 'direction': direction, 'targets': targets,
         'egress_warning': egress_warning, 'error': error if rule is None else None,
     })
+
+
+@login_required
+def org_recipes(request, slug):
+    """Apply a preset recipe to a tag."""
+    if request.method == 'POST':
+        org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+        key = request.POST.get('recipe')
+        tag = Tag.objects.filter(id=request.POST.get('tag'), organization=org).first()
+        if tag and key in RECIPES:
+            apply_recipe(tag, key, org)
+            messages.success(request, f'Applied "{RECIPES[key]["label"]}" to {tag.name}.')
+            return redirect('security_groups_org:detail', slug=slug, pk=tag.id)
+        messages.error(request, 'Choose a recipe and a tag.')
+    org = check_org_access(request.user, organization_slug=slug)
+    context = {
+        'organization': org,
+        'recipes': [{'key': k, **v} for k, v in RECIPES.items()],
+        'tags': Tag.objects.filter(organization=org).order_by('name'),
+    }
+    return render(request, 'security_groups/recipes.html', context)
