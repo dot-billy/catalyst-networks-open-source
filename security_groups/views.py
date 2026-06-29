@@ -5,7 +5,7 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import FirewallRule, SecurityGroup, Tag
-from .summaries import summarize_tag
+from .summaries import summarize_tag, target_rules_for_tag, target_rules_queryset
 from organizations.permissions import IsOrganizationOwnerOrAdmin
 from organizations.access import get_org_role, require_org_access
 from django.http import JsonResponse
@@ -220,13 +220,14 @@ def org_security_group_list(request, slug):
     # Check if user has access to the organization
     org = check_org_access(request.user, organization_slug=slug)
     
-    # Get security groups for this organization, annotated with a "policies touching this group" count
-    from django.db.models import Count
+    # Get security groups for this organization with the rule relations used by summaries and badges.
+    target_rule_qs = target_rules_queryset(org)
     security_groups = (
         Tag.objects.filter(organization=org)
-        .annotate(
-            inbound_count=Count('firewall_rules', distinct=True),
-            outbound_count=Count('rules_as_source', distinct=True),
+        .prefetch_related(
+            Prefetch('firewall_rules', queryset=target_rule_qs, to_attr='legacy_target_rules'),
+            Prefetch('rules_targeting', queryset=target_rule_qs, to_attr='m2m_target_rules'),
+            'nodes',
         )
     )
 
@@ -238,8 +239,9 @@ def org_security_group_list(request, slug):
     # Materialize so we can attach derived attrs without re-querying
     security_groups = list(security_groups)
     for sg in security_groups:
-        sg.policy_count = sg.inbound_count + sg.outbound_count
-        sg.summary = summarize_tag(sg)
+        rules = target_rules_for_tag(sg)
+        sg.rule_count = len(rules)
+        sg.summary = summarize_tag(sg, rules=rules)
 
     # Determine user's role in this organization for UI controls
     user_role = get_org_role(request.user, org)
@@ -294,19 +296,7 @@ def org_security_group_detail(request, slug, pk):
     security_group = get_object_or_404(Tag, id=pk, organization=org)
     
     # Get rules and nodes for this security group
-    from nodes.models import Node
-    rules = security_group.firewall_rules.prefetch_related(
-        Prefetch(
-            'source_groups',
-            queryset=Tag.objects.filter(organization=org).order_by('name'),
-            to_attr='org_source_groups',
-        ),
-        Prefetch(
-            'source_nodes',
-            queryset=Node.objects.filter(organization=org).order_by('name'),
-            to_attr='org_source_nodes',
-        ),
-    ).all()
+    rules = target_rules_for_tag(security_group)
     nodes = security_group.nodes.all().filter(organization=org)
     
     context = {
@@ -315,7 +305,7 @@ def org_security_group_detail(request, slug, pk):
         'rules': rules,
         'nodes': nodes,
         'user_role': get_org_role(request.user, org),
-        'summary': summarize_tag(security_group),
+        'summary': summarize_tag(security_group, rules=rules),
     }
     
     # Use the shared detail template for organization context

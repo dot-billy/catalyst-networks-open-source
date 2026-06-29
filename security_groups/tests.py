@@ -834,6 +834,7 @@ class TagListSummaryTests(TestCase):
         response = self.client.get(reverse('security_groups_org:list', kwargs={'slug': self.org.slug}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Accepts HTTPS from anywhere.')
+        self.assertContains(response, '1 rules')
 
 
 class TagDetailSummaryTests(TestCase):
@@ -842,11 +843,13 @@ class TagDetailSummaryTests(TestCase):
         from security_groups.models import Tag, FirewallRule
         self.client = Client()
         self.owner = User.objects.create_user(email='detail-sum@example.com', password='pw')
+        self.foreign_owner = User.objects.create_user(email='foreign-detail-sum@example.com', password='pw')
         self.org = Organization.objects.create(name='Detail Sum Org', created_by=self.owner)
+        self.foreign_org = Organization.objects.create(name='Foreign Detail Sum Org', created_by=self.foreign_owner)
         Membership.objects.create(user=self.owner, organization=self.org, role='owner')
         self.admin_tag = Tag.objects.create(name='admin', organization=self.org)
         self.web = Tag.objects.create(name='web', organization=self.org)
-        r = FirewallRule(security_group=self.web, direction='in', match_type='groups', protocol='tcp', port_min=22, port_max=22)
+        r = FirewallRule(security_group=self.web, direction='in', match_type='groups', protocol='tcp', port_min=22, port_max=22, description='ssh from admin')
         r.save(); r.target_groups.add(self.web); r.security_group = None; r.save()
         r.source_groups.add(self.admin_tag)
         self.client.force_login(self.owner)
@@ -855,3 +858,47 @@ class TagDetailSummaryTests(TestCase):
         response = self.client.get(reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.web.id}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Accepts SSH from tag admin.')
+        self.assertContains(response, '1 rules')
+        self.assertContains(response, 'ssh from admin')
+
+    def test_rendered_summary_hides_foreign_source_names(self):
+        local_host = self._node('local-node', self.org, self.owner, '10.70.0.10')
+        foreign_host = self._node('foreign-node', self.foreign_org, self.foreign_owner, '10.71.0.10')
+        foreign_tag = Tag.objects.create(name='foreign-src', organization=self.foreign_org)
+        local_tag = Tag.objects.create(name='local-src', organization=self.org)
+
+        group_rule = FirewallRule(security_group=self.web, direction='in', match_type='groups', protocol='tcp', port_min=443, port_max=443)
+        group_rule.save(); group_rule.target_groups.add(self.web); group_rule.security_group = None; group_rule.save()
+        group_rule.source_groups.add(local_tag, foreign_tag)
+
+        host_rule = FirewallRule(security_group=self.web, direction='in', match_type='host', protocol='tcp', port_min=8443, port_max=8443)
+        host_rule.save(); host_rule.target_groups.add(self.web); host_rule.security_group = None; host_rule.save()
+        host_rule.source_nodes.add(local_host, foreign_host)
+
+        response = self.client.get(reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.web.id}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'local-src')
+        self.assertContains(response, 'local-node')
+        self.assertNotContains(response, 'foreign-src')
+        self.assertNotContains(response, 'foreign-node')
+
+    def _node(self, name, org, owner, ip):
+        NetworkRange.objects.get_or_create(
+            organization=org,
+            cidr=f"{'.'.join(ip.split('.')[:2])}.0.0/16",
+            defaults={'description': f'{name} test range'},
+        )
+        ca = CertificateAuthority.objects.create(
+            name=f'{name} CA',
+            organization=org,
+            created_by=owner,
+            ca_cert=SimpleUploadedFile(f'{name}.crt', b'certificate-bytes'),
+            ca_key=SimpleUploadedFile(f'{name}.key', b'key-bytes'),
+        )
+        return Node.objects.create(
+            name=name,
+            organization=org,
+            certificate_authority=ca,
+            nebula_ip=ip,
+            created_by=owner,
+        )
