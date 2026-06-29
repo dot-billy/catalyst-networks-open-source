@@ -4,10 +4,10 @@
 {% block page_title %}Effective Rules{% endblock %}
 
 {% block content %}
-<div x-data="{ yaml: false }">
+<div>
   <div class="ui-page-header">
     <h1 class="ui-page-title">Effective rules - {{ node.name }}</h1>
-    <p class="ui-page-subtitle">What can reach this node, and why. <button class="ui-link" @click="yaml = !yaml" type="button">Toggle Nebula YAML</button></p>
+    <p class="ui-page-subtitle">Explicit firewall entries that apply to this node and why.</p>
   </div>
 
   <h2 class="text-base font-semibold mt-4">Inbound</h2>
@@ -37,11 +37,5 @@
     {% endfor %}
     </tbody></table>
   {% endif %}
-
-  <pre x-show="yaml" class="text-xs mt-4 text-light-100">inbound:
-{% for row in effective.inbound %}  - { {% for k, v in row.entry.items %}{{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} }
-{% endfor %}outbound:
-{% for row in effective.outbound %}  - { {% for k, v in row.entry.items %}{{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} }
-{% endfor %}</pre>
 </div>
 {% endblock %}

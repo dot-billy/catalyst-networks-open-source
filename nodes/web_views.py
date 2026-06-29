@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.files import File
 from django.core.paginator import Paginator
 from django.db import models, transaction
@@ -54,6 +55,19 @@ def check_org_access(user, org_id=None, required_roles=None, organization_slug=N
         slug=organization_slug,
         required_roles=required_roles,
     )
+
+
+def _get_visible_org_node(request, org, pk):
+    node = get_object_or_404(Node, id=pk, organization=org)
+    membership_role = request.user.memberships.filter(
+        organization=org
+    ).values_list('role', flat=True).first()
+    can_edit = membership_role in ['owner', 'admin']
+
+    if not can_edit and node.assigned_user_id != request.user.id and node.created_by_id != request.user.id:
+        raise PermissionDenied("You don't have access to this mobile node.")
+
+    return node, can_edit
 
 # Organization-specific views (placeholder implementations)
 @login_required
@@ -234,14 +248,7 @@ def org_node_create(request, slug):
 def org_node_detail(request, slug, pk):
     """View details of a node in an organization."""
     org = check_org_access(request.user, organization_slug=slug)
-    node = get_object_or_404(Node, id=pk, organization=org)
-    membership_role = request.user.memberships.filter(
-        organization=org
-    ).values_list('role', flat=True).first()
-    can_edit = membership_role in ['owner', 'admin']
-
-    if not can_edit and node.assigned_user_id != request.user.id and node.created_by_id != request.user.id:
-        raise PermissionDenied("You don't have access to this mobile node.")
+    node, can_edit = _get_visible_org_node(request, org, pk)
 
     # Handle QR code generation/regeneration
     if request.GET.get('generate_qr') == '1' or request.GET.get('regenerate_qr') == '1':
@@ -832,7 +839,7 @@ def org_node_enroll(request, slug, pk):
 def org_node_effective_rules(request, slug, pk):
     """What firewall rules effectively apply to this node, and why."""
     org = check_org_access(request.user, organization_slug=slug)
-    node = get_object_or_404(Node, id=pk, organization=org)
+    node, _can_edit = _get_visible_org_node(request, org, pk)
     context = {
         'organization': org,
         'node': node,

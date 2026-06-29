@@ -1394,7 +1394,7 @@ class RenderRuleEntriesTests(TestCase):
         self.assertEqual(result, [{'proto': 'any', 'port': 'any', 'cidr': '10.0.0.0/8'}])
 
 
-class EffectiveRulesHelperTests(TestCase):
+class EffectiveRulesResolverTests(TestCase):
     def setUp(self):
         from organizations.models import Organization, Membership, NetworkRange
         from certificates.models import CertificateAuthority
@@ -1457,6 +1457,89 @@ class EffectiveRulesHelperTests(TestCase):
         self.assertFalse(result['outbound_default_allow'])
         self.assertTrue(result['inbound_default_allow'])
 
+    def test_legacy_fk_rule_provenance_names_tag(self):
+        from nodes.effective_rules import effective_rules
+        from security_groups.models import FirewallRule
+
+        rule = FirewallRule(
+            security_group=self.db,
+            direction='in',
+            protocol='tcp',
+            port_min=5432,
+            port_max=5432,
+            match_type='cidr',
+            source_cidr='10.0.0.0/8',
+        )
+        rule.save()
+
+        result = effective_rules(self.node)
+
+        self.assertIn(rule, self.node.get_all_applicable_firewall_rules())
+        self.assertEqual(result['inbound'][0]['via'], 'via tag db')
+
+    def test_malformed_mixed_org_sources_do_not_render_foreign_sources(self):
+        from nodes.effective_rules import effective_rules
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from security_groups.models import FirewallRule, Tag
+
+        foreign_owner = User.objects.create_user(email='foreign-er@example.com', password='pw')
+        foreign_org = Organization.objects.create(name='Foreign ER Org', created_by=foreign_owner)
+        NetworkRange.objects.create(organization=foreign_org, cidr='10.88.0.0/24', description='foreign')
+        foreign_ca = CertificateAuthority.objects.create(
+            name='Foreign CA',
+            organization=foreign_org,
+            created_by=foreign_owner,
+            ca_cert=SimpleUploadedFile('foreign-ca.crt', b'c'),
+            ca_key=SimpleUploadedFile('foreign-ca.key', b'k'),
+        )
+        foreign_target = Tag.objects.create(name='foreign-target', organization=foreign_org)
+        foreign_source = Tag.objects.create(name='foreign-source', organization=foreign_org)
+        foreign_node = Node.objects.create(
+            name='foreign-node',
+            organization=foreign_org,
+            certificate_authority=foreign_ca,
+            nebula_ip='10.88.0.10',
+            external_port=4242,
+            created_by=foreign_owner,
+        )
+        local_target = Tag.objects.create(name='local-target', organization=self.org)
+        self.node.tags.add(local_target)
+
+        group_rule = FirewallRule(
+            security_group=local_target,
+            direction='in',
+            protocol='tcp',
+            port_min=5432,
+            port_max=5432,
+            match_type='groups',
+        )
+        group_rule.save()
+        group_rule.target_groups.set([foreign_target, local_target])
+        group_rule.security_group = None
+        group_rule.save()
+        group_rule.source_groups.add(foreign_source)
+
+        host_rule = FirewallRule(
+            security_group=local_target,
+            direction='in',
+            protocol='tcp',
+            port_min=22,
+            port_max=22,
+            match_type='host',
+        )
+        host_rule.save()
+        host_rule.target_groups.set([foreign_target, local_target])
+        host_rule.security_group = None
+        host_rule.save()
+        host_rule.source_nodes.add(foreign_node)
+
+        rendered = str(effective_rules(self.node))
+
+        self.assertNotIn('foreign-source', rendered)
+        self.assertNotIn('10.88.0.10', rendered)
+
 
 class EffectiveRulesPageTests(TestCase):
     def setUp(self):
@@ -1475,6 +1558,17 @@ class EffectiveRulesPageTests(TestCase):
             nebula_ip='10.87.0.10', external_port=4242, created_by=self.owner)
         self.db = Tag.objects.create(name='db', organization=self.org)
         self.node.tags.add(self.db)
+        self.member = User.objects.create_user(email='erp-member@example.com', password='pw')
+        Membership.objects.create(user=self.member, organization=self.org, role='member')
+        self.member_node = Node.objects.create(
+            name='member-node',
+            organization=self.org,
+            certificate_authority=ca,
+            nebula_ip='10.87.0.11',
+            external_port=4242,
+            created_by=self.member,
+            assigned_user=self.member,
+        )
         r = FirewallRule(direction='in', protocol='tcp', port_min=5432, port_max=5432,
                          match_type='cidr', source_cidr='10.0.0.0/8')
         r.security_group = self.db; r.save(); r.target_groups.add(self.db); r.security_group = None; r.save()
@@ -1497,3 +1591,35 @@ class EffectiveRulesPageTests(TestCase):
         resp = self.client.get(reverse('nodes_org:detail', kwargs={'slug': self.org.slug, 'pk': self.node.id}))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, self.url)
+
+    def test_unrelated_member_cannot_view_effective_rules(self):
+        self.client.force_login(self.member)
+        self.client.raise_request_exception = False
+
+        resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 403)
+
+    def test_assigned_or_created_member_can_view_effective_rules(self):
+        self.client.force_login(self.member)
+        url = reverse('nodes_org:effective_rules', kwargs={'slug': self.org.slug, 'pk': self.member_node.id})
+
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 200)
+
+    def test_effective_rules_page_does_not_present_generated_config_yaml(self):
+        resp = self.client.get(self.url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, 'Toggle Nebula YAML')
+        self.assertNotContains(resp, '<pre')
+
+    def test_node_detail_denied_member_returns_403(self):
+        self.client.force_login(self.member)
+        self.client.raise_request_exception = False
+        url = reverse('nodes_org:detail', kwargs={'slug': self.org.slug, 'pk': self.node.id})
+
+        resp = self.client.get(url)
+
+        self.assertEqual(resp.status_code, 403)
