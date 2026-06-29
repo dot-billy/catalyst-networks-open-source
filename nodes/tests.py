@@ -1313,3 +1313,8 @@ class OrgNodeSecurityGroupsPageTests(TestCase):
         url = reverse('nodes_org:assign_security_group', kwargs={'slug': self.org.slug, 'pk': self.node.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+
+        detail_url = reverse('nodes_org:detail', kwargs={'slug': self.org.slug, 'pk': self.node.id})
+        legacy_url = f'/nodes/org/{self.org.id}/{self.node.id}/'
+        self.assertContains(response, f'href="{detail_url}"')
+        self.assertNotContains(response, f'href="{legacy_url}"')
