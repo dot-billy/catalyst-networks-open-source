@@ -689,6 +689,10 @@ def _validate_policy_source(org, post):
     source_group_ids = post.getlist('source_group')
     source_node_id = post.get('source_node')
     source_cidr = post.get('source_cidr', '').strip()
+    valid_source_types = {'group', 'host', 'cidr', 'any'}
+
+    if source_type not in valid_source_types:
+        return False, None, 'Choose a valid source type.'
 
     if source_type == 'group' and source_group_ids:
         try:
@@ -723,7 +727,7 @@ def _validate_policy_source(org, post):
             'source_cidr': '',
         }, None
 
-    if source_cidr and not source_group_ids and not source_node_id:
+    if source_type == 'cidr' and source_cidr and not source_group_ids and not source_node_id:
         try:
             ipaddress.ip_network(source_cidr, strict=False)
         except ValueError:

@@ -290,6 +290,27 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(FirewallRule.objects.exists())
 
+    def test_policy_create_rejects_malformed_source_type_with_cidr_without_creating_rule(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse('security_groups_org:policy_create', kwargs={'slug': self.organization.slug}),
+            {
+                'source_type': 'bogus',
+                'source_cidr': '10.0.0.0/8',
+                'dest_type': 'group',
+                'dest_group': str(self.destination_group.id),
+                'protocol': 'tcp',
+                'port_min': '443',
+                'port_max': '443',
+                'description': 'Malformed source type create',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Choose a valid source type.')
+        self.assertFalse(FirewallRule.objects.filter(description='Malformed source type create').exists())
+
     def test_invalid_source_edit_leaves_existing_rule_unchanged(self):
         self.client.force_login(self.owner)
         rule = FirewallRule.objects.create(
@@ -346,6 +367,27 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Source group not found in this organization.')
         self.assertFalse(FirewallRule.objects.filter(description='Foreign legacy add attempt').exists())
+
+    def test_legacy_add_rejects_malformed_source_type_with_cidr_without_creating_rule(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse(
+                'security_groups_org:add_rule',
+                kwargs={'slug': self.organization.slug, 'sg_id': self.destination_group.id},
+            ),
+            {
+                'source_type': 'bogus',
+                'source_cidr': '10.0.0.0/8',
+                'protocol': 'tcp',
+                'port': '443',
+                'description': 'Malformed legacy add source',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Choose a valid source type.')
+        self.assertFalse(FirewallRule.objects.filter(description='Malformed legacy add source').exists())
 
     def test_legacy_edit_rejects_foreign_source_node_without_mutating_rule(self):
         self.client.force_login(self.owner)
@@ -561,6 +603,46 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(rule.port_min, 8443)
         self.assertEqual(rule.port_max, 8443)
         self.assertEqual(rule.description, 'Updated host destination policy')
+
+    def test_policy_edit_legacy_node_destination_rejects_malformed_source_type_with_cidr(self):
+        self.client.force_login(self.owner)
+        rule = FirewallRule.objects.create(
+            node=self.destination_node,
+            protocol='udp',
+            port_min=51820,
+            port_max=51820,
+            description='Original node destination policy',
+            match_type='host',
+        )
+        rule.source_nodes.set([self.source_node])
+
+        response = self.client.post(
+            reverse('security_groups_org:policy_edit', kwargs={'slug': self.organization.slug, 'rule_id': rule.id}),
+            {
+                'source_type': 'bogus',
+                'source_cidr': '10.0.0.0/8',
+                'dest_type': 'host',
+                'dest_node': str(self.destination_node.id),
+                'protocol': 'tcp',
+                'port_min': '8443',
+                'port_max': '8443',
+                'description': 'Malformed node destination edit',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Choose a valid source type.')
+        rule.refresh_from_db()
+        self.assertEqual(rule.node, self.destination_node)
+        self.assertIsNone(rule.security_group)
+        self.assertFalse(rule.target_groups.exists())
+        self.assertEqual(rule.match_type, 'host')
+        self.assertQuerySetEqual(rule.source_nodes.all(), [self.source_node])
+        self.assertFalse(rule.source_groups.exists())
+        self.assertEqual(rule.protocol, 'udp')
+        self.assertEqual(rule.port_min, 51820)
+        self.assertEqual(rule.port_max, 51820)
+        self.assertEqual(rule.description, 'Original node destination policy')
 
     def test_list_scopes_to_org(self):
         FirewallRule.objects.create(
