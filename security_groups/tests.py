@@ -1209,6 +1209,25 @@ class DirectionFirstRuleCreateTests(TestCase):
         NetworkRange.objects.create(organization=self.org, cidr='10.84.0.0/24', description='r')
         self.web = Tag.objects.create(name='web', organization=self.org)
         self.admin = Tag.objects.create(name='admin', organization=self.org)
+        self.foreign_owner = User.objects.create_user(email='rc-foreign@example.com', password='pw')
+        self.foreign_org = Organization.objects.create(name='RC Foreign Org', created_by=self.foreign_owner)
+        NetworkRange.objects.create(organization=self.foreign_org, cidr='10.94.0.0/24', description='foreign')
+        self.foreign_ca = CertificateAuthority.objects.create(
+            name='Foreign CA',
+            organization=self.foreign_org,
+            created_by=self.foreign_owner,
+            ca_cert=SimpleUploadedFile('foreign-ca.crt', b'c'),
+            ca_key=SimpleUploadedFile('foreign-ca.key', b'k'),
+        )
+        self.foreign_admin = Tag.objects.create(name='foreign-admin', organization=self.foreign_org)
+        self.foreign_node = Node.objects.create(
+            name='foreign-node',
+            organization=self.foreign_org,
+            certificate_authority=self.foreign_ca,
+            nebula_ip='10.94.0.10',
+            external_port=4242,
+            created_by=self.foreign_owner,
+        )
         self.url = reverse('security_groups_org:rule_create', kwargs={'slug': self.org.slug})
         self.client.force_login(self.owner)
 
@@ -1247,11 +1266,193 @@ class DirectionFirstRuleCreateTests(TestCase):
         self.assertEqual(resp.status_code, 200)  # re-render with error
         self.assertContains(resp, 'tag')  # error mentions choosing a tag
 
+    def test_create_rejects_foreign_host_source_without_persisting(self):
+        from security_groups.models import FirewallRule
+        before = FirewallRule.objects.count()
+
+        resp = self.client.post(self.url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'source_type': 'host',
+            'source_node': str(self.foreign_node.id),
+            'protocol': 'tcp',
+            'port': '22',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Source host not found in this organization.')
+        self.assertEqual(FirewallRule.objects.count(), before)
+
+    def test_create_rejects_unknown_or_foreign_source_group_without_persisting(self):
+        from security_groups.models import FirewallRule
+        before = FirewallRule.objects.count()
+
+        resp = self.client.post(self.url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'source_type': 'group',
+            'source_group': [str(self.foreign_admin.id), '999999'],
+            'protocol': 'tcp',
+            'port': '443',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Source tag not found in this organization.')
+        self.assertEqual(FirewallRule.objects.count(), before)
+
     def test_get_renders_form_with_tags(self):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'web')
         self.assertContains(resp, 'Inbound')
+
+
+class DirectionFirstRuleLifecycleTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='rfl@example.com', password='pw')
+        self.org = Organization.objects.create(name='Rule Flow Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.86.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='Rule Flow CA',
+            organization=self.org,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('rule-flow-ca.crt', b'c'),
+            ca_key=SimpleUploadedFile('rule-flow-ca.key', b'k'),
+        )
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        self.db = Tag.objects.create(name='db', organization=self.org)
+        self.admin = Tag.objects.create(name='admin', organization=self.org)
+        self.node = Node.objects.create(
+            name='web-node',
+            organization=self.org,
+            certificate_authority=self.ca,
+            nebula_ip='10.86.0.10',
+            external_port=4242,
+            created_by=self.owner,
+        )
+        self.node.tags.add(self.web)
+        self.client.force_login(self.owner)
+
+    def _target_only_rule(self, **kwargs):
+        from security_groups.models import FirewallRule
+        rule = FirewallRule(
+            security_group=self.web,
+            direction=kwargs.get('direction', 'in'),
+            match_type=kwargs.get('match_type', 'any'),
+            protocol=kwargs.get('protocol', 'any'),
+            port_min=kwargs.get('port_min'),
+            port_max=kwargs.get('port_max'),
+            source_cidr=kwargs.get('source_cidr', ''),
+        )
+        rule.save()
+        rule.target_groups.set(kwargs.get('target_groups', [self.web]))
+        if kwargs.get('source_groups'):
+            rule.source_groups.set(kwargs['source_groups'])
+        rule.security_group = None
+        rule.save()
+        return rule
+
+    def test_rule_created_through_direction_first_appears_in_policy_list(self):
+        create_url = reverse('security_groups_org:rule_create', kwargs={'slug': self.org.slug})
+        response = self.client.post(create_url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'source_type': 'any',
+            'protocol': 'any',
+        })
+        self.assertRedirects(
+            response,
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.org.slug}),
+        )
+
+        response = self.client.get(reverse('security_groups_org:policy_list', kwargs={'slug': self.org.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Any')
+        self.assertContains(response, 'web')
+        self.assertNotContains(response, 'Unspecified')
+
+    def test_policy_edit_get_renders_direction_first_form_with_current_values(self):
+        rule = self._target_only_rule(
+            direction='out',
+            match_type='cidr',
+            protocol='tcp',
+            port_min=443,
+            port_max=443,
+            source_cidr='10.0.0.0/8',
+        )
+
+        response = self.client.get(
+            reverse('security_groups_org:policy_edit', kwargs={'slug': self.org.slug, 'rule_id': rule.id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit Rule')
+        self.assertContains(response, 'value="out" checked')
+        self.assertContains(response, f'value="{self.web.id}" selected')
+        self.assertContains(response, 'value="cidr" checked')
+        self.assertContains(response, 'value="tcp" selected')
+        self.assertContains(response, 'value="443"')
+        self.assertContains(response, 'value="10.0.0.0/8"')
+
+    def test_policy_edit_post_updates_direction_source_and_targets(self):
+        rule = self._target_only_rule(
+            direction='in',
+            match_type='groups',
+            protocol='tcp',
+            port_min=22,
+            port_max=22,
+            source_groups=[self.admin],
+        )
+
+        response = self.client.post(
+            reverse('security_groups_org:policy_edit', kwargs={'slug': self.org.slug, 'rule_id': rule.id}),
+            {
+                'direction': 'out',
+                'target_group': [str(self.web.id), str(self.db.id)],
+                'source_type': 'cidr',
+                'source_cidr': '10.0.0.0/8',
+                'protocol': 'tcp',
+                'port': '443',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.org.slug}),
+        )
+        rule.refresh_from_db()
+        self.assertEqual(rule.direction, 'out')
+        self.assertEqual(rule.match_type, 'cidr')
+        self.assertEqual(rule.source_cidr, '10.0.0.0/8')
+        self.assertFalse(rule.source_groups.exists())
+        self.assertFalse(rule.source_nodes.exists())
+        self.assertEqual(rule.protocol, 'tcp')
+        self.assertEqual(rule.port_min, 443)
+        self.assertEqual(rule.port_max, 443)
+        self.assertIsNone(rule.security_group)
+        self.assertEqual(set(rule.target_groups.values_list('id', flat=True)), {self.web.id, self.db.id})
+
+    def test_policy_delete_can_delete_target_group_only_rule(self):
+        from security_groups.models import FirewallRule
+        rule = self._target_only_rule()
+
+        response = self.client.post(
+            reverse('security_groups_org:policy_delete', kwargs={'slug': self.org.slug, 'rule_id': rule.id})
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.org.slug}),
+        )
+        self.assertFalse(FirewallRule.objects.filter(id=rule.id).exists())
 
 
 class RulePreviewTests(TestCase):

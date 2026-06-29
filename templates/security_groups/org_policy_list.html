@@ -41,6 +41,8 @@
                             {% for node in rule.org_source_nodes %}
                             <span class="ui-badge ui-badge-primary">host: {{ node.name }}</span>
                             {% endfor %}
+                        {% elif rule.match_type == 'any' %}
+                            <span class="ui-badge ui-badge-primary">Any</span>
                         {% elif rule.source_cidr %}
                             <span class="ui-badge ui-badge-primary">{{ rule.source_cidr }}</span>
                         {% else %}
@@ -48,10 +50,16 @@
                         {% endif %}
                         <span class="text-light-300">-&gt;</span>
                         <span class="ui-badge ui-badge-muted">Destination</span>
-                        {% if rule.security_group %}
+                        {% if rule.org_target_groups %}
+                            {% for group in rule.org_target_groups %}
+                            <span class="ui-badge ui-badge-primary">{{ group.name }}</span>
+                            {% endfor %}
+                        {% elif rule.security_group %}
                             <span class="ui-badge ui-badge-primary">{{ rule.security_group.name }}</span>
                         {% elif rule.node %}
                             <span class="ui-badge ui-badge-primary">host: {{ rule.node.name }}</span>
+                        {% else %}
+                            <span class="ui-badge ui-badge-muted">Unspecified</span>
                         {% endif %}
                     </div>
                     <p class="mt-2 text-sm text-light-100">

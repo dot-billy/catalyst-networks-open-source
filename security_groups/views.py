@@ -766,18 +766,23 @@ def _save_policy_rule(rule, field_data, source_data):
     return rule
 
 
-@login_required
-def org_policy_list(request, slug):
-    """List source-to-destination firewall policies for an organization."""
-    org = check_org_access(request.user, organization_slug=slug)
+def _org_policy_queryset(org):
+    """Policies visible in an org, including direction-first target-group rules."""
     from nodes.models import Node
 
-    rules = (
+    return (
         FirewallRule.objects.filter(
-            Q(security_group__organization=org) | Q(node__organization=org)
+            Q(security_group__organization=org)
+            | Q(node__organization=org)
+            | Q(target_groups__organization=org)
         )
         .select_related('security_group', 'node')
         .prefetch_related(
+            Prefetch(
+                'target_groups',
+                queryset=SecurityGroup.objects.filter(organization=org).order_by('name'),
+                to_attr='org_target_groups',
+            ),
             Prefetch(
                 'source_groups',
                 queryset=SecurityGroup.objects.filter(organization=org).order_by('name'),
@@ -789,8 +794,15 @@ def org_policy_list(request, slug):
                 to_attr='org_source_nodes',
             ),
         )
-        .order_by('-created_at')
+        .distinct()
     )
+
+
+@login_required
+def org_policy_list(request, slug):
+    """List source-to-destination firewall policies for an organization."""
+    org = check_org_access(request.user, organization_slug=slug)
+    rules = _org_policy_queryset(org).order_by('-created_at')
 
     search_query = request.GET.get('search', '').strip()
     if search_query:
@@ -869,53 +881,37 @@ def org_policy_create(request, slug):
 
 @login_required
 def org_policy_edit(request, slug, rule_id):
-    """Edit an existing source-to-destination firewall policy."""
+    """Edit an existing firewall policy with the direction-first rule form."""
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
-    rule = get_object_or_404(
-        FirewallRule.objects.filter(
-            Q(security_group__organization=org) | Q(node__organization=org)
-        ),
-        id=rule_id,
-    )
+    rule = get_object_or_404(_org_policy_queryset(org), id=rule_id)
 
-    error_message = None
+    error = None
     if request.method == 'POST':
-        ok, field_data, error_message = _validate_policy_fields(org, request.POST)
-        if ok:
-            ok, source_data, error_message = _validate_policy_source(org, request.POST)
-            if ok:
-                with transaction.atomic():
-                    _save_policy_rule(rule, field_data, source_data)
-                    messages.success(request, 'Policy updated.')
-                    return redirect('security_groups_org:policy_list', slug=slug)
+        updated_rule, error = create_rule_from_form(org, request.POST, rule=rule)
+        if updated_rule:
+            messages.success(request, 'Policy updated.')
+            return redirect('security_groups_org:policy_list', slug=slug)
 
-    selected_source_group_ids = list(rule.source_groups.filter(organization=org).values_list('id', flat=True))
-    selected_source_node_id = rule.source_nodes.filter(organization=org).values_list('id', flat=True).first()
-    context = {
-        'organization': org,
-        'rule': rule,
-        'error_message': error_message,
-        'selected_source_group_ids': selected_source_group_ids,
-        'selected_source_node_id': selected_source_node_id,
-        'selected_dest_group_id': rule.security_group_id,
-        'selected_dest_node_id': rule.node_id,
-        'default_source_type': 'group' if selected_source_group_ids else 'host' if selected_source_node_id else 'group',
-        'default_dest_type': 'group' if rule.security_group_id else 'host',
-        **_policy_form_choices(org),
-    }
-    return render(request, 'security_groups/org_policy_form.html', context)
+    return render(
+        request,
+        'security_groups/rule_form.html',
+        _direction_first_form_context(
+            org,
+            request,
+            rule=rule,
+            error=error,
+            form_action_url=reverse('security_groups_org:policy_edit', kwargs={'slug': slug, 'rule_id': rule.id}),
+            title='Edit Rule',
+            submit_label='Save Rule',
+        ),
+    )
 
 
 @login_required
 def org_policy_delete(request, slug, rule_id):
     """Delete a source-to-destination firewall policy."""
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
-    rule = get_object_or_404(
-        FirewallRule.objects.filter(
-            Q(security_group__organization=org) | Q(node__organization=org)
-        ),
-        id=rule_id,
-    )
+    rule = get_object_or_404(_org_policy_queryset(org), id=rule_id)
 
     if request.method == 'POST':
         rule.delete()
@@ -960,24 +956,42 @@ def org_unassign_node(request, slug, sg_id, node_id):
 # Direction-first rule editor (Slice 4b)
 # ---------------------------------------------------------------------------
 
-def create_rule_from_form(org, post):
-    """Build + save a FirewallRule from the direction-first editor POST.
+def _parse_id_list(raw_ids):
+    ids = []
+    try:
+        for raw_id in raw_ids:
+            ids.append(int(raw_id))
+    except (TypeError, ValueError):
+        return None
+    return list(dict.fromkeys(ids))
 
-    Returns (rule, None) on success or (None, error_message). Uses the temp-target
-    save pattern because FirewallRule.clean() (called by save) requires a target.
-    """
-    import ipaddress as _ipaddress
 
+def _ordered_org_tags(org, ids):
+    tags_by_id = {
+        tag.id: tag
+        for tag in Tag.objects.filter(id__in=ids, organization=org)
+    }
+    if set(tags_by_id) != set(ids):
+        return None
+    return [tags_by_id[tag_id] for tag_id in ids]
+
+
+def _validate_direction_first_payload(org, post):
     direction = post.get('direction')
     if direction not in ('in', 'out'):
         return None, 'Choose a direction (inbound or outbound).'
-    target_ids = post.getlist('target_group')
-    target_tags = list(Tag.objects.filter(id__in=target_ids, organization=org))
-    if not target_tags:
+
+    target_ids = _parse_id_list(post.getlist('target_group'))
+    if not target_ids:
         return None, 'Choose at least one tag this rule applies to.'
+    target_tags = _ordered_org_tags(org, target_ids)
+    if target_tags is None:
+        return None, 'Target tag not found in this organization.'
+
     protocol = post.get('protocol')
     if protocol not in {p[0] for p in FirewallRule.PROTOCOL_CHOICES}:
         return None, 'Choose a protocol.'
+
     port_min = port_max = None
     if protocol in ('tcp', 'udp'):
         raw = post.get('port') or ''
@@ -989,46 +1003,155 @@ def create_rule_from_form(org, post):
                 port_min = port_max = int(raw)
         except (ValueError, TypeError):
             return None, 'A numeric port (or min-max range) is required for TCP/UDP.'
-        # Validate port range bounds.
         if port_min < 1 or port_min > 65535 or port_max < 1 or port_max > 65535:
             return None, 'Port numbers must be between 1 and 65535.'
         if port_min > port_max:
             return None, 'Port range start must not exceed port range end.'
+
     source_type = post.get('source_type', 'any')
-    source_group_ids = post.getlist('source_group')
-    source_node_id = post.get('source_node')
-    source_cidr = (post.get('source_cidr') or '').strip()
     match_type = {'group': 'groups', 'host': 'host', 'cidr': 'cidr', 'any': 'any'}.get(source_type, 'any')
-    if match_type == 'groups' and not source_group_ids:
-        return None, 'Choose at least one source tag.'
-    if match_type == 'cidr' and not source_cidr:
-        return None, 'Enter a source CIDR.'
-    if match_type == 'cidr' and source_cidr:
+    source_group_ids = []
+    source_node_ids = []
+    source_cidr = ''
+
+    if match_type == 'groups':
+        source_group_ids = _parse_id_list(post.getlist('source_group'))
+        if not source_group_ids:
+            return None, 'Choose at least one source tag.'
+        if _ordered_org_tags(org, source_group_ids) is None:
+            return None, 'Source tag not found in this organization.'
+    elif match_type == 'host':
         try:
-            _ipaddress.ip_network(source_cidr, strict=False)
+            source_node_id = int(post.get('source_node') or '')
+        except (TypeError, ValueError):
+            return None, 'Choose a source host.'
+        if not Node.objects.filter(id=source_node_id, organization=org).exists():
+            return None, 'Source host not found in this organization.'
+        source_node_ids = [source_node_id]
+    elif match_type == 'cidr':
+        source_cidr = (post.get('source_cidr') or '').strip()
+        if not source_cidr:
+            return None, 'Enter a source CIDR.'
+        try:
+            ipaddress.ip_network(source_cidr, strict=False)
         except ValueError:
             return None, 'Enter a valid CIDR.'
-    if match_type == 'host' and not source_node_id:
-        return None, 'Choose a source host.'
+
+    return {
+        'direction': direction,
+        'target_ids': [tag.id for tag in target_tags],
+        'protocol': protocol,
+        'port_min': port_min,
+        'port_max': port_max,
+        'description': post.get('description', ''),
+        'match_type': match_type,
+        'source_group_ids': source_group_ids,
+        'source_node_ids': source_node_ids,
+        'source_cidr': source_cidr,
+    }, None
+
+
+def create_rule_from_form(org, post, rule=None):
+    """Validate, build, and save a direction-first FirewallRule.
+
+    Returns (rule, None) on success or (None, error_message). All submitted
+    targets and sources are org-scoped before the first save.
+    """
+    payload, error = _validate_direction_first_payload(org, post)
+    if error:
+        return None, error
 
     with transaction.atomic():
-        rule = FirewallRule(direction=direction, protocol=protocol,
-                            port_min=port_min, port_max=port_max, match_type=match_type)
-        rule.security_group = target_tags[0]  # temp target so first save() passes clean()
+        rule = rule or FirewallRule()
+        rule.direction = payload['direction']
+        rule.protocol = payload['protocol']
+        rule.port_min = payload['port_min']
+        rule.port_max = payload['port_max']
+        rule.description = payload['description']
+        rule.match_type = payload['match_type']
+        rule.source_cidr = payload['source_cidr']
+        rule.node = None
+        # Temp target so save() passes clean(); final storage is target_groups.
+        rule.security_group_id = payload['target_ids'][0]
         rule.save()
-        rule.target_groups.set(target_tags)
+        rule.target_groups.set(payload['target_ids'])
+        rule.source_groups.set(payload['source_group_ids'])
+        rule.source_nodes.set(payload['source_node_ids'])
         rule.security_group = None
-        if match_type == 'groups':
-            rule.source_groups.set(Tag.objects.filter(id__in=source_group_ids, organization=org))
-        elif match_type == 'cidr':
-            rule.source_cidr = source_cidr
-        elif match_type == 'host':
-            node = Node.objects.filter(id=source_node_id, organization=org).first()
-            if not node:
-                return None, 'Source host not found in this organization.'
-            rule.source_nodes.set([node.id])
         rule.save()  # clean() passes via pk + target_groups.exists()
     return rule, None
+
+
+def _rule_port_value(rule):
+    if not rule or rule.protocol not in ('tcp', 'udp') or rule.port_min is None:
+        return ''
+    if rule.port_max and rule.port_max != rule.port_min:
+        return f'{rule.port_min}-{rule.port_max}'
+    return str(rule.port_min)
+
+
+def _rule_source_type(rule):
+    if not rule:
+        return 'group'
+    return {
+        'groups': 'group',
+        'host': 'host',
+        'cidr': 'cidr',
+        'any': 'any',
+    }.get(rule.match_type, 'any')
+
+
+def _direction_first_form_context(
+    org,
+    request,
+    *,
+    rule=None,
+    error=None,
+    form_action_url=None,
+    title='Create Rule',
+    submit_label='Create Rule',
+):
+    is_post = request.method == 'POST'
+    post = request.POST
+    target_ids = post.getlist('target_group') if is_post else []
+    source_group_ids = post.getlist('source_group') if is_post else []
+    source_node_id = post.get('source_node', '') if is_post else ''
+    source_cidr = post.get('source_cidr', '') if is_post else ''
+
+    if not is_post and rule:
+        target_ids = list(rule.target_groups.filter(organization=org).values_list('id', flat=True))
+        if not target_ids and rule.security_group_id and rule.security_group.organization_id == org.id:
+            target_ids = [rule.security_group_id]
+        source_group_ids = list(rule.source_groups.filter(organization=org).values_list('id', flat=True))
+        source_node_id = rule.source_nodes.filter(organization=org).values_list('id', flat=True).first() or ''
+        source_cidr = rule.source_cidr
+
+    selected_direction = post.get('direction') if is_post else (rule.direction if rule else 'in')
+    selected_source_type = post.get('source_type') if is_post else _rule_source_type(rule)
+    selected_protocol = post.get('protocol') if is_post else (rule.protocol if rule else 'tcp')
+    selected_port = post.get('port') if is_post else _rule_port_value(rule)
+
+    return {
+        'organization': org,
+        'rule': rule,
+        'tags': Tag.objects.filter(organization=org).order_by('name'),
+        'nodes': Node.objects.filter(organization=org).order_by('name'),
+        'protocols': FirewallRule.PROTOCOL_CHOICES,
+        'error': error,
+        'form_title': title,
+        'submit_label': submit_label,
+        'form_action_url': form_action_url
+        or reverse('security_groups_org:rule_create', kwargs={'slug': org.slug}),
+        'preview_url': reverse('security_groups_org:rule_preview', kwargs={'slug': org.slug}),
+        'selected_direction': selected_direction or 'in',
+        'selected_source_type': selected_source_type or 'group',
+        'selected_protocol': selected_protocol or 'tcp',
+        'selected_port': selected_port,
+        'selected_target_group_ids': [str(target_id) for target_id in target_ids],
+        'selected_source_group_ids': [str(source_group_id) for source_group_id in source_group_ids],
+        'selected_source_node_id': str(source_node_id) if source_node_id else '',
+        'selected_source_cidr': source_cidr,
+    }
 
 
 @login_required
@@ -1041,13 +1164,14 @@ def org_rule_create(request, slug):
         if rule:
             messages.success(request, 'Rule created.')
             return redirect('security_groups_org:policy_list', slug=slug)
-    context = {
-        'organization': org,
-        'tags': Tag.objects.filter(organization=org).order_by('name'),
-        'nodes': Node.objects.filter(organization=org).order_by('name'),
-        'protocols': FirewallRule.PROTOCOL_CHOICES,
-        'error': error,
-    }
+    context = _direction_first_form_context(
+        org,
+        request,
+        error=error,
+        title='Create Rule',
+        submit_label='Create Rule',
+        form_action_url=reverse('security_groups_org:rule_create', kwargs={'slug': slug}),
+    )
     return render(request, 'security_groups/rule_form.html', context)
 
 

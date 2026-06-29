@@ -1,13 +1,13 @@
 {% extends "base/base.html" %}
 
-{% block title %}Create Rule - {{ organization.name }}{% endblock %}
-{% block page_title %}Create Rule{% endblock %}
+{% block title %}{{ form_title }} - {{ organization.name }}{% endblock %}
+{% block page_title %}{{ form_title }}{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
     <div class="ui-page-header">
         <div>
-            <h1 class="ui-page-title">Create Rule</h1>
+            <h1 class="ui-page-title">{{ form_title }}</h1>
             <p class="ui-page-subtitle">Direction-first rule editor: choose direction, then which tags to apply it to, then the source and protocol.</p>
         </div>
     </div>
@@ -22,7 +22,8 @@
 
     <div class="ui-form-section">
         <form method="post"
-              hx-post="{% url 'security_groups_org:rule_preview' slug=organization.slug %}"
+              action="{{ form_action_url }}"
+              hx-post="{{ preview_url }}"
               hx-trigger="change from:input, change from:select, keyup changed delay:400ms from:input"
               hx-target="#rule-preview"
               hx-swap="innerHTML">
@@ -33,14 +34,14 @@
                 <label class="block mb-3 text-base font-semibold">Direction</label>
                 <div class="ui-inline-actions">
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="direction" value="in" checked class="mt-1">
+                        <input type="radio" name="direction" value="in" {% if selected_direction == 'in' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">Inbound</div>
                             <div class="text-sm text-light-300">Gate traffic into the target nodes.</div>
                         </div>
                     </label>
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="direction" value="out" class="mt-1">
+                        <input type="radio" name="direction" value="out" {% if selected_direction == 'out' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">Outbound</div>
                             <div class="text-sm text-light-300">Gate traffic out of the target nodes.</div>
@@ -55,7 +56,9 @@
                 <p class="text-sm text-light-300 mb-2">Select one or more tags. Nodes in these tags will have this rule applied.</p>
                 <select name="target_group" multiple class="w-full">
                     {% for tag in tags %}
-                    <option value="{{ tag.id }}">{{ tag.name }}</option>
+                    {% with tag_id=tag.id|stringformat:"s" %}
+                    <option value="{{ tag.id }}"{% if tag_id in selected_target_group_ids %} selected{% endif %}>{{ tag.name }}</option>
+                    {% endwith %}
                     {% endfor %}
                 </select>
             </div>
@@ -65,28 +68,28 @@
                 <label class="block mb-3 text-base font-semibold">Source</label>
                 <div class="ui-inline-actions">
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="source_type" value="group" checked class="mt-1">
+                        <input type="radio" name="source_type" value="group" {% if selected_source_type == 'group' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">Group</div>
                             <div class="text-sm text-light-300">Allow traffic from one or more security groups.</div>
                         </div>
                     </label>
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="source_type" value="host" class="mt-1">
+                        <input type="radio" name="source_type" value="host" {% if selected_source_type == 'host' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">Host</div>
                             <div class="text-sm text-light-300">Allow traffic from a single named node.</div>
                         </div>
                     </label>
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="source_type" value="cidr" class="mt-1">
+                        <input type="radio" name="source_type" value="cidr" {% if selected_source_type == 'cidr' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">CIDR</div>
                             <div class="text-sm text-light-300">Allow traffic from a CIDR range.</div>
                         </div>
                     </label>
                     <label class="ui-selection-row flex-1">
-                        <input type="radio" name="source_type" value="any" class="mt-1">
+                        <input type="radio" name="source_type" value="any" {% if selected_source_type == 'any' %}checked {% endif %}class="mt-1">
                         <div>
                             <div class="font-semibold text-light-100">Any</div>
                             <div class="text-sm text-light-300">Allow traffic from any source.</div>
@@ -94,26 +97,30 @@
                     </label>
                 </div>
                 <div class="ui-form-grid mt-4">
-                    <div data-role="source-group">
+                    <div data-role="source-group"{% if selected_source_type != 'group' %} style="display:none;"{% endif %}>
                         <label for="id_source_group">Source group(s)</label>
                         <select id="id_source_group" name="source_group" multiple>
                             {% for tag in tags %}
-                            <option value="{{ tag.id }}">{{ tag.name }}</option>
+                            {% with tag_id=tag.id|stringformat:"s" %}
+                            <option value="{{ tag.id }}"{% if tag_id in selected_source_group_ids %} selected{% endif %}>{{ tag.name }}</option>
+                            {% endwith %}
                             {% endfor %}
                         </select>
                     </div>
-                    <div data-role="source-host" style="display:none;">
+                    <div data-role="source-host"{% if selected_source_type != 'host' %} style="display:none;"{% endif %}>
                         <label for="id_source_node">Source host</label>
                         <select id="id_source_node" name="source_node">
                             <option value="">Select a host...</option>
                             {% for node in nodes %}
-                            <option value="{{ node.id }}">{{ node.name }}</option>
+                            {% with node_id=node.id|stringformat:"s" %}
+                            <option value="{{ node.id }}"{% if node_id == selected_source_node_id %} selected{% endif %}>{{ node.name }}</option>
+                            {% endwith %}
                             {% endfor %}
                         </select>
                     </div>
-                    <div data-role="source-cidr" style="display:none;">
+                    <div data-role="source-cidr"{% if selected_source_type != 'cidr' %} style="display:none;"{% endif %}>
                         <label for="id_source_cidr">Source CIDR</label>
-                        <input type="text" id="id_source_cidr" name="source_cidr" placeholder="10.0.0.0/8">
+                        <input type="text" id="id_source_cidr" name="source_cidr" value="{{ selected_source_cidr }}" placeholder="10.0.0.0/8">
                     </div>
                 </div>
             </div>
@@ -124,14 +131,14 @@
                     <label for="id_protocol">Protocol</label>
                     <select id="id_protocol" name="protocol">
                         {% for value, label in protocols %}
-                        <option value="{{ value }}">{{ label }}</option>
+                        <option value="{{ value }}"{% if value == selected_protocol %} selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                     <p class="ui-field-help">Use TCP or UDP for port-based rules, ICMP for ping, or Any Protocol when ports do not matter.</p>
                 </div>
                 <div>
                     <label for="id_port">Port</label>
-                    <input type="text" id="id_port" name="port" placeholder="22 or 8000-9000">
+                    <input type="text" id="id_port" name="port" value="{{ selected_port }}" placeholder="22 or 8000-9000">
                     <p class="ui-field-help">Required for TCP/UDP. Single port or min-max range. Leave blank for ICMP or Any.</p>
                 </div>
             </div>
@@ -146,7 +153,7 @@
 
             <div class="ui-action-bar mt-8 justify-end">
                 <a href="{% url 'security_groups_org:policy_list' slug=organization.slug %}" class="btn-enhanced ui-button-secondary ui-button-sm">Cancel</a>
-                <button type="submit" formaction="{% url 'security_groups_org:rule_create' slug=organization.slug %}" formmethod="post" class="btn-enhanced ui-button-primary ui-button-sm">Create Rule</button>
+                <button type="submit" formaction="{{ form_action_url }}" formmethod="post" class="btn-enhanced ui-button-primary ui-button-sm">{{ submit_label }}</button>
             </div>
         </form>
     </div>
@@ -162,7 +169,7 @@
             if (hostEl) hostEl.style.display = (value === 'host') ? '' : 'none';
             if (cidrEl) cidrEl.style.display = (value === 'cidr') ? '' : 'none';
         }
-        let initial = 'group';
+        let initial = '{{ selected_source_type }}';
         radios.forEach(r => { if (r.checked) initial = r.value; });
         sync(initial);
         radios.forEach(r => r.addEventListener('change', function() { sync(this.value); }));
