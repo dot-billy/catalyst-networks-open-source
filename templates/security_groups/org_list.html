@@ -56,6 +56,7 @@
                         <span class="ui-badge ui-badge-muted">{{ security_group.nodes.count }} assigned nodes</span>
                     </div>
                     <p class="mt-2 text-sm text-light-300">{{ security_group.description|default:"No description provided yet." }}</p>
+                    <p class="mt-1 text-sm text-light-400" title="What this Tag's rules allow">{{ security_group.summary }}</p>
                     <div class="ui-meta-list">
                         <span>Created {{ security_group.created_at|date:"F j, Y" }}</span>
                         <span>•</span>

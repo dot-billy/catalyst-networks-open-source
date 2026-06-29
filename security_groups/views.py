@@ -5,6 +5,7 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import FirewallRule, SecurityGroup, Tag
+from .summaries import summarize_tag
 from organizations.permissions import IsOrganizationOwnerOrAdmin
 from organizations.access import get_org_role, require_org_access
 from django.http import JsonResponse
@@ -233,7 +234,13 @@ def org_security_group_list(request, slug):
     search_query = request.GET.get('search', '')
     if search_query:
         security_groups = security_groups.filter(name__icontains=search_query)
-    
+
+    # Materialize so we can attach derived attrs without re-querying
+    security_groups = list(security_groups)
+    for sg in security_groups:
+        sg.policy_count = sg.inbound_count + sg.outbound_count
+        sg.summary = summarize_tag(sg)
+
     # Determine user's role in this organization for UI controls
     user_role = get_org_role(request.user, org)
     context = {
@@ -308,6 +315,7 @@ def org_security_group_detail(request, slug, pk):
         'rules': rules,
         'nodes': nodes,
         'user_role': get_org_role(request.user, org),
+        'summary': summarize_tag(security_group),
     }
     
     # Use the shared detail template for organization context

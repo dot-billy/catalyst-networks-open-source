@@ -746,3 +746,112 @@ class NavLabelTests(TestCase):
         self.assertEqual(rules_text, 'Rules')
         self.assertNotEqual(tags_text, 'Groups')
         self.assertNotEqual(rules_text, 'Policies')
+
+
+class SummarizeTagTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization
+        self.owner = User.objects.create_user(email='sum@example.com', password='pw')
+        self.org = Organization.objects.create(name='Sum Org', created_by=self.owner)
+
+    def _tag(self, name):
+        from security_groups.models import Tag
+        return Tag.objects.create(name=name, organization=self.org)
+
+    def _rule(self, target, *, direction='in', match_type='any', protocol='tcp',
+              port=None, port_max=None, source_cidr='', source_groups=(), source_nodes=()):
+        from security_groups.models import FirewallRule
+        r = FirewallRule(security_group=target, direction=direction, match_type=match_type,
+                         protocol=protocol, port_min=port, port_max=(port_max if port_max is not None else port),
+                         source_cidr=source_cidr)
+        r.save()
+        r.target_groups.add(target)
+        r.security_group = None
+        r.save()
+        for g in source_groups:
+            r.source_groups.add(g)
+        for n in source_nodes:
+            r.source_nodes.add(n)
+        return r
+
+    def test_no_rules_returns_placeholder(self):
+        from security_groups.summaries import summarize_tag
+        self.assertEqual(summarize_tag(self._tag('empty')), 'No rules yet.')
+
+    def test_inbound_ssh_from_a_tag(self):
+        from security_groups.summaries import summarize_tag
+        web = self._tag('web')
+        admin = self._tag('admin')
+        self._rule(web, match_type='groups', protocol='tcp', port=22, source_groups=[admin])
+        self.assertEqual(summarize_tag(web), 'Accepts SSH from tag admin.')
+
+    def test_inbound_https_from_anywhere(self):
+        from security_groups.summaries import summarize_tag
+        web = self._tag('web')
+        self._rule(web, match_type='any', protocol='tcp', port=443)
+        self.assertEqual(summarize_tag(web), 'Accepts HTTPS from anywhere.')
+
+    def test_inbound_cidr_source_uses_well_known_name(self):
+        from security_groups.summaries import summarize_tag
+        db = self._tag('db')
+        self._rule(db, match_type='cidr', protocol='tcp', port=5432, source_cidr='10.0.0.0/8')
+        self.assertEqual(summarize_tag(db), 'Accepts PostgreSQL from 10.0.0.0/8.')
+
+    def test_port_range_and_unknown_port_fall_back_to_proto_port(self):
+        from security_groups.summaries import summarize_tag
+        app = self._tag('app')
+        self._rule(app, match_type='any', protocol='tcp', port=8000, port_max=8100)
+        self.assertEqual(summarize_tag(app), 'Accepts TCP/8000-8100 from anywhere.')
+
+    def test_outbound_rule_renders_sends(self):
+        from security_groups.summaries import summarize_tag
+        web = self._tag('web')
+        self._rule(web, direction='out', match_type='cidr', protocol='tcp', port=443, source_cidr='10.0.0.0/8')
+        self.assertEqual(summarize_tag(web), 'Sends HTTPS to 10.0.0.0/8.')
+
+    def test_inbound_and_outbound_combined(self):
+        from security_groups.summaries import summarize_tag
+        web = self._tag('web')
+        self._rule(web, match_type='any', protocol='tcp', port=443)
+        self._rule(web, direction='out', match_type='any', protocol='any')
+        self.assertEqual(summarize_tag(web), 'Accepts HTTPS from anywhere. Sends all traffic to anywhere.')
+
+
+class TagListSummaryTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership
+        from security_groups.models import Tag, FirewallRule
+        self.client = Client()
+        self.owner = User.objects.create_user(email='list-sum@example.com', password='pw')
+        self.org = Organization.objects.create(name='List Sum Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        r = FirewallRule(security_group=self.web, direction='in', match_type='any', protocol='tcp', port_min=443, port_max=443)
+        r.save(); r.target_groups.add(self.web); r.security_group = None; r.save()
+        self.client.force_login(self.owner)
+
+    def test_list_page_shows_tag_summary(self):
+        response = self.client.get(reverse('security_groups_org:list', kwargs={'slug': self.org.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Accepts HTTPS from anywhere.')
+
+
+class TagDetailSummaryTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership
+        from security_groups.models import Tag, FirewallRule
+        self.client = Client()
+        self.owner = User.objects.create_user(email='detail-sum@example.com', password='pw')
+        self.org = Organization.objects.create(name='Detail Sum Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        self.admin_tag = Tag.objects.create(name='admin', organization=self.org)
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        r = FirewallRule(security_group=self.web, direction='in', match_type='groups', protocol='tcp', port_min=22, port_max=22)
+        r.save(); r.target_groups.add(self.web); r.security_group = None; r.save()
+        r.source_groups.add(self.admin_tag)
+        self.client.force_login(self.owner)
+
+    def test_detail_page_shows_tag_summary(self):
+        response = self.client.get(reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.web.id}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Accepts SSH from tag admin.')
