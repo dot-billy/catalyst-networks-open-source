@@ -11,7 +11,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.response import Response
@@ -37,6 +37,10 @@ class NodeOrgUrlExportTests(SimpleTestCase):
             'org_node_import_csv',
             'org_node_bulk_delete',
             'org_node_bulk_renew',
+            'org_node_create_mobile',
+            'org_node_mobile_sign',
+            'org_node_enroll',
+            'org_node_effective_rules',
         ):
             with self.subTest(view_name=view_name):
                 self.assertTrue(callable(getattr(views, view_name, None)))
@@ -1388,3 +1392,108 @@ class RenderRuleEntriesTests(TestCase):
         result = render_rule_entries(rule)
 
         self.assertEqual(result, [{'proto': 'any', 'port': 'any', 'cidr': '10.0.0.0/8'}])
+
+
+class EffectiveRulesHelperTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from security_groups.models import Tag
+        self.owner = User.objects.create_user(email='er@example.com', password='pw')
+        self.org = Organization.objects.create(name='ER Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.86.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node = Node.objects.create(name='er-node', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.86.0.10', external_port=4242, created_by=self.owner)
+        self.db = Tag.objects.create(name='db', organization=self.org)
+        self.node.tags.add(self.db)
+
+    def _rule(self, *, target_node=None, target_tag=None, direction='in', protocol='tcp', port=None, source_cidr=''):
+        from security_groups.models import FirewallRule
+        r = FirewallRule(direction=direction, protocol=protocol,
+                         port_min=port, port_max=port, source_cidr=source_cidr,
+                         match_type=('cidr' if source_cidr else 'any'))
+        r.security_group = target_tag  # temp target so clean() passes on first save
+        if target_node is not None:
+            r.node = target_node
+            r.security_group = None
+        r.save()
+        if target_tag is not None:
+            r.target_groups.add(target_tag)
+            r.security_group = None
+            r.save()
+        return r
+
+    def test_tag_rule_is_via_tag(self):
+        from nodes.effective_rules import effective_rules
+        self._rule(target_tag=self.db, direction='in', protocol='tcp', port=5432, source_cidr='10.0.0.0/8')
+        result = effective_rules(self.node)
+        self.assertEqual(len(result['inbound']), 1)
+        self.assertEqual(result['inbound'][0]['via'], 'via tag db')
+        self.assertEqual(result['inbound'][0]['entry'], {'proto': 'tcp', 'port': 5432, 'cidr': '10.0.0.0/8'})
+        self.assertFalse(result['inbound_default_allow'])
+
+    def test_direct_rule_is_direct(self):
+        from nodes.effective_rules import effective_rules
+        self._rule(target_node=self.node, direction='in', protocol='tcp', port=22, source_cidr='10.0.0.0/8')
+        result = effective_rules(self.node)
+        self.assertEqual(result['inbound'][0]['via'], 'direct')
+
+    def test_no_inbound_rules_flags_default_allow(self):
+        from nodes.effective_rules import effective_rules
+        result = effective_rules(self.node)
+        self.assertEqual(result['inbound'], [])
+        self.assertTrue(result['inbound_default_allow'])
+        self.assertTrue(result['outbound_default_allow'])
+
+    def test_outbound_rule_routed_to_outbound(self):
+        from nodes.effective_rules import effective_rules
+        self._rule(target_tag=self.db, direction='out', protocol='tcp', port=443, source_cidr='10.0.0.0/8')
+        result = effective_rules(self.node)
+        self.assertEqual(len(result['outbound']), 1)
+        self.assertFalse(result['outbound_default_allow'])
+        self.assertTrue(result['inbound_default_allow'])
+
+
+class EffectiveRulesPageTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from security_groups.models import Tag, FirewallRule
+        self.client = Client()
+        self.owner = User.objects.create_user(email='erp@example.com', password='pw')
+        self.org = Organization.objects.create(name='ERP Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.87.0.0/24', description='r')
+        ca = CertificateAuthority.objects.create(name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.node = Node.objects.create(name='erp-node', organization=self.org, certificate_authority=ca,
+            nebula_ip='10.87.0.10', external_port=4242, created_by=self.owner)
+        self.db = Tag.objects.create(name='db', organization=self.org)
+        self.node.tags.add(self.db)
+        r = FirewallRule(direction='in', protocol='tcp', port_min=5432, port_max=5432,
+                         match_type='cidr', source_cidr='10.0.0.0/8')
+        r.security_group = self.db; r.save(); r.target_groups.add(self.db); r.security_group = None; r.save()
+        self.client.force_login(self.owner)
+        self.url = reverse('nodes_org:effective_rules', kwargs={'slug': self.org.slug, 'pk': self.node.id})
+
+    def test_page_shows_rule_with_provenance(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'via tag db')
+        self.assertContains(resp, '5432')
+
+    def test_page_shows_default_allow_for_empty_outbound(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        # outbound has no rules -> default-allow disclosure
+        self.assertContains(resp, 'everything', msg_prefix='outbound default-allow disclosure expected')
+
+    def test_node_detail_links_to_effective_rules(self):
+        resp = self.client.get(reverse('nodes_org:detail', kwargs={'slug': self.org.slug, 'pk': self.node.id}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.url)

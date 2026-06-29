@@ -21,6 +21,7 @@ from .web_views import (
     org_node_download_config,
     org_node_download_key,
     org_node_edit,
+    org_node_effective_rules,
     org_node_enroll,
     org_node_export_csv,
     org_node_import_csv,

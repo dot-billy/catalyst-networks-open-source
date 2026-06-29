@@ -27,6 +27,7 @@ from security_groups.models import Tag
 from notifications import dispatch as notification_dispatch
 
 from .api_registration import NodeRegistrationView
+from .effective_rules import effective_rules
 from .models import Node, NodeQRCode, NodeRegistrationToken
 from .services import _get_latest_org_ca
 
@@ -773,14 +774,14 @@ def org_node_security_groups(request, slug, pk):
                     messages.error(request, f"Failed to regenerate certificate for {node.name}.")
             
             return redirect('nodes_org:assign_security_group', slug=slug, pk=node.id)
-    
+
     context = {
         'organization': org,
         'node': node,
         'security_groups': security_groups,
         'assigned_groups': assigned_groups
     }
-    
+
     return render(request, 'nodes/org_security_groups.html', context)
 
 
@@ -825,6 +826,20 @@ def org_node_enroll(request, slug, pk):
     except ValueError as e:
         messages.error(request, f"Failed to prepare node configuration: {str(e)}")
         return redirect('nodes_org:detail', slug=slug, pk=node.id)
+
+
+@login_required
+def org_node_effective_rules(request, slug, pk):
+    """What firewall rules effectively apply to this node, and why."""
+    org = check_org_access(request.user, organization_slug=slug)
+    node = get_object_or_404(Node, id=pk, organization=org)
+    context = {
+        'organization': org,
+        'node': node,
+        'effective': effective_rules(node),
+    }
+    return render(request, 'nodes/effective_rules.html', context)
+
 
 # Registration token views
 @login_required

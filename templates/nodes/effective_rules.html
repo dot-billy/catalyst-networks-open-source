@@ -1,0 +1,47 @@
+{% extends "base/base.html" %}
+
+{% block title %}Effective Rules - {{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Effective Rules{% endblock %}
+
+{% block content %}
+<div x-data="{ yaml: false }">
+  <div class="ui-page-header">
+    <h1 class="ui-page-title">Effective rules - {{ node.name }}</h1>
+    <p class="ui-page-subtitle">What can reach this node, and why. <button class="ui-link" @click="yaml = !yaml" type="button">Toggle Nebula YAML</button></p>
+  </div>
+
+  <h2 class="text-base font-semibold mt-4">Inbound</h2>
+  {% if effective.inbound_default_allow %}
+    <p class="ui-alert ui-alert-muted">No inbound rules - everything can reach this node. Add a rule to start restricting.</p>
+  {% else %}
+    <table class="min-w-full text-sm"><tbody>
+    {% for row in effective.inbound %}
+    <tr class="border-t border-dark-600">
+      <td class="p-2">{% for k, v in row.entry.items %}{{ k }}:{{ v }} {% endfor %}</td>
+      <td class="p-2 text-light-300">{{ row.via }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  {% endif %}
+
+  <h2 class="text-base font-semibold mt-4">Outbound</h2>
+  {% if effective.outbound_default_allow %}
+    <p class="ui-alert ui-alert-muted">No outbound rules - everything is reachable from this node (default-allow egress).</p>
+  {% else %}
+    <table class="min-w-full text-sm"><tbody>
+    {% for row in effective.outbound %}
+    <tr class="border-t border-dark-600">
+      <td class="p-2">{% for k, v in row.entry.items %}{{ k }}:{{ v }} {% endfor %}</td>
+      <td class="p-2 text-light-300">{{ row.via }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  {% endif %}
+
+  <pre x-show="yaml" class="text-xs mt-4 text-light-100">inbound:
+{% for row in effective.inbound %}  - { {% for k, v in row.entry.items %}{{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} }
+{% endfor %}outbound:
+{% for row in effective.outbound %}  - { {% for k, v in row.entry.items %}{{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} }
+{% endfor %}</pre>
+</div>
+{% endblock %}
