@@ -122,6 +122,8 @@
                                 {% endfor %}
                             {% elif rule.source_cidr %}
                                 {{ rule.source_cidr }}
+                            {% elif rule.match_type == 'any' %}
+                                Any
                             {% else %}
                                 Unspecified
                             {% endif %}

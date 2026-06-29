@@ -1559,6 +1559,17 @@ class DirectionFirstRuleLifecycleTests(TestCase):
         self.assertContains(response, 'web')
         self.assertNotContains(response, 'Unspecified')
 
+    def test_target_group_any_rule_appears_on_group_detail(self):
+        self._target_only_rule()
+
+        response = self.client.get(
+            reverse('security_groups_org:detail', kwargs={'slug': self.org.slug, 'pk': self.web.id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Any')
+        self.assertNotContains(response, 'Unspecified')
+
     def test_policy_edit_get_renders_direction_first_form_with_current_values(self):
         rule = self._target_only_rule(
             direction='out',
