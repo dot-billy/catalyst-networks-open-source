@@ -1193,3 +1193,148 @@ class NodeTagMatrixStagingTests(TestCase):
         response = self.client.get(reverse('security_groups_org:matrix', kwargs={'slug': self.org.slug}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="matrix-result" @htmx:after-swap.camel="reset()"')
+
+
+class DirectionFirstRuleCreateTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='rc@example.com', password='pw')
+        self.org = Organization.objects.create(name='RC Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.84.0.0/24', description='r')
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        self.admin = Tag.objects.create(name='admin', organization=self.org)
+        self.url = reverse('security_groups_org:rule_create', kwargs={'slug': self.org.slug})
+        self.client.force_login(self.owner)
+
+    def test_create_inbound_rule_with_target_and_tag_source(self):
+        from security_groups.models import FirewallRule
+        resp = self.client.post(self.url, {
+            'direction': 'in', 'target_group': [str(self.web.id)],
+            'source_type': 'group', 'source_group': [str(self.admin.id)],
+            'protocol': 'tcp', 'port': '22',
+        })
+        self.assertIn(resp.status_code, (302, 200))
+        rule = FirewallRule.objects.get(protocol='tcp', port_min=22)
+        self.assertEqual(rule.direction, 'in')
+        self.assertIsNone(rule.security_group)  # nulled after target_groups set
+        self.assertEqual(set(rule.target_groups.values_list('id', flat=True)), {self.web.id})
+        self.assertEqual(set(rule.source_groups.values_list('id', flat=True)), {self.admin.id})
+        self.assertEqual(rule.match_type, 'groups')
+
+    def test_create_outbound_cidr_rule(self):
+        from security_groups.models import FirewallRule
+        resp = self.client.post(self.url, {
+            'direction': 'out', 'target_group': [str(self.web.id)],
+            'source_type': 'cidr', 'source_cidr': '10.0.0.0/8',
+            'protocol': 'tcp', 'port': '443',
+        })
+        rule = FirewallRule.objects.get(protocol='tcp', port_min=443)
+        self.assertEqual(rule.direction, 'out')
+        self.assertEqual(rule.source_cidr, '10.0.0.0/8')
+        self.assertEqual(rule.match_type, 'cidr')
+        self.assertEqual(set(rule.target_groups.values_list('id', flat=True)), {self.web.id})
+
+    def test_create_requires_target(self):
+        resp = self.client.post(self.url, {
+            'direction': 'in', 'source_type': 'any', 'protocol': 'tcp', 'port': '22',
+        })
+        self.assertEqual(resp.status_code, 200)  # re-render with error
+        self.assertContains(resp, 'tag')  # error mentions choosing a tag
+
+    def test_get_renders_form_with_tags(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'web')
+        self.assertContains(resp, 'Inbound')
+
+
+class RulePreviewTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from nodes.models import Node
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='rp@example.com', password='pw')
+        self.org = Organization.objects.create(name='RP Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        NetworkRange.objects.create(organization=self.org, cidr='10.85.0.0/24', description='r')
+        ca = CertificateAuthority.objects.create(name='CA', organization=self.org, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
+        self.web = Tag.objects.create(name='web', organization=self.org)
+        self.admin = Tag.objects.create(name='admin', organization=self.org)
+        self.n1 = Node.objects.create(name='n1', organization=self.org, certificate_authority=ca,
+            nebula_ip='10.85.0.10', external_port=4242, created_by=self.owner)
+        self.n1.tags.add(self.web)
+        self.url = reverse('security_groups_org:rule_preview', kwargs={'slug': self.org.slug})
+        self.client.force_login(self.owner)
+
+    def test_preview_renders_entries_and_targets(self):
+        resp = self.client.post(self.url, {
+            'direction': 'in', 'target_group': [str(self.web.id)],
+            'source_type': 'group', 'source_group': [str(self.admin.id)],
+            'protocol': 'tcp', 'port': '22',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'admin')   # groups:[admin] in the rendered YAML
+        self.assertContains(resp, '22')
+        # web tag has 1 node -> Targets 1
+        self.assertContains(resp, '1')
+
+    def test_preview_does_not_persist(self):
+        from security_groups.models import FirewallRule, FirewallRuleSourceGroup
+        before_rules = FirewallRule.objects.count()
+        before_source_groups = FirewallRuleSourceGroup.objects.count()
+        self.client.post(self.url, {
+            'direction': 'in', 'target_group': [str(self.web.id)],
+            'source_type': 'any', 'protocol': 'tcp', 'port': '80',
+        })
+        self.assertEqual(FirewallRule.objects.count(), before_rules)  # rolled back
+
+    def test_preview_does_not_persist_m2m_source_group(self):
+        """A preview with source_type='group' must roll back the M2M join rows too."""
+        from security_groups.models import FirewallRule, FirewallRuleSourceGroup
+        before_rules = FirewallRule.objects.count()
+        before_source_groups = FirewallRuleSourceGroup.objects.count()
+        self.client.post(self.url, {
+            'direction': 'in', 'target_group': [str(self.web.id)],
+            'source_type': 'group', 'source_group': [str(self.admin.id)],
+            'protocol': 'tcp', 'port': '443',
+        })
+        self.assertEqual(FirewallRule.objects.count(), before_rules)  # rules rolled back
+        self.assertEqual(FirewallRuleSourceGroup.objects.count(), before_source_groups)  # M2M rolled back
+
+    def test_preview_flags_egress_lockout(self):
+        # first OUTBOUND rule on a tag whose nodes have no existing outbound -> warning
+        resp = self.client.post(self.url, {
+            'direction': 'out', 'target_group': [str(self.web.id)],
+            'source_type': 'any', 'protocol': 'any',
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'egress')  # warning text mentions egress
+
+
+class RuleFormPreviewWiringTests(TestCase):
+    def setUp(self):
+        from organizations.models import Organization, Membership
+        from security_groups.models import Tag
+        self.client = Client()
+        self.owner = User.objects.create_user(email='rfw@example.com', password='pw')
+        self.org = Organization.objects.create(name='RFW Org', created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.org, role='owner')
+        Tag.objects.create(name='web', organization=self.org)
+        self.client.force_login(self.owner)
+
+    def test_form_wires_preview(self):
+        resp = self.client.get(reverse('security_groups_org:rule_create', kwargs={'slug': self.org.slug}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, reverse('security_groups_org:rule_preview', kwargs={'slug': self.org.slug}))
+        self.assertContains(resp, 'hx-post')
+        self.assertContains(resp, 'rule-preview')

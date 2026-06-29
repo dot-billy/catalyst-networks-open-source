@@ -945,12 +945,138 @@ def org_unassign_node(request, slug, sg_id, node_id):
     if request.method == 'POST':
         # Remove node from security group
         security_group.nodes.remove(node)
-        
+
         # Regenerate certificate to drop group from cert
         from nodes.views import regenerate_certificate
         regenerate_certificate(node)
 
         messages.success(request, f'"{node.name}" was removed from the policy.')
         return redirect('security_groups_org:detail', slug=slug, pk=sg_id)
-    
+
     return redirect('security_groups_org:detail', slug=slug, pk=sg_id)
+
+
+# ---------------------------------------------------------------------------
+# Direction-first rule editor (Slice 4b)
+# ---------------------------------------------------------------------------
+
+def create_rule_from_form(org, post):
+    """Build + save a FirewallRule from the direction-first editor POST.
+
+    Returns (rule, None) on success or (None, error_message). Uses the temp-target
+    save pattern because FirewallRule.clean() (called by save) requires a target.
+    """
+    import ipaddress as _ipaddress
+
+    direction = post.get('direction')
+    if direction not in ('in', 'out'):
+        return None, 'Choose a direction (inbound or outbound).'
+    target_ids = post.getlist('target_group')
+    target_tags = list(Tag.objects.filter(id__in=target_ids, organization=org))
+    if not target_tags:
+        return None, 'Choose at least one tag this rule applies to.'
+    protocol = post.get('protocol')
+    if protocol not in {p[0] for p in FirewallRule.PROTOCOL_CHOICES}:
+        return None, 'Choose a protocol.'
+    port_min = port_max = None
+    if protocol in ('tcp', 'udp'):
+        raw = post.get('port') or ''
+        try:
+            if '-' in raw:
+                lo, hi = raw.split('-', 1)
+                port_min, port_max = int(lo), int(hi)
+            else:
+                port_min = port_max = int(raw)
+        except (ValueError, TypeError):
+            return None, 'A numeric port (or min-max range) is required for TCP/UDP.'
+        # Validate port range bounds.
+        if port_min < 1 or port_min > 65535 or port_max < 1 or port_max > 65535:
+            return None, 'Port numbers must be between 1 and 65535.'
+        if port_min > port_max:
+            return None, 'Port range start must not exceed port range end.'
+    source_type = post.get('source_type', 'any')
+    source_group_ids = post.getlist('source_group')
+    source_node_id = post.get('source_node')
+    source_cidr = (post.get('source_cidr') or '').strip()
+    match_type = {'group': 'groups', 'host': 'host', 'cidr': 'cidr', 'any': 'any'}.get(source_type, 'any')
+    if match_type == 'groups' and not source_group_ids:
+        return None, 'Choose at least one source tag.'
+    if match_type == 'cidr' and not source_cidr:
+        return None, 'Enter a source CIDR.'
+    if match_type == 'cidr' and source_cidr:
+        try:
+            _ipaddress.ip_network(source_cidr, strict=False)
+        except ValueError:
+            return None, 'Enter a valid CIDR.'
+    if match_type == 'host' and not source_node_id:
+        return None, 'Choose a source host.'
+
+    with transaction.atomic():
+        rule = FirewallRule(direction=direction, protocol=protocol,
+                            port_min=port_min, port_max=port_max, match_type=match_type)
+        rule.security_group = target_tags[0]  # temp target so first save() passes clean()
+        rule.save()
+        rule.target_groups.set(target_tags)
+        rule.security_group = None
+        if match_type == 'groups':
+            rule.source_groups.set(Tag.objects.filter(id__in=source_group_ids, organization=org))
+        elif match_type == 'cidr':
+            rule.source_cidr = source_cidr
+        elif match_type == 'host':
+            node = Node.objects.filter(id=source_node_id, organization=org).first()
+            if not node:
+                return None, 'Source host not found in this organization.'
+            rule.source_nodes.set([node.id])
+        rule.save()  # clean() passes via pk + target_groups.exists()
+    return rule, None
+
+
+@login_required
+def org_rule_create(request, slug):
+    """Direction-first rule editor."""
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    error = None
+    if request.method == 'POST':
+        rule, error = create_rule_from_form(org, request.POST)
+        if rule:
+            messages.success(request, 'Rule created.')
+            return redirect('security_groups_org:policy_list', slug=slug)
+    context = {
+        'organization': org,
+        'tags': Tag.objects.filter(organization=org).order_by('name'),
+        'nodes': Node.objects.filter(organization=org).order_by('name'),
+        'protocols': FirewallRule.PROTOCOL_CHOICES,
+        'error': error,
+    }
+    return render(request, 'security_groups/rule_form.html', context)
+
+
+@login_required
+@require_POST
+def org_rule_preview(request, slug):
+    """Render a transient rule to its Nebula firewall entries without persisting."""
+    from nodes.api_registration import render_rule_entries
+    org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
+    entries = []
+    targets = 0
+    direction = request.POST.get('direction', 'in')
+    egress_warning = False
+    rule = None
+    error = None
+    with transaction.atomic():
+        rule, error = create_rule_from_form(org, request.POST)
+        if rule is not None:
+            entries = render_rule_entries(rule)
+            targets = Node.objects.filter(organization=org, tags__in=rule.target_groups.all()).distinct().count()
+            if direction == 'out':
+                # first outbound rule for these target nodes -> deny-by-default egress
+                target_nodes = Node.objects.filter(organization=org, tags__in=rule.target_groups.all()).distinct()
+                existing_outbound = FirewallRule.objects.filter(
+                    direction='out', target_groups__in=rule.target_groups.all()
+                ).exclude(id=rule.id).exists()
+                egress_warning = target_nodes.exists() and not existing_outbound
+        transaction.set_rollback(True)
+    return render(request, 'security_groups/_rule_preview.html', {
+        'entries': entries, 'direction': direction, 'targets': targets,
+        'egress_warning': egress_warning, 'error': error if rule is None else None,
+    })

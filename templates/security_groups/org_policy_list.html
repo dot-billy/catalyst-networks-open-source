@@ -12,7 +12,7 @@
         </div>
         <div class="ui-page-actions">
             {% if user_role == 'owner' or user_role == 'admin' %}
-            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% url 'security_groups_org:rule_create' slug=organization.slug as create_policy_url %}
             {% include "components/button.html" with text="Create Policy" href=create_policy_url variant="primary" size="sm" %}
             {% endif %}
         </div>
@@ -88,7 +88,7 @@
         <p>Create your first policy to allow a source group or host to reach a destination over a specific protocol and port.</p>
         {% if user_role == 'owner' or user_role == 'admin' %}
         <div class="mt-6">
-            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% url 'security_groups_org:rule_create' slug=organization.slug as create_policy_url %}
             {% include "components/button.html" with text="Create First Policy" href=create_policy_url variant="primary" size="lg" %}
         </div>
         {% endif %}

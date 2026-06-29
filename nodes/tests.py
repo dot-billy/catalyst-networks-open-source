@@ -19,7 +19,7 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from nodes.api_views import NodeViewSet, OrgNodeViewSet
 from certificates.models import CertificateAuthority
-from nodes.api_registration import NodeRegistrationView
+from nodes.api_registration import NodeRegistrationView, render_rule_entries
 from nodes.models import Node, NodeRegistrationToken
 from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
@@ -1318,3 +1318,73 @@ class OrgNodeSecurityGroupsPageTests(TestCase):
         legacy_url = f'/nodes/org/{self.org.id}/{self.node.id}/'
         self.assertContains(response, f'href="{detail_url}"')
         self.assertNotContains(response, f'href="{legacy_url}"')
+
+
+class RenderRuleEntriesTests(TestCase):
+    """Unit tests for the module-level render_rule_entries() helper."""
+
+    def setUp(self):
+        from organizations.models import Organization, NetworkRange
+        from certificates.models import CertificateAuthority
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.owner = User.objects.create_user(email='rre@example.com', password='pw')
+        self.organization = Organization.objects.create(name='RRE Org', created_by=self.owner)
+        NetworkRange.objects.create(organization=self.organization, cidr='10.60.0.0/24', description='r')
+        self.ca = CertificateAuthority.objects.create(
+            name='CA', organization=self.organization, created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'ca-cert-bytes'),
+            ca_key=SimpleUploadedFile('ca.key', b'ca-key-bytes'))
+        # A tag to use as security_group on FirewallRule (required by the model).
+        from security_groups.models import Tag
+        self.tag = Tag.objects.create(name='rre-target', organization=self.organization)
+
+    def _make_rule(self, protocol, port_min=None, port_max=None, direction='in',
+                   source_cidr=None, match_type='groups'):
+        """Create and return a FirewallRule using the save-twice pattern."""
+        from security_groups.models import FirewallRule
+        kwargs = dict(
+            security_group=self.tag,
+            protocol=protocol,
+            port_min=port_min,
+            port_max=port_max,
+            direction=direction,
+            match_type=match_type,
+        )
+        if source_cidr is not None:
+            kwargs['source_cidr'] = source_cidr
+        rule = FirewallRule(**kwargs)
+        rule.save()
+        rule.target_groups.add(self.tag)
+        rule.security_group = None
+        rule.save()
+        return rule
+
+    def test_tcp_port_with_source_tag(self):
+        """tcp/443, source tag 'web' -> [{'proto':'tcp','port':443,'groups':['web']}]"""
+        from security_groups.models import Tag
+        web_tag = Tag.objects.create(name='web', organization=self.organization)
+        rule = self._make_rule(protocol='tcp', port_min=443, port_max=443)
+        rule.source_groups.add(web_tag)
+        rule.save()
+
+        result = render_rule_entries(rule)
+
+        self.assertEqual(result, [{'proto': 'tcp', 'port': 443, 'groups': ['web']}])
+
+    def test_tcp_port_with_source_cidr(self):
+        """tcp/5432, source_cidr='10.0.0.0/8' -> [{'proto':'tcp','port':5432,'cidr':'10.0.0.0/8'}]"""
+        rule = self._make_rule(protocol='tcp', port_min=5432, port_max=5432,
+                               source_cidr='10.0.0.0/8', match_type='cidr')
+
+        result = render_rule_entries(rule)
+
+        self.assertEqual(result, [{'proto': 'tcp', 'port': 5432, 'cidr': '10.0.0.0/8'}])
+
+    def test_proto_any_with_source_cidr(self):
+        """protocol='any', source_cidr='10.0.0.0/8' -> [{'proto':'any','port':'any','cidr':'10.0.0.0/8'}]"""
+        rule = self._make_rule(protocol='any', source_cidr='10.0.0.0/8',
+                               match_type='cidr')
+
+        result = render_rule_entries(rule)
+
+        self.assertEqual(result, [{'proto': 'any', 'port': 'any', 'cidr': '10.0.0.0/8'}])

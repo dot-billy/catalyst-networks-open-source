@@ -36,6 +36,76 @@ from .tasks import parse_nebula_cert_expiration
 logger = logging.getLogger(__name__)
 AUTH_SCHEME = 'Bearer'
 
+
+def _rule_organization(rule):
+    if getattr(rule, 'security_group_id', None):
+        return rule.security_group.organization
+    if getattr(rule, 'node_id', None):
+        return rule.node.organization
+    if getattr(rule, 'pk', None):
+        target_group = rule.target_groups.order_by('id').first()
+        if target_group:
+            return target_group.organization
+    return None
+
+
+def render_sources(rule):
+    # Returns a list of source-match dicts (ONE firewall entry per source).
+    # target_groups (which nodes the rule applies to) is handled by
+    # get_all_applicable_firewall_rules.
+    match_type = getattr(rule, 'match_type', 'any') or 'any'
+    organization = _rule_organization(rule)
+
+    if match_type == 'any':
+        return [{'host': 'any'}]
+    if match_type == 'groups':
+        source_groups = rule.source_groups.all()
+        if organization:
+            source_groups = source_groups.filter(organization=organization)
+        src_groups = list(source_groups.values_list('name', flat=True))
+        if src_groups:
+            return [{'groups': src_groups}]
+    elif match_type == 'host':
+        source_nodes = rule.source_nodes.all()
+        if organization:
+            source_nodes = source_nodes.filter(organization=organization)
+        node_ips = list(source_nodes.values_list('nebula_ip', flat=True))
+        if node_ips:
+            # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
+            # Nebula's 'host' key matches the remote cert name, not an IP.
+            return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
+    elif match_type == 'cidr' and rule.source_cidr:
+        # Nebula matches IP/CIDR sources via the 'cidr' key; 'host' is a
+        # cert-name matcher and never matches a CIDR.
+        return [{'cidr': rule.source_cidr}]
+    logger.debug("Skipping rule %s with no source specified", rule.id)
+    return []
+
+
+def render_proto_port(rule, fr):
+    if rule.protocol == 'any':
+        fr['proto'] = 'any'
+        fr['port'] = 'any'
+    elif rule.protocol == 'icmp':
+        fr['proto'] = 'icmp'
+    else:  # TCP or UDP
+        fr['proto'] = rule.protocol
+        if rule.port_min is not None and rule.port_max is not None:
+            if rule.port_min == rule.port_max:
+                fr['port'] = rule.port_min
+            else:
+                fr['port'] = f"{rule.port_min}-{rule.port_max}"
+        else:
+            fr['port'] = 'any'
+
+
+def render_rule_entries(rule):
+    """The firewall entries the config builder emits for one rule, one per source."""
+    base = {}
+    render_proto_port(rule, base)
+    return [{**base, **src} for src in render_sources(rule)]
+
+
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
     node_name = serializers.CharField(max_length=255)
@@ -873,58 +943,6 @@ class NodeRegistrationView(APIView):
             "Building firewall config for node %s (%s): %d inbound, %d outbound applicable rules",
             node.id, node.name, len(inbound_rules), len(outbound_rules),
         )
-
-        def render_sources(rule):
-            # Returns a list of source-match dicts (ONE firewall entry per source).
-            # target_groups (which nodes the rule applies to) is handled by
-            # get_all_applicable_firewall_rules.
-            if rule.match_type == 'any':
-                return [{'host': 'any'}]
-            if rule.match_type == 'groups':
-                src_groups = list(
-                    rule.source_groups.filter(
-                        organization=node.organization,
-                    ).values_list('name', flat=True)
-                )
-                if src_groups:
-                    return [{'groups': src_groups}]
-            elif rule.match_type == 'host':
-                node_ips = list(
-                    rule.source_nodes.filter(
-                        organization=node.organization,
-                    ).values_list('nebula_ip', flat=True)
-                )
-                if node_ips:
-                    # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
-                    # Nebula's 'host' key matches the remote cert name, not an IP.
-                    return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
-            elif rule.match_type == 'cidr' and rule.source_cidr:
-                # Nebula matches IP/CIDR sources via the 'cidr' key; 'host' is a
-                # cert-name matcher and never matches a CIDR.
-                return [{'cidr': rule.source_cidr}]
-            logger.debug("Skipping rule %s with no source specified", rule.id)
-            return []
-
-        def render_proto_port(rule, fr):
-            if rule.protocol == 'any':
-                fr['proto'] = 'any'
-                fr['port'] = 'any'
-            elif rule.protocol == 'icmp':
-                fr['proto'] = 'icmp'
-            else:  # TCP or UDP
-                fr['proto'] = rule.protocol
-                if rule.port_min is not None and rule.port_max is not None:
-                    if rule.port_min == rule.port_max:
-                        fr['port'] = rule.port_min
-                    else:
-                        fr['port'] = f"{rule.port_min}-{rule.port_max}"
-                else:
-                    fr['port'] = 'any'
-
-        def render_rule_entries(rule):
-            base = {}
-            render_proto_port(rule, base)
-            return [{**base, **src} for src in render_sources(rule)]
 
         # Inbound: keep the ICMP seed; append default allow-all only when there
         # are no explicit rendered inbound rules.
