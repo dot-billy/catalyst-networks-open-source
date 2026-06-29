@@ -1,5 +1,7 @@
 """Preset firewall-rule recipes that materialize onto a Tag, idempotently."""
 
+from django.db import transaction
+
 RECIPES = {
     'web': {
         'label': 'Web tier',
@@ -43,25 +45,27 @@ def apply_recipe(tag, key, org):
     from .models import FirewallRule, Tag
     if key not in RECIPES:
         raise ValueError(f"Unknown recipe: {key}")
-    FirewallRule.objects.filter(target_groups=tag, managed_by_recipe=True).delete()
-    created = []
-    for spec in RECIPES[key]['rules']:
-        is_tag_source = spec['source'].startswith('tag:')
-        rule = FirewallRule(
-            direction=spec['direction'], protocol=spec['protocol'],
-            port_min=spec.get('port'), port_max=spec.get('port'),
-            match_type='groups' if is_tag_source else 'any',
-            managed_by_recipe=True,
-        )
-        rule.security_group = tag  # temp target so first save() passes clean()
-        rule.save()
-        rule.target_groups.add(tag)
-        rule.security_group = None
-        if is_tag_source:
-            src = Tag.objects.get_or_create(name=spec['source'].split(':', 1)[1], organization=org)[0]
-            rule.source_groups.add(src)
-        rule.save()
-        created.append(rule)
-    tag.recipe = key
-    tag.save(update_fields=['recipe'])
-    return created
+    with transaction.atomic():
+        tag = Tag.objects.select_for_update().get(pk=tag.pk)
+        FirewallRule.objects.filter(target_groups=tag, managed_by_recipe=True).delete()
+        created = []
+        for spec in RECIPES[key]['rules']:
+            is_tag_source = spec['source'].startswith('tag:')
+            rule = FirewallRule(
+                direction=spec['direction'], protocol=spec['protocol'],
+                port_min=spec.get('port'), port_max=spec.get('port'),
+                match_type='groups' if is_tag_source else 'any',
+                managed_by_recipe=True,
+            )
+            rule.security_group = tag  # temp target so first save() passes clean()
+            rule.save()
+            rule.target_groups.add(tag)
+            rule.security_group = None
+            if is_tag_source:
+                src = Tag.objects.get_or_create(name=spec['source'].split(':', 1)[1], organization=org)[0]
+                rule.source_groups.add(src)
+            rule.save()
+            created.append(rule)
+        tag.recipe = key
+        tag.save(update_fields=['recipe'])
+        return created

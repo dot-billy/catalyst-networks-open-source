@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
@@ -1805,6 +1807,46 @@ class ApplyRecipeTests(TestCase):
         apply_recipe(self.web, 'web', self.org)
         self.assertTrue(FirewallRule.objects.filter(id=hand.id).exists())  # hand-added survives
         self.assertEqual(FirewallRule.objects.filter(target_groups=self.web).count(), 3)  # 1 hand + 2 recipe
+
+    def test_apply_locks_target_tag_inside_transaction(self):
+        from django.db import transaction
+        from security_groups import recipes
+        from security_groups.recipes import apply_recipe
+        from security_groups.models import Tag
+
+        atomic_depth = 0
+        real_atomic = transaction.atomic
+        real_select_for_update = Tag.objects.select_for_update
+
+        def recording_atomic(*args, **kwargs):
+            real_context = real_atomic(*args, **kwargs)
+
+            class RecordingAtomic:
+                def __enter__(self):
+                    nonlocal atomic_depth
+                    result = real_context.__enter__()
+                    atomic_depth += 1
+                    return result
+
+                def __exit__(self, exc_type, exc_value, traceback):
+                    nonlocal atomic_depth
+                    atomic_depth -= 1
+                    return real_context.__exit__(exc_type, exc_value, traceback)
+
+            return RecordingAtomic()
+
+        def recording_select_for_update(*args, **kwargs):
+            self.assertGreater(atomic_depth, 0)
+            return real_select_for_update(*args, **kwargs)
+
+        with mock.patch.object(recipes, 'transaction', create=True) as transaction_mock:
+            transaction_mock.atomic.side_effect = recording_atomic
+            with mock.patch.object(Tag.objects, 'select_for_update', side_effect=recording_select_for_update) as lock_mock:
+                created = apply_recipe(self.web, 'web', self.org)
+
+        transaction_mock.atomic.assert_called_once()
+        lock_mock.assert_called_once()
+        self.assertEqual(len(created), 2)
 
     def test_unknown_recipe_raises(self):
         from security_groups.recipes import apply_recipe
