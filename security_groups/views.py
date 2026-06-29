@@ -290,28 +290,52 @@ def org_node_tag_matrix_apply(request, slug):
     try:
         changes = json.loads(raw)
     except (ValueError, TypeError):
-        return HttpResponseBadRequest('Invalid JSON in changes field.')
+        return HttpResponseBadRequest('Invalid matrix changes.')
+    if not isinstance(changes, list):
+        return HttpResponseBadRequest('Invalid matrix changes.')
+
     # Bulk-load org-scoped nodes and tags once to avoid N+1 and validate membership.
     nodes_by_id = {n.id: n for n in Node.objects.filter(organization=org)}
     tags_by_id = {t.id: t for t in Tag.objects.filter(organization=org)}
-    affected = set()
+    desired_membership = {}
+    for ch in changes:
+        if not isinstance(ch, dict):
+            return HttpResponseBadRequest('Invalid matrix changes.')
+        nid, tid, op = ch.get('node'), ch.get('tag'), ch.get('op')
+        if (
+            type(nid) is not int
+            or type(tid) is not int
+            or nid not in nodes_by_id
+            or tid not in tags_by_id
+            or op not in ('add', 'remove')
+        ):
+            return HttpResponseBadRequest('Invalid matrix changes.')
+        desired_membership[(nid, tid)] = op == 'add'
+
+    existing_membership = set(
+        Node.tags.through.objects.filter(
+            node__organization=org,
+            tag__organization=org,
+        ).values_list('node_id', 'tag_id')
+    )
+    changed_node_ids = set()
     with transaction.atomic():
-        for ch in changes:
-            nid, tid, op = ch.get('node'), ch.get('tag'), ch.get('op')
-            if nid not in nodes_by_id or tid not in tags_by_id or op not in ('add', 'remove'):
+        for (nid, tid), should_have_tag in desired_membership.items():
+            already_has_tag = (nid, tid) in existing_membership
+            if should_have_tag == already_has_tag:
                 continue
             node = nodes_by_id[nid]
             tag = tags_by_id[tid]
-            if op == 'add':
+            if should_have_tag:
                 node.tags.add(tag)
             else:
                 node.tags.remove(tag)
-            affected.add(nid)
+            changed_node_ids.add(nid)
     # Queue re-signs outside the atomic block so a mid-batch crash rolls back all
     # membership changes without queuing any certificate renewals.
-    for nid in affected:
+    for nid in sorted(changed_node_ids):
         renew_node_certificate.delay(nid)
-    return render(request, 'security_groups/_matrix_apply_result.html', {'count': len(affected)})
+    return render(request, 'security_groups/_matrix_apply_result.html', {'count': len(changed_node_ids)})
 
 
 @login_required

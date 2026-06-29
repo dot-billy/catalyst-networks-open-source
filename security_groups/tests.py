@@ -999,6 +999,8 @@ class NodeTagMatrixApplyTests(TestCase):
             ca_cert=SimpleUploadedFile('ca.crt', b'c'), ca_key=SimpleUploadedFile('ca.key', b'k'))
         self.node1 = Node.objects.create(name='n1', organization=self.org, certificate_authority=self.ca,
             nebula_ip='10.81.0.10', external_port=4242, created_by=self.owner)
+        self.node2 = Node.objects.create(name='n2', organization=self.org, certificate_authority=self.ca,
+            nebula_ip='10.81.0.11', external_port=4242, created_by=self.owner)
         self.tagA = Tag.objects.create(name='alpha', organization=self.org)
         self.tagB = Tag.objects.create(name='bravo', organization=self.org)
         self.node1.tags.add(self.tagA)
@@ -1020,11 +1022,75 @@ class NodeTagMatrixApplyTests(TestCase):
         self.assertIn(self.tagB.id, ids)
         self.assertNotIn(self.tagA.id, ids)
 
-    def test_apply_ignores_foreign_tag(self):
+    def test_apply_rejects_non_list_json_without_mutating(self):
+        self.client.raise_request_exception = False
+        changes = self.json.dumps({'node': self.node1.id})
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(self.tagA.id, set(self.node1.tags.values_list('id', flat=True)))
+        self.assertNotIn(self.tagB.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_rejects_non_object_item_without_mutating(self):
+        self.client.raise_request_exception = False
+        changes = self.json.dumps([42])
+        response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(self.tagA.id, set(self.node1.tags.values_list('id', flat=True)))
+        self.assertNotIn(self.tagB.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_rejects_foreign_tag_without_mutating(self):
         changes = self.json.dumps([{'node': self.node1.id, 'tag': self.foreign_tag.id, 'op': 'add'}])
         response = self.client.post(self.url, {'changes': changes})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 400)
         self.assertNotIn(self.foreign_tag.id, set(self.node1.tags.values_list('id', flat=True)))
+
+    def test_apply_rejects_mixed_invalid_batch_without_mutation_or_renewal(self):
+        from unittest.mock import patch
+        changes = self.json.dumps([
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.foreign_tag.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagA.id, 'op': 'toggle'},
+        ])
+        with patch('security_groups.views.renew_node_certificate') as mock_task:
+            response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(mock_task.delay.called)
+        ids = set(self.node1.tags.values_list('id', flat=True))
+        self.assertIn(self.tagA.id, ids)
+        self.assertNotIn(self.tagB.id, ids)
+
+    def test_apply_no_net_changes_do_not_mutate_or_renew(self):
+        from unittest.mock import patch
+        changes = self.json.dumps([
+            {'node': self.node1.id, 'tag': self.tagA.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'remove'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'remove'},
+        ])
+        with patch('security_groups.views.renew_node_certificate') as mock_task:
+            response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(mock_task.delay.called)
+        ids = set(self.node1.tags.values_list('id', flat=True))
+        self.assertIn(self.tagA.id, ids)
+        self.assertNotIn(self.tagB.id, ids)
+
+    def test_apply_conflicting_changes_use_final_state_and_renew_only_changed_nodes(self):
+        from unittest.mock import patch
+        changes = self.json.dumps([
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'remove'},
+            {'node': self.node1.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node2.id, 'tag': self.tagB.id, 'op': 'add'},
+            {'node': self.node2.id, 'tag': self.tagB.id, 'op': 'remove'},
+        ])
+        with patch('security_groups.views.renew_node_certificate') as mock_task:
+            response = self.client.post(self.url, {'changes': changes})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.tagB.id, set(self.node1.tags.values_list('id', flat=True)))
+        self.assertNotIn(self.tagB.id, set(self.node2.tags.values_list('id', flat=True)))
+        self.assertEqual(mock_task.delay.call_count, 1)
+        self.assertEqual(mock_task.delay.call_args.args, (self.node1.id,))
 
     def test_apply_rejects_non_admin(self):
         # check_org_access raises PermissionDenied for an insufficient-role member → 403.
@@ -1122,3 +1188,8 @@ class NodeTagMatrixStagingTests(TestCase):
         self.assertContains(response, 'changes pending')
         self.assertContains(response, reverse('security_groups_org:matrix_apply', kwargs={'slug': self.org.slug}))
         self.assertContains(response, 'csrfmiddlewaretoken')
+
+    def test_matrix_reset_binding_is_on_swap_target(self):
+        response = self.client.get(reverse('security_groups_org:matrix', kwargs={'slug': self.org.slug}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="matrix-result" @htmx:after-swap.camel="reset()"')

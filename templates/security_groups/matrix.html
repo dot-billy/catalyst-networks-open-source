@@ -11,12 +11,9 @@
         {% if user_role == 'owner' or user_role == 'admin' %}
         <div x-show="count > 0" class="flex items-center gap-3">
             <span class="text-light-200" x-text="count + ' changes pending'"></span>
-            {# Use htmx:afterSwap (fires only on successful swap) with .camel modifier so Alpine
-               receives the correctly-cased event name that HTMX 1.9.2 dispatches. #}
             <form method="post" action="{% url 'security_groups_org:matrix_apply' slug=organization.slug %}"
                   hx-post="{% url 'security_groups_org:matrix_apply' slug=organization.slug %}"
-                  hx-target="#matrix-result" hx-swap="innerHTML"
-                  @htmx:after-swap.camel="reset()">
+                  hx-target="#matrix-result" hx-swap="innerHTML">
                 {% csrf_token %}
                 <input type="hidden" name="changes" :value="payload()">
                 <button type="submit" class="ui-btn ui-btn-primary ui-btn-sm">Apply</button>
@@ -25,7 +22,7 @@
         {% endif %}
     </div>
 
-    <div id="matrix-result"></div>
+    <div id="matrix-result" @htmx:after-swap.camel="reset()"></div>
 
     {% if nodes and tags %}
     <div class="overflow-x-auto">
