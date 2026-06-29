@@ -798,6 +798,28 @@ def _org_policy_queryset(org):
     )
 
 
+def _is_legacy_node_destination_rule(rule):
+    """Rules that target one node directly still use the legacy host form."""
+    return bool(rule.node_id) and not rule.security_group_id and not rule.target_groups.exists()
+
+
+def _legacy_policy_edit_context(org, rule, error_message=None):
+    selected_source_group_ids = list(rule.source_groups.filter(organization=org).values_list('id', flat=True))
+    selected_source_node_id = rule.source_nodes.filter(organization=org).values_list('id', flat=True).first()
+    return {
+        'organization': org,
+        'rule': rule,
+        'error_message': error_message,
+        'selected_source_group_ids': selected_source_group_ids,
+        'selected_source_node_id': selected_source_node_id,
+        'selected_dest_group_id': rule.security_group_id,
+        'selected_dest_node_id': rule.node_id,
+        'default_source_type': 'group' if selected_source_group_ids else 'host' if selected_source_node_id else 'group',
+        'default_dest_type': 'group' if rule.security_group_id else 'host',
+        **_policy_form_choices(org),
+    }
+
+
 @login_required
 def org_policy_list(request, slug):
     """List source-to-destination firewall policies for an organization."""
@@ -884,6 +906,23 @@ def org_policy_edit(request, slug, rule_id):
     """Edit an existing firewall policy with the direction-first rule form."""
     org = check_org_access(request.user, organization_slug=slug, required_roles=['owner', 'admin'])
     rule = get_object_or_404(_org_policy_queryset(org), id=rule_id)
+
+    if _is_legacy_node_destination_rule(rule):
+        error_message = None
+        if request.method == 'POST':
+            ok, field_data, error_message = _validate_policy_fields(org, request.POST)
+            if ok:
+                ok, source_data, error_message = _validate_policy_source(org, request.POST)
+                if ok:
+                    with transaction.atomic():
+                        _save_policy_rule(rule, field_data, source_data)
+                        messages.success(request, 'Policy updated.')
+                        return redirect('security_groups_org:policy_list', slug=slug)
+        return render(
+            request,
+            'security_groups/org_policy_form.html',
+            _legacy_policy_edit_context(org, rule, error_message),
+        )
 
     error = None
     if request.method == 'POST':
@@ -1008,8 +1047,16 @@ def _validate_direction_first_payload(org, post):
         if port_min > port_max:
             return None, 'Port range start must not exceed port range end.'
 
-    source_type = post.get('source_type', 'any')
-    match_type = {'group': 'groups', 'host': 'host', 'cidr': 'cidr', 'any': 'any'}.get(source_type, 'any')
+    source_type = post.get('source_type')
+    source_type_to_match_type = {
+        'group': 'groups',
+        'host': 'host',
+        'cidr': 'cidr',
+        'any': 'any',
+    }
+    if source_type not in source_type_to_match_type:
+        return None, 'Choose a valid source type.'
+    match_type = source_type_to_match_type[source_type]
     source_group_ids = []
     source_node_ids = []
     source_cidr = ''

@@ -497,6 +497,71 @@ class OrganizationSecurityPolicyWorkflowTests(TestCase):
         self.assertEqual(rule.match_type, 'host')
         self.assertFalse(rule.target_groups.exists())
 
+    def test_policy_edit_get_preserves_legacy_node_destination_form(self):
+        self.client.force_login(self.owner)
+        rule = FirewallRule.objects.create(
+            node=self.destination_node,
+            protocol='udp',
+            port_min=51820,
+            port_max=51820,
+            description='Legacy host destination policy',
+            match_type='host',
+        )
+        rule.source_nodes.set([self.source_node])
+
+        response = self.client.get(
+            reverse('security_groups_org:policy_edit', kwargs={'slug': self.organization.slug, 'rule_id': rule.id})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Edit Policy')
+        self.assertContains(response, 'name="dest_type" value="host" checked')
+        self.assertContains(response, f'value="{self.destination_node.id}" selected')
+        self.assertContains(response, f'value="{self.source_node.id}" selected')
+        self.assertContains(response, 'name="source_type" value="host" checked')
+
+    def test_policy_edit_post_preserves_legacy_node_destination(self):
+        self.client.force_login(self.owner)
+        rule = FirewallRule.objects.create(
+            node=self.destination_node,
+            protocol='udp',
+            port_min=51820,
+            port_max=51820,
+            description='Legacy host destination policy',
+            match_type='host',
+        )
+        rule.source_nodes.set([self.source_node])
+
+        response = self.client.post(
+            reverse('security_groups_org:policy_edit', kwargs={'slug': self.organization.slug, 'rule_id': rule.id}),
+            {
+                'source_type': 'host',
+                'source_node': str(self.source_node.id),
+                'dest_type': 'host',
+                'dest_node': str(self.destination_node.id),
+                'protocol': 'tcp',
+                'port_min': '8443',
+                'port_max': '8443',
+                'description': 'Updated host destination policy',
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('security_groups_org:policy_list', kwargs={'slug': self.organization.slug}),
+        )
+        rule.refresh_from_db()
+        self.assertEqual(rule.node, self.destination_node)
+        self.assertIsNone(rule.security_group)
+        self.assertFalse(rule.target_groups.exists())
+        self.assertEqual(rule.match_type, 'host')
+        self.assertQuerySetEqual(rule.source_nodes.all(), [self.source_node])
+        self.assertFalse(rule.source_groups.exists())
+        self.assertEqual(rule.protocol, 'tcp')
+        self.assertEqual(rule.port_min, 8443)
+        self.assertEqual(rule.port_max, 8443)
+        self.assertEqual(rule.description, 'Updated host destination policy')
+
     def test_list_scopes_to_org(self):
         FirewallRule.objects.create(
             security_group=self.destination_group,
@@ -1300,6 +1365,37 @@ class DirectionFirstRuleCreateTests(TestCase):
         self.assertContains(resp, 'Source tag not found in this organization.')
         self.assertEqual(FirewallRule.objects.count(), before)
 
+    def test_create_rejects_unknown_source_type_without_persisting(self):
+        from security_groups.models import FirewallRule
+        before = FirewallRule.objects.count()
+
+        resp = self.client.post(self.url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'source_type': 'bogus',
+            'protocol': 'tcp',
+            'port': '443',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Choose a valid source type.')
+        self.assertEqual(FirewallRule.objects.count(), before)
+
+    def test_create_requires_source_type_without_persisting(self):
+        from security_groups.models import FirewallRule
+        before = FirewallRule.objects.count()
+
+        resp = self.client.post(self.url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'protocol': 'tcp',
+            'port': '443',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Choose a valid source type.')
+        self.assertEqual(FirewallRule.objects.count(), before)
+
     def test_get_renders_form_with_tags(self):
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
@@ -1511,6 +1607,25 @@ class RulePreviewTests(TestCase):
         })
         self.assertEqual(FirewallRule.objects.count(), before_rules)  # rules rolled back
         self.assertEqual(FirewallRuleSourceGroup.objects.count(), before_source_groups)  # M2M rolled back
+
+    def test_preview_rejects_malformed_source_type_without_persisting(self):
+        from security_groups.models import FirewallRule, FirewallRuleSourceGroup
+        before_rules = FirewallRule.objects.count()
+        before_source_groups = FirewallRuleSourceGroup.objects.count()
+
+        resp = self.client.post(self.url, {
+            'direction': 'in',
+            'target_group': [str(self.web.id)],
+            'source_type': 'bogus',
+            'source_group': [str(self.admin.id)],
+            'protocol': 'tcp',
+            'port': '443',
+        })
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Choose a valid source type.')
+        self.assertEqual(FirewallRule.objects.count(), before_rules)
+        self.assertEqual(FirewallRuleSourceGroup.objects.count(), before_source_groups)
 
     def test_preview_flags_egress_lockout(self):
         # first OUTBOUND rule on a tag whose nodes have no existing outbound -> warning
