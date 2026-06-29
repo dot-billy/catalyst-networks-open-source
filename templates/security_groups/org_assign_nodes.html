@@ -72,6 +72,10 @@
                     this.sortDir = 'asc';
                   }
                 },
+                sortAria(key) {
+                  if (this.sortKey !== key) return 'none';
+                  return this.sortDir === 'asc' ? 'ascending' : 'descending';
+                },
                 sortIndicator(key) { return this.sortKey === key ? this.sortDir.charAt(0).toUpperCase() + this.sortDir.slice(1) : ''; },
                 selectAll(v) { this.nodes.forEach(n => { if (this.matches(n.id)) this.selected[n.id] = v; }); }
               }">
@@ -126,22 +130,22 @@
                 <div class="ui-node-picker-table" role="table" aria-label="Group member nodes">
                     <div class="ui-node-picker-table-header" role="row">
                         <div class="ui-node-picker-select-heading" role="columnheader">Use</div>
-                        <div role="columnheader">
+                        <div role="columnheader" :aria-sort="sortAria('name')">
                             <button type="button" class="ui-node-picker-sortbtn" aria-label="Sort by name" @click="sortBy('name')">
                                 Name <span class="ui-node-picker-sort" x-text="sortIndicator('name')"></span>
                             </button>
                         </div>
-                        <div role="columnheader">
+                        <div role="columnheader" :aria-sort="sortAria('ip')">
                             <button type="button" class="ui-node-picker-sortbtn" aria-label="Sort by IP" @click="sortBy('ip')">
                                 IP <span class="ui-node-picker-sort" x-text="sortIndicator('ip')"></span>
                             </button>
                         </div>
-                        <div role="columnheader">
+                        <div role="columnheader" :aria-sort="sortAria('type')">
                             <button type="button" class="ui-node-picker-sortbtn" aria-label="Sort by type" @click="sortBy('type')">
                                 Type <span class="ui-node-picker-sort" x-text="sortIndicator('type')"></span>
                             </button>
                         </div>
-                        <div role="columnheader">
+                        <div role="columnheader" :aria-sort="sortAria('assigned')">
                             <button type="button" class="ui-node-picker-sortbtn" aria-label="Sort by assignment" @click="sortBy('assigned')">
                                 Assigned <span class="ui-node-picker-sort" x-text="sortIndicator('assigned')"></span>
                             </button>
