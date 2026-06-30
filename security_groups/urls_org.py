@@ -25,4 +25,15 @@ urlpatterns = [
     # Node management
     path('<int:sg_id>/assign-nodes/', views.org_assign_nodes, name='assign_nodes'),
     path('<int:sg_id>/unassign-node/<int:node_id>/', views.org_unassign_node, name='unassign_node'),
+
+    # Node x Tag membership matrix
+    path('matrix/', views.org_node_tag_matrix, name='matrix'),
+    path('matrix/apply/', views.org_node_tag_matrix_apply, name='matrix_apply'),
+
+    # Direction-first rule editor
+    path('rules/new/', views.org_rule_create, name='rule_create'),
+    path('rules/preview/', views.org_rule_preview, name='rule_preview'),
+
+    # Recipe wizard
+    path('recipes/', views.org_recipes, name='recipes'),
 ]

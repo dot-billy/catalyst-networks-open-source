@@ -32,7 +32,7 @@
                                     <div>
                                         <span class="text-catalyst-teal font-medium">{{ group.name }}</span>
                                     </div>
-                                    <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                    <form method="post" action="{% url 'nodes_org:assign_security_group' slug=organization.slug pk=node.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="security_group_id" value="{{ group.id }}">
                                         <input type="hidden" name="action" value="remove">
@@ -60,7 +60,7 @@
                                         <div>
                                             <span class="text-light-100 font-medium">{{ group.name }}</span>
                                         </div>
-                                        <form method="post" action="{% url 'nodes_org:assign_security_group' org_id=organization.id pk=node.id %}">
+                                        <form method="post" action="{% url 'nodes_org:assign_security_group' slug=organization.slug pk=node.id %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="security_group_id" value="{{ group.id }}">
                                             <input type="hidden" name="action" value="add">
@@ -80,8 +80,9 @@
         </div>
         
         <div class="mt-8 flex justify-end">
-            {% include "components/button.html" with text="Back to Node Details" variant="secondary" size="md" href="/nodes/org/{{ organization.id }}/{{ node.id }}/" icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>' icon_position="left" %}
+            {% url 'nodes_org:detail' slug=organization.slug pk=node.id as node_detail_url %}
+            {% include "components/button.html" with text="Back to Node Details" variant="secondary" size="md" href=node_detail_url icon='<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>' icon_position="left" %}
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

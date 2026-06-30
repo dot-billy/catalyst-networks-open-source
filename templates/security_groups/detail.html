@@ -13,6 +13,9 @@
                 <span class="ui-badge ui-badge-muted">{{ nodes|length }} assigned nodes</span>
             </div>
             <p class="ui-page-subtitle">{{ security_group.description|default:"Use this policy to control which node groups or hosts can reach members of this group." }}</p>
+            {% if summary %}
+            <p class="ui-page-subtitle text-light-400">{{ summary }}</p>
+            {% endif %}
         </div>
         <div class="ui-page-actions">
             {% if organization %}
@@ -119,6 +122,8 @@
                                 {% endfor %}
                             {% elif rule.source_cidr %}
                                 {{ rule.source_cidr }}
+                            {% elif rule.match_type == 'any' %}
+                                Any
                             {% else %}
                                 Unspecified
                             {% endif %}

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SecurityGroup, FirewallRule
+from .models import Tag, FirewallRule
 
 class FirewallRuleInline(admin.TabularInline):
     model = FirewallRule
@@ -9,7 +9,7 @@ class FirewallRuleInline(admin.TabularInline):
     verbose_name = "Firewall Rule"
     verbose_name_plural = "Firewall Rules"
 
-@admin.register(SecurityGroup)
+@admin.register(Tag)
 class SecurityGroupAdmin(admin.ModelAdmin):
     list_display = ['name', 'organization', 'node_count', 'rule_count', 'created_at']
     list_filter = ['created_at', 'organization']

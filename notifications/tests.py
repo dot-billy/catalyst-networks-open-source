@@ -3,17 +3,69 @@ from unittest import mock
 from cryptography.fernet import Fernet
 from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.db import transaction
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
+import notifications
 import requests
 
+from .apps import NotificationsConfig
 from organizations.models import Membership, Organization
+from security_groups.models import Tag
 
 from .dispatch import dispatch_notification
 from .models import EventType, NotificationIntegration, default_notification_events
 
 
 User = get_user_model()
+
+
+class NotificationsConfigTests(TestCase):
+    @mock.patch("notifications.apps.importlib.import_module")
+    def test_ready_imports_signals(self, import_module):
+        NotificationsConfig("notifications", notifications).ready()
+
+        import_module.assert_called_once_with("notifications.signals")
+
+
+class NotificationTransactionSignalTests(TransactionTestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(email="tx-owner@example.com", password="testpass")
+        self.organization = Organization.objects.create(name="Notify Tx Org", created_by=self.owner)
+        Membership.objects.create(user=self.owner, organization=self.organization, role="owner")
+
+    @mock.patch("notifications.signals._dispatch_event")
+    def test_group_created_event_waits_until_transaction_commit(self, dispatch_event):
+        with transaction.atomic():
+            Tag.objects.create(
+                name="committed-policy",
+                organization=self.organization,
+                description="created inside a transaction",
+            )
+            dispatch_event.assert_not_called()
+
+        dispatch_event.assert_called_once_with(
+            "group.created",
+            self.organization.id,
+            {
+                "group_name": "committed-policy",
+                "description": "created inside a transaction",
+            },
+        )
+
+    @mock.patch("notifications.signals._dispatch_event")
+    def test_group_created_event_is_not_queued_after_rollback(self, dispatch_event):
+        with self.assertRaisesMessage(RuntimeError, "force rollback"):
+            with transaction.atomic():
+                Tag.objects.create(
+                    name="rolled-back-policy",
+                    organization=self.organization,
+                    description="rolled back inside a transaction",
+                )
+                raise RuntimeError("force rollback")
+
+        dispatch_event.assert_not_called()
+        self.assertFalse(Tag.objects.filter(name="rolled-back-policy").exists())
 
 
 @override_settings(**{"FIELD_ENCRYPTION_KEY": Fernet.generate_key().decode()})

@@ -18,6 +18,7 @@ urlpatterns = [
     path('<int:pk>/enroll/', views.org_node_enroll, name='enroll'),
     path('<int:pk>/renew-cert/', views.org_node_renew_cert, name='renew_cert'),
     path('<int:pk>/security-groups/', views.org_node_security_groups, name='assign_security_group'),
+    path('<int:pk>/effective-rules/', views.org_node_effective_rules, name='effective_rules'),
 
     # Bulk operations
     path('export-csv/', views.org_node_export_csv, name='export_csv'),
@@ -30,4 +31,4 @@ urlpatterns = [
     path('registration-tokens/create/', views.org_registration_token_create, name='token_create'),
     path('registration-tokens/<int:pk>/', views.org_registration_token_detail, name='token_detail'),
     path('registration-tokens/<int:pk>/revoke/', views.org_registration_token_revoke, name='token_revoke'),
-] 
+]

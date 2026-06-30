@@ -36,6 +36,76 @@ from .tasks import parse_nebula_cert_expiration
 logger = logging.getLogger(__name__)
 AUTH_SCHEME = 'Bearer'
 
+
+def _rule_organization(rule):
+    if getattr(rule, 'security_group_id', None):
+        return rule.security_group.organization
+    if getattr(rule, 'node_id', None):
+        return rule.node.organization
+    if getattr(rule, 'pk', None):
+        target_group = rule.target_groups.order_by('id').first()
+        if target_group:
+            return target_group.organization
+    return None
+
+
+def render_sources(rule):
+    # Returns a list of source-match dicts (ONE firewall entry per source).
+    # target_groups (which nodes the rule applies to) is handled by
+    # get_all_applicable_firewall_rules.
+    match_type = getattr(rule, 'match_type', 'any') or 'any'
+    organization = _rule_organization(rule)
+
+    if match_type == 'any':
+        return [{'host': 'any'}]
+    if match_type == 'groups':
+        source_groups = rule.source_groups.all()
+        if organization:
+            source_groups = source_groups.filter(organization=organization)
+        src_groups = list(source_groups.values_list('name', flat=True))
+        if src_groups:
+            return [{'groups': src_groups}]
+    elif match_type == 'host':
+        source_nodes = rule.source_nodes.all()
+        if organization:
+            source_nodes = source_nodes.filter(organization=organization)
+        node_ips = list(source_nodes.values_list('nebula_ip', flat=True))
+        if node_ips:
+            # Match each source node by its Nebula VPN IP as a /32 via 'cidr'.
+            # Nebula's 'host' key matches the remote cert name, not an IP.
+            return [{'cidr': f"{ip.split('/')[0]}/32"} for ip in node_ips]
+    elif match_type == 'cidr' and rule.source_cidr:
+        # Nebula matches IP/CIDR sources via the 'cidr' key; 'host' is a
+        # cert-name matcher and never matches a CIDR.
+        return [{'cidr': rule.source_cidr}]
+    logger.debug("Skipping rule %s with no source specified", rule.id)
+    return []
+
+
+def render_proto_port(rule, fr):
+    if rule.protocol == 'any':
+        fr['proto'] = 'any'
+        fr['port'] = 'any'
+    elif rule.protocol == 'icmp':
+        fr['proto'] = 'icmp'
+    else:  # TCP or UDP
+        fr['proto'] = rule.protocol
+        if rule.port_min is not None and rule.port_max is not None:
+            if rule.port_min == rule.port_max:
+                fr['port'] = rule.port_min
+            else:
+                fr['port'] = f"{rule.port_min}-{rule.port_max}"
+        else:
+            fr['port'] = 'any'
+
+
+def render_rule_entries(rule):
+    """The firewall entries the config builder emits for one rule, one per source."""
+    base = {}
+    render_proto_port(rule, base)
+    return [{**base, **src} for src in render_sources(rule)]
+
+
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
     node_name = serializers.CharField(max_length=255)
@@ -654,7 +724,7 @@ class NodeRegistrationView(APIView):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         if group_names:
             cmd.extend(['-groups', ','.join(group_names)])
         
@@ -688,7 +758,7 @@ class NodeRegistrationView(APIView):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         return sorted(set(group_names))
 
     def _expected_certificate_networks(self, node):
@@ -865,77 +935,35 @@ class NodeRegistrationView(APIView):
                     # In production, lighthouse nodes should have public_ip or fqdn set
                     config['static_host_map'][lh['ip']] = [f"{lh['ip']}:{lh['external_port']}"]
         
-        # Add security group rules
-        # Get all security groups this node belongs to
-        all_firewall_rules = node.get_all_applicable_firewall_rules()
+        # Add security group rules, split by direction.
+        applicable = node.get_all_applicable_firewall_rules()
+        inbound_rules = [r for r in applicable if r.direction == 'in']
+        outbound_rules = [r for r in applicable if r.direction == 'out']
         logger.debug(
-            "Building firewall config for node %s (%s): %d applicable rules",
-            node.id,
-            node.name,
-            all_firewall_rules.count(),
+            "Building firewall config for node %s (%s): %d inbound, %d outbound applicable rules",
+            node.id, node.name, len(inbound_rules), len(outbound_rules),
         )
 
-        # Only add the default allow-all rule if there are no explicit rules defined
-        if not all_firewall_rules.exists():
-            # Add default allow-all rule only if no specific rules exist
-            config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
+        # Inbound: keep the ICMP seed; append default allow-all only when there
+        # are no explicit rendered inbound rules.
+        inbound_entries = []
+        for rule in inbound_rules:
+            inbound_entries.extend(render_rule_entries(rule))
+        if inbound_entries:
+            config['firewall']['inbound'].extend(inbound_entries)
         else:
-            # Process all applicable rules
-            for rule in all_firewall_rules:
-                firewall_rule = {}
-                
-                # Protocol/port
-                if rule.protocol == 'any':
-                    firewall_rule['proto'] = 'any'
-                    firewall_rule['port'] = 'any'
-                elif rule.protocol == 'icmp':
-                    firewall_rule['proto'] = 'icmp'
-                else:  # TCP or UDP
-                    firewall_rule['proto'] = rule.protocol
-                    if rule.port_min is not None and rule.port_max is not None:
-                        if rule.port_min == rule.port_max:
-                            firewall_rule['port'] = rule.port_min
-                        else:
-                            firewall_rule['port'] = f"{rule.port_min}-{rule.port_max}"
-                    else:
-                        firewall_rule['port'] = 'any'
-                
-                # Source handling - prioritize in this order:
-                # 1. Source Groups (if any)
-                # 2. Source Nodes (if any)
-                # 3. Source CIDR (if any)
-                # 4. Skip rule if no source is specified (avoid empty host field)
-                
-                # Check if rule has source groups
-                group_names = list(
-                    rule.source_groups.filter(
-                        organization=node.organization,
-                    ).values_list('name', flat=True)
-                )
-                if group_names:
-                    # Use the 'groups' field when source groups are specified
-                    firewall_rule['groups'] = group_names
-                    # Do NOT add an empty 'host' field when groups are specified
-                else:
-                    # Only handle host field if no source groups were specified
-                    node_ips = list(
-                        rule.source_nodes.filter(
-                            organization=node.organization,
-                        ).values_list('nebula_ip', flat=True)
-                    )
-                    if node_ips:
-                        firewall_rule['host'] = node_ips if len(node_ips) > 1 else node_ips[0]
-                    # Source CIDR
-                    elif rule.source_cidr:
-                        firewall_rule['host'] = rule.source_cidr
-                    else:
-                        # If no source is specified, skip this rule
-                        logger.debug("Skipping rule %s with no source specified", rule.id)
-                        continue
-                
-                # Add the rule to the config
-                config['firewall']['inbound'].append(firewall_rule)
-            
+            config['firewall']['inbound'].append({'port': 'any', 'proto': 'any', 'host': 'any'})
+
+        # Outbound is allow-list like inbound: explicit egress rules switch egress
+        # to deny-by-default (drop the default allow-all from the config above).
+        # When no outbound rule renders, the default allow-all stays untouched.
+        if outbound_rules:
+            outbound_entries = []
+            for rule in outbound_rules:
+                outbound_entries.extend(render_rule_entries(rule))
+            if outbound_entries:
+                config['firewall']['outbound'] = outbound_entries
+
         # Format as YAML string
         config_yaml = self._dict_to_yaml(config)
         

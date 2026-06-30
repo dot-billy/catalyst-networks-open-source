@@ -1,0 +1,41 @@
+{% extends "base/base.html" %}
+
+{% block title %}Effective Rules - {{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Effective Rules{% endblock %}
+
+{% block content %}
+<div>
+  <div class="ui-page-header">
+    <h1 class="ui-page-title">Effective rules - {{ node.name }}</h1>
+    <p class="ui-page-subtitle">Explicit firewall entries that apply to this node and why.</p>
+  </div>
+
+  <h2 class="text-base font-semibold mt-4">Inbound</h2>
+  {% if effective.inbound_default_allow %}
+    <p class="ui-alert ui-alert-muted">No inbound rules - everything can reach this node. Add a rule to start restricting.</p>
+  {% else %}
+    <table class="min-w-full text-sm"><tbody>
+    {% for row in effective.inbound %}
+    <tr class="border-t border-dark-600">
+      <td class="p-2">{% for k, v in row.entry.items %}{{ k }}:{{ v }} {% endfor %}</td>
+      <td class="p-2 text-light-300">{{ row.via }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  {% endif %}
+
+  <h2 class="text-base font-semibold mt-4">Outbound</h2>
+  {% if effective.outbound_default_allow %}
+    <p class="ui-alert ui-alert-muted">No outbound rules - everything is reachable from this node (default-allow egress).</p>
+  {% else %}
+    <table class="min-w-full text-sm"><tbody>
+    {% for row in effective.outbound %}
+    <tr class="border-t border-dark-600">
+      <td class="p-2">{% for k, v in row.entry.items %}{{ k }}:{{ v }} {% endfor %}</td>
+      <td class="p-2 text-light-300">{{ row.via }}</td>
+    </tr>
+    {% endfor %}
+    </tbody></table>
+  {% endif %}
+</div>
+{% endblock %}

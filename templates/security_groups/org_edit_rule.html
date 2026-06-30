@@ -12,6 +12,14 @@
     </div>
   </div>
 
+  {% if error_message %}
+  <div class="alert alert-error">
+    <div>
+      <h3 class="text-sm font-semibold">{{ error_message }}</h3>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="ui-form-section">
     <form method="post">
       {% csrf_token %}
@@ -118,5 +126,4 @@
   });
 </script>
 {% endblock %}
-
 

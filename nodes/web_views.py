@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.files import File
 from django.core.paginator import Paginator
 from django.db import models, transaction
@@ -22,11 +23,12 @@ from django.views.decorators.http import require_http_methods
 from certificates.models import CertificateAuthority
 from organizations.access import require_org_access
 from organizations.models import Organization
-from security_groups.models import SecurityGroup
+from security_groups.models import Tag
 
 from notifications import dispatch as notification_dispatch
 
 from .api_registration import NodeRegistrationView
+from .effective_rules import effective_rules
 from .models import Node, NodeQRCode, NodeRegistrationToken
 from .services import _get_latest_org_ca
 
@@ -53,6 +55,19 @@ def check_org_access(user, org_id=None, required_roles=None, organization_slug=N
         slug=organization_slug,
         required_roles=required_roles,
     )
+
+
+def _get_visible_org_node(request, org, pk):
+    node = get_object_or_404(Node, id=pk, organization=org)
+    membership_role = request.user.memberships.filter(
+        organization=org
+    ).values_list('role', flat=True).first()
+    can_edit = membership_role in ['owner', 'admin']
+
+    if not can_edit and node.assigned_user_id != request.user.id and node.created_by_id != request.user.id:
+        raise PermissionDenied("You don't have access to this mobile node.")
+
+    return node, can_edit
 
 # Organization-specific views (placeholder implementations)
 @login_required
@@ -233,14 +248,7 @@ def org_node_create(request, slug):
 def org_node_detail(request, slug, pk):
     """View details of a node in an organization."""
     org = check_org_access(request.user, organization_slug=slug)
-    node = get_object_or_404(Node, id=pk, organization=org)
-    membership_role = request.user.memberships.filter(
-        organization=org
-    ).values_list('role', flat=True).first()
-    can_edit = membership_role in ['owner', 'admin']
-
-    if not can_edit and node.assigned_user_id != request.user.id and node.created_by_id != request.user.id:
-        raise PermissionDenied("You don't have access to this mobile node.")
+    node, can_edit = _get_visible_org_node(request, org, pk)
 
     # Handle QR code generation/regeneration
     if request.GET.get('generate_qr') == '1' or request.GET.get('regenerate_qr') == '1':
@@ -429,7 +437,7 @@ def regenerate_certificate(node):
         group_names = []
         if node.is_lighthouse:
             group_names.append('lighthouse')
-        group_names.extend(list(node.security_groups.values_list('name', flat=True)))
+        group_names.extend(list(node.tags.values_list('name', flat=True)))
         if group_names:
             cmd.extend(['-groups', ','.join(group_names)])
         
@@ -737,30 +745,30 @@ def org_node_security_groups(request, slug, pk):
     node = get_object_or_404(Node, id=pk, organization=org)
     
     # Get all security groups for this organization
-    security_groups = SecurityGroup.objects.filter(organization=org)
-    
+    security_groups = Tag.objects.filter(organization=org)
+
     # Get security groups assigned to this node
-    assigned_groups = node.security_groups.all()
-    
+    assigned_groups = node.tags.all()
+
     if request.method == 'POST':
         # Handle form submission for adding/removing security groups
         security_group_id = request.POST.get('security_group_id')
         action = request.POST.get('action')
-        
+
         if security_group_id and action:
-            security_group = get_object_or_404(SecurityGroup, id=security_group_id, organization=org)
+            security_group = get_object_or_404(Tag, id=security_group_id, organization=org)
             security_groups_changed = False
-            
+
             if action == 'add':
                 # Add security group to node
                 if security_group not in assigned_groups:
-                    node.security_groups.add(security_group)
+                    node.tags.add(security_group)
                     security_groups_changed = True
                     messages.success(request, f"Security group '{security_group.name}' added to node.")
             elif action == 'remove':
                 # Remove security group from node
                 if security_group in assigned_groups:
-                    node.security_groups.remove(security_group)
+                    node.tags.remove(security_group)
                     security_groups_changed = True
                     messages.success(request, f"Security group '{security_group.name}' removed from node.")
             
@@ -773,14 +781,14 @@ def org_node_security_groups(request, slug, pk):
                     messages.error(request, f"Failed to regenerate certificate for {node.name}.")
             
             return redirect('nodes_org:assign_security_group', slug=slug, pk=node.id)
-    
+
     context = {
         'organization': org,
         'node': node,
         'security_groups': security_groups,
         'assigned_groups': assigned_groups
     }
-    
+
     return render(request, 'nodes/org_security_groups.html', context)
 
 
@@ -825,6 +833,20 @@ def org_node_enroll(request, slug, pk):
     except ValueError as e:
         messages.error(request, f"Failed to prepare node configuration: {str(e)}")
         return redirect('nodes_org:detail', slug=slug, pk=node.id)
+
+
+@login_required
+def org_node_effective_rules(request, slug, pk):
+    """What firewall rules effectively apply to this node, and why."""
+    org = check_org_access(request.user, organization_slug=slug)
+    node, _can_edit = _get_visible_org_node(request, org, pk)
+    context = {
+        'organization': org,
+        'node': node,
+        'effective': effective_rules(node),
+    }
+    return render(request, 'nodes/effective_rules.html', context)
+
 
 # Registration token views
 @login_required

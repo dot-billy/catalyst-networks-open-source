@@ -1,0 +1,7 @@
+{% if error %}<p class="ui-alert ui-alert-warning">{{ error }}</p>{% else %}
+<div class="ui-card p-3">
+  <p class="text-light-300 text-xs mb-1">Generated Nebula {% if direction == 'out' %}outbound{% else %}inbound{% endif %} - targets {{ targets }} node{{ targets|pluralize }}:</p>
+  <pre class="text-xs text-light-100">{% for e in entries %}- { {% for k, v in e.items %}{{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}{% endfor %} }
+{% empty %}(no source set){% endfor %}</pre>
+  {% if egress_warning %}<p class="ui-alert ui-alert-warning mt-2">First outbound rule - switches these nodes to deny-by-default egress. Add an "allow all egress" rule if that's not intended.</p>{% endif %}
+</div>{% endif %}

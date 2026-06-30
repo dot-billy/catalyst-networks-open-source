@@ -12,7 +12,7 @@
         </div>
         <div class="ui-page-actions">
             {% if user_role == 'owner' or user_role == 'admin' %}
-            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% url 'security_groups_org:rule_create' slug=organization.slug as create_policy_url %}
             {% include "components/button.html" with text="Create Policy" href=create_policy_url variant="primary" size="sm" %}
             {% endif %}
         </div>
@@ -41,6 +41,8 @@
                             {% for node in rule.org_source_nodes %}
                             <span class="ui-badge ui-badge-primary">host: {{ node.name }}</span>
                             {% endfor %}
+                        {% elif rule.match_type == 'any' %}
+                            <span class="ui-badge ui-badge-primary">Any</span>
                         {% elif rule.source_cidr %}
                             <span class="ui-badge ui-badge-primary">{{ rule.source_cidr }}</span>
                         {% else %}
@@ -48,10 +50,16 @@
                         {% endif %}
                         <span class="text-light-300">-&gt;</span>
                         <span class="ui-badge ui-badge-muted">Destination</span>
-                        {% if rule.security_group %}
+                        {% if rule.org_target_groups %}
+                            {% for group in rule.org_target_groups %}
+                            <span class="ui-badge ui-badge-primary">{{ group.name }}</span>
+                            {% endfor %}
+                        {% elif rule.security_group %}
                             <span class="ui-badge ui-badge-primary">{{ rule.security_group.name }}</span>
                         {% elif rule.node %}
                             <span class="ui-badge ui-badge-primary">host: {{ rule.node.name }}</span>
+                        {% else %}
+                            <span class="ui-badge ui-badge-muted">Unspecified</span>
                         {% endif %}
                     </div>
                     <p class="mt-2 text-sm text-light-100">
@@ -88,7 +96,7 @@
         <p>Create your first policy to allow a source group or host to reach a destination over a specific protocol and port.</p>
         {% if user_role == 'owner' or user_role == 'admin' %}
         <div class="mt-6">
-            {% url 'security_groups_org:policy_create' slug=organization.slug as create_policy_url %}
+            {% url 'security_groups_org:rule_create' slug=organization.slug as create_policy_url %}
             {% include "components/button.html" with text="Create First Policy" href=create_policy_url variant="primary" size="lg" %}
         </div>
         {% endif %}
