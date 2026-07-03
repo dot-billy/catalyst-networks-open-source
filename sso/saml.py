@@ -6,12 +6,26 @@ from onelogin.saml2.auth import OneLogin_Saml2_Auth
 
 
 def prepare_django_request(request):
-    """Convert a Django HttpRequest into the format python3-saml expects."""
+    """Convert a Django HttpRequest into the format python3-saml expects.
+
+    Behind a TLS-terminating proxy (Traefik/nginx), ``SERVER_PORT`` is the
+    internal gunicorn bind port (e.g. 8000), not the public port. python3-saml
+    would then compute the ACS "received-at" URL as ``https://host:8000/...``
+    and reject the assertion. Honor the proxy's ``X-Forwarded-Port`` (443),
+    falling back to the scheme default, then to ``SERVER_PORT``.
+    """
+    forwarded_port = request.META.get('HTTP_X_FORWARDED_PORT')
+    if forwarded_port:
+        server_port = forwarded_port
+    elif request.is_secure():
+        server_port = '443'
+    else:
+        server_port = request.META.get('SERVER_PORT', '80')
     return {
         'https': 'on' if request.is_secure() else 'off',
         'http_host': request.get_host(),
         'script_name': request.META['PATH_INFO'],
-        'server_port': request.META.get('SERVER_PORT', '443' if request.is_secure() else '80'),
+        'server_port': server_port,
         'get_data': request.GET.copy(),
         'post_data': request.POST.copy(),
     }

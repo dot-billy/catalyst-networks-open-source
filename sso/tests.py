@@ -12,9 +12,35 @@ from django.urls import Resolver404, resolve, reverse
 from organizations.models import Membership, Organization
 
 from .models import SSOConfiguration
-from .saml import get_saml_settings, get_sp_urls
+from .saml import get_saml_settings, get_sp_urls, prepare_django_request
 
 User = get_user_model()
+
+
+class PrepareDjangoRequestPortTests(SimpleTestCase):
+    """Regression: SAML must use the proxy-forwarded port, not gunicorn's."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_uses_x_forwarded_port_behind_tls_proxy(self):
+        request = self.factory.get(
+            '/sso/acme/acs/', secure=True,
+            SERVER_PORT='8000', HTTP_X_FORWARDED_PORT='443',
+        )
+        prepared = prepare_django_request(request)
+        self.assertEqual(prepared['server_port'], '443')
+        self.assertEqual(prepared['https'], 'on')
+
+    def test_falls_back_to_scheme_default_when_no_forwarded_port(self):
+        request = self.factory.get('/sso/acme/acs/', secure=True, SERVER_PORT='8000')
+        self.assertEqual(prepare_django_request(request)['server_port'], '443')
+
+    def test_plain_http_uses_server_port(self):
+        request = self.factory.get('/sso/acme/acs/', SERVER_PORT='8080')
+        prepared = prepare_django_request(request)
+        self.assertEqual(prepared['server_port'], '8080')
+        self.assertEqual(prepared['https'], 'off')
 
 
 class AllauthWiringTests(SimpleTestCase):
