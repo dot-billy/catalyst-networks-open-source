@@ -879,7 +879,10 @@ class NodeRegistrationView(APIView):
                 'port': node.external_port if node.is_lighthouse else 4242
             },
             'punchy': {
-                'punch': True
+                'punch': True,
+                # Respond to punch attempts by connecting back — needed when the
+                # far side is behind a NAT that drops our outbound punches.
+                'respond': True
             },
             'relay': {
                 'am_relay': False,
