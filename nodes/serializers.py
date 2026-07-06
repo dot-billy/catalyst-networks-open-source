@@ -47,7 +47,8 @@ class NodeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'organization', 'certificate_authority',
             'nebula_ip', 'is_lighthouse', 'security_groups', 'public_ip',
-            'fqdn', 'external_port', 'cert_expiration', 'created_at'
+            'fqdn', 'external_port', 'cert_expiration', 'created_at',
+            'config_overrides'
         ]
         read_only_fields = ['cert_expiration', 'created_at']
         
@@ -93,8 +94,16 @@ class NodeSerializer(serializers.ModelSerializer):
         Validate that the organization has a network range and the IP is within it.
         Only validate IP if it's provided.
         """
-        organization = data['organization']
+        # 'organization' is a read-only SerializerMethodField, so it is never
+        # present in validated data — data['organization'] raised KeyError
+        # (HTTP 500) on every create/update through this serializer. Fall back
+        # to the bound instance (updates); skip range validation if unknown.
+        organization = data.get('organization') or (
+            self.instance.organization if self.instance else None
+        )
         nebula_ip = data.get('nebula_ip')
+        if organization is None:
+            return data
         
         # If no IP is provided, skip IP validation
         if not nebula_ip:

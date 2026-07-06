@@ -27,6 +27,15 @@ class Organization(models.Model):
         through='Membership',
         related_name='organizations'
     )
+    config_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Custom Nebula config keys deep-merged into every generated node '
+            'config for this org (e.g. {"punchy": {"respond": true}}). '
+            'The "pki" key is protected and ignored.'
+        )
+    )
     history = HistoricalRecords()
 
     class Meta:

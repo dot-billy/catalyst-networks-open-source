@@ -22,7 +22,7 @@ class OrganizationSerializer(serializers.ModelSerializer):
         model = Organization
         fields = [
             'id', 'name', 'slug', 'created_at', 'created_by',
-            'members_count', 'user_role'
+            'members_count', 'user_role', 'config_overrides'
         ]
         read_only_fields = ['slug', 'created_at', 'created_by']
     

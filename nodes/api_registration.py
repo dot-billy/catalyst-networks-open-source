@@ -106,6 +106,38 @@ def render_rule_entries(rule):
     return [{**base, **src} for src in render_sources(rule)]
 
 
+
+# Keys that config_overrides may never touch: certificate material must come
+# from the CA workflow, not user-supplied overrides.
+PROTECTED_OVERRIDE_KEYS = {'pki'}
+
+
+def deep_merge_config(base, override):
+    """Recursively merge override into base (override wins; dicts merge)."""
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge_config(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def apply_config_overrides(config, node):
+    """Deep-merge org-level then node-level config_overrides into config.
+
+    Later sources win: base config < org overrides < node overrides.
+    PROTECTED_OVERRIDE_KEYS are stripped from every source.
+    """
+    for source in (
+        getattr(node.organization, 'config_overrides', None) or {},
+        getattr(node, 'config_overrides', None) or {},
+    ):
+        cleaned = {k: v for k, v in source.items() if k not in PROTECTED_OVERRIDE_KEYS}
+        if cleaned:
+            deep_merge_config(config, cleaned)
+    return config
+
+
 class NodeRegistrationSerializer(serializers.Serializer):
     organization_slug = serializers.CharField(max_length=255)
     node_name = serializers.CharField(max_length=255)
@@ -966,6 +998,10 @@ class NodeRegistrationView(APIView):
                 outbound_entries.extend(render_rule_entries(rule))
             if outbound_entries:
                 config['firewall']['outbound'] = outbound_entries
+
+        # Apply org-level then node-level custom overrides (sticky across
+        # refreshes — hosts pick changes up on their next config sync).
+        config = apply_config_overrides(config, node)
 
         # Format as YAML string
         config_yaml = self._dict_to_yaml(config)

@@ -115,6 +115,15 @@ class Node(models.Model):
         blank=True,
         help_text='Last time this node checked in via API'
     )
+    config_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Custom Nebula config keys deep-merged into this node\'s generated '
+            'config, on top of any org-level overrides. The "pki" key is '
+            'protected and ignored.'
+        )
+    )
     history = HistoricalRecords()
 
     class Meta:
