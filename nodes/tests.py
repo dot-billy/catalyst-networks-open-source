@@ -1287,6 +1287,40 @@ class PrepareNodePackageDirectionTests(TestCase):
         self.assertNotIn('5432', inbound_section)
 
 
+    def test_config_overrides_merge_precedence_and_pki_guard(self):
+        # org override lands; node override wins; pki is protected; siblings survive.
+        self.organization.config_overrides = {
+            'pki': {'ca': 'EVIL'}, 'logging': {'level': 'debug'},
+            'custom_key': 'org-value'}
+        self.organization.save()
+        self.node.config_overrides = {'custom_key': 'node-wins'}
+        self.node.save()
+
+        with patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False):
+            response = NodeRegistrationView()._prepare_node_package(self.node)
+
+        cfg = response.data['config_yaml']
+        self.assertIn('custom_key: node-wins', cfg)
+        self.assertNotIn('org-value', cfg)
+        self.assertIn('level: debug', cfg)
+        self.assertIn('format: text', cfg)
+        self.assertNotIn('EVIL', cfg)
+
+    def test_node_patch_config_overrides_via_api(self):
+        # Regression: NodeSerializer.validate KeyError'd on 'organization'
+        # making every PATCH through the org nodes API a 500.
+        from rest_framework.test import APIClient
+        from organizations.models import Membership
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+        url = f'/api/org/{self.organization.slug}/nodes/{self.node.id}/'
+        resp = client.patch(url, {'config_overrides': {'probe': 'value'}}, format='json')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.node.refresh_from_db()
+        self.assertEqual(self.node.config_overrides, {'probe': 'value'})
+
+
 class OrgNodeSecurityGroupsPageTests(TestCase):
     def setUp(self):
         from organizations.models import Organization, Membership, NetworkRange
