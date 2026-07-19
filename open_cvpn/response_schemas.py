@@ -120,7 +120,7 @@ SUCCESS_EXAMPLES = {
         'summary': 'JWT Token Response',
         'description': 'Successful authentication returns access and refresh tokens',
         'value': {
-            'access': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...',
+            'access': '<access-token>',
             'refresh': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...',
             'user': {
                 'id': 1,

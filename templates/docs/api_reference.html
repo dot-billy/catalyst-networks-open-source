@@ -29,11 +29,11 @@ Content-Type: application/json
 
 # Response:
 {
-  "access": "eyJ0eXAiOiJKV1Qi...",
+  "access": "&lt;access-token&gt;",
   "refresh": "eyJ0eXAiOiJKV1Qi..."
 }</pre>
         <p class="text-sm text-gray-700 mb-2">Use the access token in subsequent requests:</p>
-        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">Authorization: Bearer eyJ0eXAiOiJKV1Qi...</pre>
+        <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm">Authorization&#58; Bearer&#32;&lt;access-token&gt;</pre>
 
         <h3 class="text-base font-medium mb-2 mt-4">Registration Tokens (Fleet Deployment)</h3>
         <p class="text-sm text-gray-700 mb-3">For automated deployments, use registration tokens created in the web UI. These are time-limited and can restrict the number of uses and node types.</p>
@@ -45,7 +45,7 @@ Content-Type: application/json
 
         <h3 class="text-base font-medium mb-2 mt-4">Authenticated Registration</h3>
         <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/org/{slug}/nodes/register/
-Authorization: Bearer {jwt_token}
+Authorization&#58; Bearer&#32;{jwt_token}
 Content-Type: application/json
 
 {
@@ -66,7 +66,7 @@ Content-Type: application/json
 
         <h3 class="text-base font-medium mb-2 mt-4">Lighthouse Registration</h3>
         <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 overflow-x-auto text-sm mb-3">POST /api/org/{slug}/nodes/register/
-Authorization: Bearer {jwt_token}
+Authorization&#58; Bearer&#32;{jwt_token}
 Content-Type: application/json
 
 {

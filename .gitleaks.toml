@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local nested worktrees are not part of the OSS release tree"
+paths = ['''^\.worktrees/''']

@@ -1,0 +1,3 @@
+# Reviewed documentation-only JWT placeholders in the public OSS history.
+12ac215721a7afd976335dfb30857bbf3519ee5a:templates/docs/api_reference.html:generic-api-key:32
+328c63b239ca75daa178318576eda5de9046b061:open_cvpn/response_schemas.py:generic-api-key:123
