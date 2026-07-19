@@ -19,13 +19,52 @@ from rest_framework.test import APIClient, APIRequestFactory
 
 from nodes.api_views import NodeViewSet, OrgNodeViewSet
 from certificates.models import CertificateAuthority
+from nodes.authentication import NodeAPITokenAuthentication
 from nodes.api_registration import NodeRegistrationView, render_rule_entries
+from nodes.interface import nebula_interface_name
 from nodes.models import Node, NodeRegistrationToken
 from nodes.permissions import NodeAccessPermission
 from organizations.models import Membership, NetworkRange, Organization
 from security_groups.models import FirewallRule, SecurityGroup
 
 User = get_user_model()
+
+
+class NebulaInterfaceNameTests(SimpleTestCase):
+    def test_empty_or_invalid_slugs_use_legacy_fallback(self):
+        self.assertEqual(nebula_interface_name(None), 'nebula1')
+        self.assertEqual(nebula_interface_name(''), 'nebula1')
+        self.assertEqual(nebula_interface_name('***'), 'nebula1')
+        self.assertEqual(nebula_interface_name('---'), 'nebula1')
+
+    def test_normal_slug_gets_cn_prefix(self):
+        self.assertEqual(nebula_interface_name('muller-now'), 'cn-muller-now')
+        self.assertEqual(nebula_interface_name('acme'), 'cn-acme')
+
+    def test_output_is_linux_interface_safe(self):
+        for slug in (
+            'muller-now',
+            'really-long-organization-name',
+            'a',
+            'x' * 200,
+            'UPPER-Case',
+        ):
+            with self.subTest(slug=slug):
+                name = nebula_interface_name(slug)
+                self.assertRegex(name, r'^[a-z0-9-]+$')
+                self.assertLessEqual(len(name.encode('utf-8')), 15)
+                self.assertFalse(name.startswith('-'))
+                self.assertFalse(name.endswith('-'))
+
+    def test_overlength_names_keep_distinct_hash_suffixes(self):
+        self.assertNotEqual(
+            nebula_interface_name('globex-manufacturing'),
+            nebula_interface_name('globex-manufacturing-1'),
+        )
+        self.assertNotEqual(
+            nebula_interface_name('acme-corporation-east'),
+            nebula_interface_name('acme-corporation-west'),
+        )
 
 
 class NodeOrgUrlExportTests(SimpleTestCase):
@@ -113,7 +152,7 @@ class NodeAccessPermissionTests(TestCase):
         request.node = self.node
         request.parser_context = {'kwargs': {'slug': self.organization.slug}}
 
-        with self.assertLogs('nodes.permissions', level='INFO') as captured:
+        with self.assertLogs('nodes.permissions', level='DEBUG') as captured:
             allowed = permission.has_permission(request, SimpleNamespace(action='download_config'))
 
         self.assertTrue(allowed)
@@ -213,6 +252,105 @@ class NodeAccessPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.node.refresh_from_db()
         self.assertIsNotNone(self.node.last_checkin)
+
+
+class NodePermissionLoggingTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.owner = User.objects.create_user(
+            email='node-logging-owner@example.com',
+            password='testpass',
+        )
+        self.organization = Organization.objects.create(
+            name='Node Logging Org',
+            created_by=self.owner,
+        )
+        Membership.objects.create(user=self.owner, organization=self.organization, role='owner')
+        NetworkRange.objects.create(
+            organization=self.organization,
+            cidr='10.46.0.0/24',
+            description='node logging test range',
+        )
+        self.ca = CertificateAuthority.objects.create(
+            name='Node Logging CA',
+            organization=self.organization,
+            created_by=self.owner,
+            ca_cert=SimpleUploadedFile('ca.crt', b'ca-certificate-bytes'),
+            ca_key=SimpleUploadedFile('ca.key', b'ca-key-bytes'),
+        )
+        self.node_token = 'runtime-node-token-that-must-not-be-logged'
+        self.node = Node.objects.create(
+            name='logging-node',
+            organization=self.organization,
+            certificate_authority=self.ca,
+            nebula_ip='10.46.0.10',
+            api_token=self.node_token,
+            created_by=self.owner,
+        )
+        self.node.cert_path.save(
+            'node.crt',
+            SimpleUploadedFile('node.crt', b'node-certificate-bytes'),
+            save=False,
+        )
+        self.node.key_path.save(
+            'node.key',
+            SimpleUploadedFile('node.key', b'node-key-bytes'),
+            save=True,
+        )
+
+    def _node_action_response(self, action, method):
+        view = OrgNodeViewSet.as_view({method: action})
+        auth_header = ' '.join(('Bearer', self.node_token))
+        request = getattr(self.factory, method)(
+            f'/api/org/{self.organization.slug}/nodes/{self.node.pk}/{action}/',
+            HTTP_AUTHORIZATION=auth_header,
+        )
+        return view(request, slug=self.organization.slug, pk=self.node.pk)
+
+    def test_checkin_and_download_config_logs_are_redacted(self):
+        with (
+            patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False),
+            self.assertLogs('nodes', level='DEBUG') as captured,
+        ):
+            checkin_response = self._node_action_response('checkin', 'post')
+            download_response = self._node_action_response('download_config', 'get')
+
+        self.assertEqual(checkin_response.status_code, 200)
+        self.assertEqual(download_response.status_code, 200)
+
+        log_output = '\n'.join(captured.output)
+        for forbidden in (
+            self.node_token,
+            self.owner.email,
+            'Request headers',
+            'Authorization',
+            'Bearer',
+            'Traceback',
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, log_output)
+
+    def test_authentication_exception_does_not_log_exception_or_token(self):
+        auth_header = ' '.join(('Bearer', self.node_token))
+        request = self.factory.get(
+            f'/api/org/{self.organization.slug}/nodes/{self.node.pk}/checkin/',
+            HTTP_AUTHORIZATION=auth_header,
+        )
+        request.parser_context = {'kwargs': {'slug': self.organization.slug}}
+
+        with (
+            patch(
+                'organizations.models.Organization.objects.get',
+                side_effect=RuntimeError(f'failure contained {self.node_token}'),
+            ),
+            self.assertLogs('nodes.authentication', level='ERROR') as captured,
+        ):
+            result = NodeAPITokenAuthentication().authenticate(request)
+
+        self.assertIsNone(result)
+        log_output = '\n'.join(captured.output)
+        self.assertNotIn(self.node_token, log_output)
+        self.assertNotIn('RuntimeError', log_output)
 
 class NodeWebExternalPortTests(TestCase):
     def setUp(self):
@@ -410,6 +548,25 @@ class NodeCertificateReliabilityTests(TestCase):
         self.node.cert_expiration = timezone.now() + timezone.timedelta(days=365)
         self.node.save(update_fields=['cert_path', 'key_path', 'cert_expiration'])
         self.node.refresh_from_db()
+
+    @override_settings(NEBULA_INTERFACE_NAME_FROM_ORG_SLUG=False)
+    def test_config_keeps_nebula1_when_slug_naming_is_disabled(self):
+        self._save_node_certificate_files()
+
+        with patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False):
+            response = NodeRegistrationView()._prepare_node_package(self.node)
+
+        self.assertIn('dev: nebula1', response.data['config_yaml'])
+
+    @override_settings(NEBULA_INTERFACE_NAME_FROM_ORG_SLUG=True)
+    def test_config_uses_org_slug_interface_when_enabled(self):
+        self._save_node_certificate_files()
+
+        with patch.object(NodeRegistrationView, '_certificate_needs_regeneration', return_value=False):
+            response = NodeRegistrationView()._prepare_node_package(self.node)
+
+        expected = nebula_interface_name(self.organization.slug)
+        self.assertIn(f'dev: {expected}', response.data['config_yaml'])
 
     def _mark_node_checked_in_before_retention(self, days=60):
         old_time = timezone.now() - timezone.timedelta(days=days)

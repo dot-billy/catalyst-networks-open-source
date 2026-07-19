@@ -33,6 +33,9 @@ from users.views import (
     profile_view
 )
 from .error_handlers import api_404_handler, api_500_handler, api_403_handler, api_400_handler, api_502_handler
+from .admin_config import configure_admin_site
+
+configure_admin_site()
 
 urlpatterns = [
     # Admin Interface

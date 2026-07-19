@@ -73,6 +73,8 @@ INSTALLED_APPS = [
     'storages',
     'drf_spectacular',
     'axes',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
@@ -95,11 +97,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'open_cvpn.middleware.AdminIPAllowlistMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
     'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -294,7 +298,7 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'catalyst_network API',
     'DESCRIPTION': 'The catalyst_network API supports node provisioning and runtime actions for the administration platform.',
-    'VERSION': '1.0.0',
+    'VERSION': '1.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': r'/api/',
@@ -374,6 +378,25 @@ def _env_bool(name, default=False):
 # User registration policy settings
 ALLOW_BOOTSTRAP_REGISTRATION = _env_bool('ALLOW_BOOTSTRAP_REGISTRATION', True)
 ALLOW_PUBLIC_REGISTRATION = _env_bool('ALLOW_PUBLIC_REGISTRATION', False)
+
+# Compatibility-safe node config behavior. Existing installations keep
+# ``nebula1`` until an operator explicitly opts into org-derived names.
+NEBULA_INTERFACE_NAME_FROM_ORG_SLUG = _env_bool(
+    'NEBULA_INTERFACE_NAME_FROM_ORG_SLUG',
+    False,
+)
+
+# Optional self-hosting admin hardening. Enroll TOTP devices before enforcing
+# OTP, and configure proxy hops before relying on forwarded client addresses.
+ADMIN_REQUIRE_OTP = _env_bool('ADMIN_REQUIRE_OTP', False)
+ADMIN_IP_ALLOWLIST = [
+    cidr.strip()
+    for cidr in os.getenv('ADMIN_IP_ALLOWLIST', '').split(',')
+    if cidr.strip()
+]
+ADMIN_TRUSTED_PROXY_HOPS = int(
+    os.getenv('ADMIN_TRUSTED_PROXY_HOPS', '0').strip() or '0'
+)
 
 # Node Registration Settings
 _registration_token = os.getenv('REGISTRATION_MASTER_TOKEN')
