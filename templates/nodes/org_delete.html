@@ -1,0 +1,56 @@
+{% extends "base/base.html" %}
+
+{% block title %}Delete {{ node.name }} - {{ organization.name }} - {{ project_meta.NAME }}{% endblock %}
+{% block page_title %}Delete Node{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="ui-page-header">
+        <div>
+            <h1 class="ui-page-title">Delete Node</h1>
+            <p class="ui-page-subtitle">Permanently remove {{ node.name }} from {{ organization.name }}.</p>
+        </div>
+        <div class="ui-page-actions">
+            <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="btn-enhanced ui-button-secondary ui-button-sm">Back to Node</a>
+        </div>
+    </div>
+
+    <div class="ui-form-section">
+        <div class="card-header">
+            <div>
+                <h2 class="card-title">Confirm Delete</h2>
+                <p class="card-subtitle">This removes the node, its certificates, and keys.</p>
+            </div>
+        </div>
+
+        <dl class="space-y-3">
+            <div>
+                <dt class="text-sm font-medium text-gray-400">Node</dt>
+                <dd class="text-sm text-light-100">{{ node.name }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-400">Nebula IP</dt>
+                <dd class="text-sm text-light-100">{{ node.nebula_ip }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-400">Type</dt>
+                <dd>
+                    <span class="ui-badge {% if node.is_lighthouse %}ui-badge-primary{% else %}ui-badge-muted{% endif %}">
+                        {% if node.is_lighthouse %}Lighthouse{% else %}Standard{% endif %}
+                    </span>
+                </dd>
+            </div>
+        </dl>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-enhanced ui-button-primary" style="background: var(--catalyst-error); border-color: var(--catalyst-error);">
+                Delete Node
+            </button>
+            <a href="{% url 'nodes_org:detail' slug=organization.slug pk=node.id %}" class="btn-enhanced ui-button-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

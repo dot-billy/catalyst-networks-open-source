@@ -675,6 +675,49 @@ class NodeCertificateReliabilityTests(TestCase):
                 self.assertEqual(payload['node_name'], 'mobile-node-1')
                 self.assertEqual(payload['nebula_ip'], node.nebula_ip)
 
+    def test_web_certificate_regeneration_uses_unique_output_paths_within_same_second(self):
+        from nodes.web_views import regenerate_certificate
+
+        fixed_now = timezone.datetime(2026, 6, 30, 11, 43, 30, tzinfo=datetime_timezone.utc)
+        seen_cert_paths = set()
+        sign_commands = []
+
+        def run_nebula_cert(command, *args, **kwargs):
+            if command[:2] == ['nebula-cert', 'sign']:
+                sign_commands.append(command)
+                cert_path = command[command.index('-out-crt') + 1]
+                key_path = command[command.index('-out-key') + 1]
+                if cert_path in seen_cert_paths:
+                    raise subprocess.CalledProcessError(1, command, stderr='refusing to overwrite existing cert')
+                seen_cert_paths.add(cert_path)
+                with open(cert_path, 'wb') as cert_file:
+                    cert_file.write(b'renewed-cert')
+                with open(key_path, 'wb') as key_file:
+                    key_file.write(b'renewed-key')
+                return subprocess.CompletedProcess(command, 0, '', '')
+            if command[:2] == ['nebula-cert', 'print']:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    'Not After: 2030-01-01 00:00:00 +0000 UTC\n',
+                    '',
+                )
+            raise AssertionError(f'Unexpected command: {command}')
+
+        with (
+            mock.patch('nodes.web_views.timezone.now', return_value=fixed_now),
+            mock.patch('nodes.web_views.subprocess.run', side_effect=run_nebula_cert),
+            mock.patch('nodes.web_views.NodeQRCode.create_for_node'),
+        ):
+            first_result = regenerate_certificate(self.node)
+            second_result = regenerate_certificate(self.node)
+
+        self.assertTrue(first_result)
+        self.assertTrue(second_result)
+        cert_paths = [command[command.index('-out-crt') + 1] for command in sign_commands]
+        self.assertEqual(len(cert_paths), 2)
+        self.assertEqual(len(set(cert_paths)), 2)
+
     @mock.patch('notifications.dispatch.queue_notification_event')
     def test_node_delete_queues_revoked_notification(self, queue_notification_event):
         self.client.force_login(self.owner)
@@ -695,6 +738,15 @@ class NodeCertificateReliabilityTests(TestCase):
         self.assertEqual(payload['node_id'], node_id)
         self.assertEqual(payload['node_name'], node_name)
         self.assertEqual(payload['nebula_ip'], node_ip)
+
+    def test_node_delete_confirmation_page_renders(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse('nodes_org:delete', kwargs={'slug': self.organization.slug, 'pk': self.node.id}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.node.name)
+        self.assertContains(response, 'csrfmiddlewaretoken')
 
     def test_certificate_renewal_includes_security_group_claims(self):
         security_group = SecurityGroup.objects.create(
@@ -735,6 +787,48 @@ class NodeCertificateReliabilityTests(TestCase):
         sign_command = sign_commands[0]
         self.assertIn('-groups', sign_command)
         self.assertEqual(sign_command[sign_command.index('-groups') + 1], 'web')
+
+    def test_certificate_renewal_uses_unique_output_paths_within_same_second(self):
+        fixed_now = timezone.datetime(2026, 6, 30, 11, 43, 30, tzinfo=datetime_timezone.utc)
+        seen_cert_paths = set()
+        sign_commands = []
+
+        def run_nebula_cert(command, *args, **kwargs):
+            if command[:2] == ['nebula-cert', 'sign']:
+                sign_commands.append(command)
+                cert_path = command[command.index('-out-crt') + 1]
+                key_path = command[command.index('-out-key') + 1]
+                if cert_path in seen_cert_paths:
+                    raise subprocess.CalledProcessError(1, command, stderr='refusing to overwrite existing cert')
+                seen_cert_paths.add(cert_path)
+                with open(cert_path, 'wb') as cert_file:
+                    cert_file.write(b'renewed-cert')
+                with open(key_path, 'wb') as key_file:
+                    key_file.write(b'renewed-key')
+                return subprocess.CompletedProcess(command, 0, '', '')
+            if command[:2] == ['nebula-cert', 'print']:
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    'Not After: 2030-01-01 00:00:00 +0000 UTC\n',
+                    '',
+                )
+            raise AssertionError(f'Unexpected command: {command}')
+
+        with (
+            mock.patch('nodes.tasks.timezone.now', return_value=fixed_now),
+            mock.patch('nodes.tasks.subprocess.run', side_effect=run_nebula_cert),
+        ):
+            from nodes.tasks import renew_node_certificate
+
+            first_result = renew_node_certificate(self.node.id)
+            second_result = renew_node_certificate(self.node.id)
+
+        self.assertTrue(first_result['success'])
+        self.assertTrue(second_result['success'])
+        cert_paths = [command[command.index('-out-crt') + 1] for command in sign_commands]
+        self.assertEqual(len(cert_paths), 2)
+        self.assertEqual(len(set(cert_paths)), 2)
 
     @mock.patch('notifications.dispatch.queue_notification_event')
     def test_certificate_renewal_queues_slack_notification(self, dispatch_event):

@@ -8,6 +8,8 @@ import json
 import os
 import subprocess
 import logging
+
+from .certificate_paths import unique_certificate_stem
 from .models import Node
 
 logger = logging.getLogger(__name__)
@@ -158,10 +160,10 @@ def renew_node_certificate(node_id):
         cert_dir = os.path.join(settings.CERT_STORAGE_ROOT, 'certs', f'org-{node.organization.id}')
         os.makedirs(cert_dir, exist_ok=True)
         
-        # Generate new certificate file paths (use UTC datetime to ensure uniqueness)
-        timestamp_str = timezone.now().strftime("%Y%m%dT%H%M%SZ")
-        cert_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.crt')
-        key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
+        # Generate new certificate file paths before handing them to nebula-cert.
+        file_stem = unique_certificate_stem(name, now=timezone.now())
+        cert_path = os.path.join(cert_dir, f'{file_stem}.crt')
+        key_path = os.path.join(cert_dir, f'{file_stem}.key')
         
         # Generate new certificate using nebula-cert
         cmd = [
@@ -184,8 +186,8 @@ def renew_node_certificate(node_id):
         
         # Save the files to the node
         with open(cert_path, 'rb') as cert_file, open(key_path, 'rb') as key_file:
-            node.cert_path.save(f'{name}-{timestamp_str}.crt', File(cert_file), save=False)
-            node.key_path.save(f'{name}-{timestamp_str}.key', File(key_file), save=False)
+            node.cert_path.save(f'{file_stem}.crt', File(cert_file), save=False)
+            node.key_path.save(f'{file_stem}.key', File(key_file), save=False)
         
         # Get certificate expiration
         result = subprocess.run([
