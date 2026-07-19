@@ -1,7 +1,10 @@
 """
 Custom middleware to handle API error responses.
 """
-from django.http import JsonResponse
+import ipaddress
+
+from django.conf import settings
+from django.http import Http404, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 import logging
 
@@ -79,3 +82,34 @@ class APIErrorMiddleware(MiddlewareMixin):
             return 'An internal server error occurred.'
         else:
             return 'An error occurred while processing your request.'
+
+
+class AdminIPAllowlistMiddleware:
+    """Hide Django admin routes from clients outside the optional allowlist."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        cidrs = settings.ADMIN_IP_ALLOWLIST
+        if cidrs and request.path.startswith('/admin/'):
+            client_ip = self._client_ip(request)
+            networks = [ipaddress.ip_network(cidr, strict=False) for cidr in cidrs]
+            if client_ip is None or not any(client_ip in network for network in networks):
+                logger.warning("Admin IP allowlist denied client for admin route")
+                raise Http404
+        return self.get_response(request)
+
+    @staticmethod
+    def _client_ip(request):
+        hops = settings.ADMIN_TRUSTED_PROXY_HOPS
+        forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if hops > 0 and forwarded_for:
+            entries = [entry.strip() for entry in forwarded_for.split(',') if entry.strip()]
+            candidate = entries[-hops] if len(entries) >= hops else None
+        else:
+            candidate = request.META.get('REMOTE_ADDR')
+        try:
+            return ipaddress.ip_address(candidate)
+        except (TypeError, ValueError):
+            return None

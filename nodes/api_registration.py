@@ -29,6 +29,9 @@ from organizations.models import NetworkRange, Organization
 
 from notifications import dispatch as notification_dispatch
 
+from .certificate_paths import unique_certificate_stem
+from .interface import FALLBACK as DEFAULT_NEBULA_INTERFACE
+from .interface import nebula_interface_name
 from .models import Node, NodeRegistrationToken
 from .serializers import AuthenticatedNodeRegistrationSerializer
 from .tasks import parse_nebula_cert_expiration
@@ -736,10 +739,10 @@ class NodeRegistrationView(APIView):
         cert_dir = os.path.join(settings.CERT_STORAGE_ROOT, 'certs', f'org-{node.organization.id}')
         os.makedirs(cert_dir, exist_ok=True)
         
-        # Generate certificate paths with UTC datetime suffix for uniqueness
-        timestamp_str = timezone.now().strftime("%Y%m%dT%H%M%SZ")
-        cert_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.crt')
-        key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
+        # Generate certificate paths with a timestamp plus unique suffix.
+        file_stem = unique_certificate_stem(name, now=timezone.now())
+        cert_path = os.path.join(cert_dir, f'{file_stem}.crt')
+        key_path = os.path.join(cert_dir, f'{file_stem}.key')
         
         # Prepare command with just the essential parameters
         cmd = [
@@ -769,8 +772,8 @@ class NodeRegistrationView(APIView):
         
         # Save to node
         with open(cert_path, 'rb') as cert_file, open(key_path, 'rb') as key_file:
-            node.cert_path.save(f'{name}-{timestamp_str}.crt', File(cert_file), save=False)
-            node.key_path.save(f'{name}-{timestamp_str}.key', File(key_file), save=False)
+            node.cert_path.save(f'{file_stem}.crt', File(cert_file), save=False)
+            node.key_path.save(f'{file_stem}.key', File(key_file), save=False)
         
         # Get expiration
         result = subprocess.run([
@@ -882,6 +885,10 @@ class NodeRegistrationView(APIView):
         with node.certificate_authority.ca_cert.open('rb') as ca_file:
             ca_data = ca_file.read()
         
+        interface_name = DEFAULT_NEBULA_INTERFACE
+        if settings.NEBULA_INTERFACE_NAME_FROM_ORG_SLUG:
+            interface_name = nebula_interface_name(getattr(node.organization, 'slug', '') or '')
+
         # Generate a basic config
         lighthouse_nodes = []
         for lighthouse in Node.objects.filter(organization=node.organization, is_lighthouse=True):
@@ -922,7 +929,7 @@ class NodeRegistrationView(APIView):
             },
             'tun': {
                 'disabled': False,
-                'dev': 'nebula1',
+                'dev': interface_name,
                 'drop_local_broadcast': False,
                 'drop_multicast': False,
                 'tx_queue': 500,

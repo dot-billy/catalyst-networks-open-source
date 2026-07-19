@@ -33,6 +33,6 @@ class NodeAPITokenAuthentication(BaseAuthentication):
 
             request.node = node
             return (AnonymousUser(), None)
-        except Exception as e:
-            logger.error("NodeAPITokenAuthentication error: %s", e)
+        except Exception:
+            logger.error("NodeAPITokenAuthentication error")
             return None

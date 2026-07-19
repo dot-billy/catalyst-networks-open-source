@@ -8,8 +8,9 @@ An open-source platform for managing [Nebula](https://github.com/slackhq/nebula)
 - **Certificate Authority management** — create CAs, issue and rotate Nebula certificates
 - **Node provisioning** — register and manage Nebula endpoints (lighthouses and nodes)
 - **IP address management** — automatic IP allocation from organization-scoped CIDR ranges
-- **Security groups** — logical firewall groupings for nodes
-- **SAML SSO** — organization-managed SAML login enforcement
+- **Security groups** — inbound/outbound rules, reusable recipes, effective-rule views, and bulk node assignment
+- **Configuration overrides** — organization and per-node Nebula configuration customization
+- **SAML, Google Workspace, and generic OIDC SSO** — organization-managed identity provider support
 - **Webhook notifications** — event-driven webhooks for node and certificate lifecycle events
 - **Slack notifications** — optional incoming webhook delivery for organization events
 - **Audit logging** — full change history via django-simple-history
@@ -29,7 +30,7 @@ An open-source platform for managing [Nebula](https://github.com/slackhq/nebula)
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/catalyst-networks-open-source.git
+git clone https://github.com/dot-billy/catalyst-networks-open-source.git
 cd catalyst-networks-open-source
 
 # Copy the example environment file
@@ -97,6 +98,10 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `DJANGO_LOG_FILE` | Optional writable file path for Django logs | Empty; logs go to console |
 | `ALLOW_BOOTSTRAP_REGISTRATION` | Allow `/register/` to create the first human admin account when no users exist | `True` in `.env.example`; `False` in `.env.prod.example` |
 | `ALLOW_PUBLIC_REGISTRATION` | Allow public human account registration after users exist | `False` |
+| `NEBULA_INTERFACE_NAME_FROM_ORG_SLUG` | Opt into deterministic org-derived Linux/Windows Nebula interface names | `False` |
+| `ADMIN_REQUIRE_OTP` | Require an enrolled TOTP device for Django admin login | `False` |
+| `ADMIN_IP_ALLOWLIST` | Optional comma-separated CIDRs allowed to access `/admin/` | Empty |
+| `ADMIN_TRUSTED_PROXY_HOPS` | Trusted trailing `X-Forwarded-For` hops for the admin allowlist | `0` |
 | `CREATE_SUPERUSER` | Optionally seed the first superuser during container startup when email and password are also set | Empty |
 | `DJANGO_SUPERUSER_EMAIL` | Email address for optional non-interactive superuser creation | Empty |
 | `DJANGO_SUPERUSER_PASSWORD` | Password for optional non-interactive superuser creation; inject as a secret | Empty |
@@ -118,6 +123,13 @@ All configuration is done via environment variables. See `.env.example` for the 
 | `RUN_COLLECTSTATIC` | Collect static assets before Gunicorn startup | `true` in Compose |
 | `CERT_STORAGE_ROOT` | Path for certificate storage | `/data/certs` |
 | `RUN_MIGRATIONS` | Run migrations when the Compose web service starts | `true` |
+
+The historical interface name remains `nebula1` unless
+`NEBULA_INTERFACE_NAME_FROM_ORG_SLUG=True`. When enabled, Linux and Windows
+nodes receive a deterministic, Linux-safe name derived from the organization
+slug on their next configuration sync; macOS continues to auto-assign
+`utunN`. See [self-hosting security and compatibility](docs/SELF_HOSTING_SECURITY.md)
+before enabling interface naming, admin OTP, or the IP allowlist.
 
 For Resend delivery, verify the sender domain in Resend, set `DEFAULT_FROM_EMAIL`
 to that domain, set `RESEND_API_KEY`, and leave `EMAIL_BACKEND` unset. If
@@ -178,7 +190,7 @@ RUN_MIGRATIONS=false docker compose up -d
 | Database | PostgreSQL 15 |
 | Task Queue | Celery + Redis 7 |
 | Frontend | Django templates + HTMX |
-| Auth | JWT (simplejwt), SAML SSO, custom User model |
+| Auth | JWT (simplejwt), SAML, Google Workspace, generic OIDC, optional admin TOTP |
 | API Docs | OpenAPI/Swagger (drf-spectacular) |
 | Audit | django-simple-history |
 | Security | django-axes (brute-force protection) |
@@ -214,6 +226,9 @@ docker compose exec web python manage.py test
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Release maintainers should follow [the clean-tree and clean-history release
+procedure](docs/RELEASING.md).
 
 ## License
 

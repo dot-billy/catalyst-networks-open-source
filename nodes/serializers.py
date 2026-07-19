@@ -9,6 +9,7 @@ import os
 from django.conf import settings
 from django.core.files import File
 from django.utils import timezone
+from .certificate_paths import unique_certificate_stem
 from .models import NodeRegistrationToken
 
 class NodeSerializer(serializers.ModelSerializer):
@@ -151,10 +152,10 @@ class NodeSerializer(serializers.ModelSerializer):
         cert_dir = os.path.join(settings.CERT_STORAGE_ROOT, 'certs', f'org-{node.organization.id}')
         os.makedirs(cert_dir, exist_ok=True)
 
-        # Generate certificate using nebula-cert (filename with UTC datetime suffix)
-        timestamp_str = timezone.now().strftime("%Y%m%dT%H%M%SZ")
-        cert_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.crt')
-        key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
+        # Generate certificate using nebula-cert with collision-safe output paths.
+        file_stem = unique_certificate_stem(name, now=timezone.now())
+        cert_path = os.path.join(cert_dir, f'{file_stem}.crt')
+        key_path = os.path.join(cert_dir, f'{file_stem}.key')
         
         try:
             subprocess.run([
@@ -169,8 +170,8 @@ class NodeSerializer(serializers.ModelSerializer):
 
             # Save the files to the node
             with open(cert_path, 'rb') as cert_file, open(key_path, 'rb') as key_file:
-                node.cert_path.save(f'{name}-{timestamp_str}.crt', File(cert_file))
-                node.key_path.save(f'{name}-{timestamp_str}.key', File(key_file))
+                node.cert_path.save(f'{file_stem}.crt', File(cert_file))
+                node.key_path.save(f'{file_stem}.key', File(key_file))
 
             # Get certificate expiration
             result = subprocess.run([

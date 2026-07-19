@@ -315,7 +315,7 @@ def org_certificate_authority_create(request, slug):
                     old_ca.delete()
                 
                 messages.success(request, f'Certificate Authority "{name}" created and rotated successfully.')
-                return redirect('certificates_org:detail', pk=ca.id)
+                return redirect('certificates_org:detail', slug=org.slug, pk=ca.id)
             except Exception as e:
                 messages.error(request, f'Error creating certificate authority: {e}')
         else:

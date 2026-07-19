@@ -28,6 +28,7 @@ from security_groups.models import Tag
 from notifications import dispatch as notification_dispatch
 
 from .api_registration import NodeRegistrationView
+from .certificate_paths import unique_certificate_stem
 from .effective_rules import effective_rules
 from .models import Node, NodeQRCode, NodeRegistrationToken
 from .services import _get_latest_org_ca
@@ -412,11 +413,11 @@ def regenerate_certificate(node):
     cert_dir = os.path.join(settings.CERT_STORAGE_ROOT, 'certs', f'org-{node.organization.id}')
     os.makedirs(cert_dir, exist_ok=True)
     
-    # Generate new certificate file paths (use a UTC datetime to ensure uniqueness)
-    timestamp_str = timezone.now().strftime("%Y%m%dT%H%M%SZ")
-    cert_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.crt')
-    key_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.key')
-    qr_path = os.path.join(cert_dir, f'{name}-{timestamp_str}.png')
+    # Generate new certificate file paths before handing them to nebula-cert.
+    file_stem = unique_certificate_stem(name, now=timezone.now())
+    cert_path = os.path.join(cert_dir, f'{file_stem}.crt')
+    key_path = os.path.join(cert_dir, f'{file_stem}.key')
+    qr_path = os.path.join(cert_dir, f'{file_stem}.png')
     nebula_qr_generated = False
     
     try:
@@ -473,8 +474,8 @@ def regenerate_certificate(node):
             old_key_path = node.key_path.path if node.key_path else None
             
             # Update node with new certificate files
-            node.cert_path.save(f'{name}-{timestamp_str}.crt', File(cert_file), save=False)
-            node.key_path.save(f'{name}-{timestamp_str}.key', File(key_file), save=False)
+            node.cert_path.save(f'{file_stem}.crt', File(cert_file), save=False)
+            node.key_path.save(f'{file_stem}.key', File(key_file), save=False)
         
         # Get certificate expiration
         result = subprocess.run([
