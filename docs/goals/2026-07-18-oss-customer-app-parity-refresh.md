@@ -1,8 +1,8 @@
 # Goal: Refresh OSS Parity and Prepare the Next Release
 
-**Created:** 2026-07-18  
-**Repository:** `dot-billy/catalyst-networks-open-source`  
-**Source of shared behavior:** `dot-billy/customer_app`  
+**Created:** 2026-07-18
+**Repository:** `dot-billy/catalyst-networks-open-source`
+**Source of shared behavior:** `dot-billy/customer_app`
 **Status:** Ready for execution
 
 ## Goal
@@ -165,4 +165,3 @@ After validation:
 - OSS SAML fix PR #12: https://github.com/dot-billy/catalyst-networks-open-source/pull/12
 - OSS `punchy.respond` PR #13: https://github.com/dot-billy/catalyst-networks-open-source/pull/13
 - OSS `config_overrides` PR #14: https://github.com/dot-billy/catalyst-networks-open-source/pull/14
-
